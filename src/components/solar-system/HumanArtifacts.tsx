@@ -38,8 +38,8 @@ function ISSArtifact({
   artifact: (typeof humanArtifacts)[0]
 }) {
   const groupRef = useRef<THREE.Group>(null!)
-  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
-  const parentAngleRef = useRef(Math.random() * Math.PI * 2)
+  const orbitAngleRef = useRef(0.5)
+  const parentAngleRef = useRef(0.3)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
 
@@ -99,8 +99,8 @@ function VoyagerArtifact({
   artifact: (typeof humanArtifacts)[0]
 }) {
   const groupRef = useRef<THREE.Group>(null!)
-  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
-  const parentAngleRef = useRef(Math.random() * Math.PI * 2)
+  const orbitAngleRef = useRef(0.5)
+  const parentAngleRef = useRef(0.3)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
 
@@ -158,8 +158,8 @@ function HubbleArtifact({
   artifact: (typeof humanArtifacts)[0]
 }) {
   const groupRef = useRef<THREE.Group>(null!)
-  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
-  const parentAngleRef = useRef(Math.random() * Math.PI * 2)
+  const orbitAngleRef = useRef(0.5)
+  const parentAngleRef = useRef(0.3)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
 
@@ -211,6 +211,56 @@ function HubbleArtifact({
   )
 }
 
+function GenericOrbitArtifact({
+  artifact,
+}: {
+  artifact: (typeof humanArtifacts)[0]
+}) {
+  const groupRef = useRef<THREE.Group>(null!)
+  const orbitAngleRef = useRef(1.2)
+  const parentAngleRef = useRef(0.8)
+  const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
+  const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
+
+  const planet = planets.find((p) => p.id === artifact.parentId)
+
+  useFrame((_, delta) => {
+    if (groupRef.current && planet) {
+      parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
+      const parentAngle = parentAngleRef.current
+      const parentX = Math.cos(parentAngle) * planet.orbitRadius
+      const parentZ = Math.sin(parentAngle) * planet.orbitRadius
+
+      orbitAngleRef.current += delta * artifact.orbitSpeed * 0.05 * timeSpeed
+      const angle = orbitAngleRef.current
+      groupRef.current.position.x = parentX + Math.cos(angle) * artifact.orbitRadius
+      groupRef.current.position.z = parentZ + Math.sin(angle) * artifact.orbitRadius
+      groupRef.current.position.y = Math.sin(angle) * 0.1
+    }
+  })
+
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation()
+    setSelectedBody(artifact.id)
+  }
+
+  return (
+    <group ref={groupRef}>
+      <group onClick={handleClick}>
+        <ArtifactRenderer
+          artifact={artifact}
+          fallback={
+            <mesh>
+              <boxGeometry args={[artifact.size, artifact.size * 0.5, artifact.size * 0.3]} />
+              <meshStandardMaterial color={artifact.color} emissive={artifact.color} emissiveIntensity={0.3} metalness={0.7} roughness={0.3} />
+            </mesh>
+          }
+        />
+      </group>
+    </group>
+  )
+}
+
 export default function HumanArtifacts() {
   return (
     <group>
@@ -224,7 +274,7 @@ export default function HumanArtifacts() {
         if (artifact.id === 'hubble') {
           return <HubbleArtifact key={artifact.id} artifact={artifact} />
         }
-        return null
+        return <GenericOrbitArtifact key={artifact.id} artifact={artifact} />
       })}
     </group>
   )

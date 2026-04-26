@@ -87,7 +87,7 @@ function CameraController() {
     }
     const planet = planets.find((p) => p.id === id)
     if (planet) {
-      const angle = time * planet.orbitSpeed * 0.05 + dateOffset * planet.orbitSpeed
+      const angle = time * planet.orbitSpeed * 0.05 + dateOffset * planet.orbitSpeed + planet.initialAngle
       return new THREE.Vector3(
         Math.cos(angle) * planet.orbitRadius,
         0,
@@ -96,7 +96,7 @@ function CameraController() {
     }
     const dwarfPlanet = dwarfPlanets.find((d) => d.id === id)
     if (dwarfPlanet) {
-      const angle = time * dwarfPlanet.orbitSpeed * 0.05 + dateOffset * dwarfPlanet.orbitSpeed
+      const angle = time * dwarfPlanet.orbitSpeed * 0.05 + dateOffset * dwarfPlanet.orbitSpeed + dwarfPlanet.initialAngle
       const incl = (dwarfPlanet.orbitInclination * Math.PI) / 180
       return new THREE.Vector3(
         Math.cos(angle) * dwarfPlanet.orbitRadius,
@@ -256,7 +256,7 @@ function CameraController() {
       enableZoom
       enableRotate
       minDistance={1.5}
-      maxDistance={2000}
+      maxDistance={4000}
       zoomSpeed={1.2}
       rotateSpeed={0.5}
       panSpeed={0.8}
@@ -388,8 +388,9 @@ export default function SolarSystem() {
       {/* Background stars */}
       <StarField />
 
-      {/* <MeteorShower />
-      <Constellations /> */}
+      {/* Meteor shower */}
+      <MeteorShower />
+      {/* <Constellations /> */}
 
       {/* Distance ruler */}
       <DistanceRuler />
