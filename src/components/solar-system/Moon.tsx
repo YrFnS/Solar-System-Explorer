@@ -35,7 +35,7 @@ function ColorMoon({ moonData, meshRef, handleClick }: any) {
 export default function MoonComponent({ moonData, parentId }: MoonProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const meshRef = useRef<THREE.Mesh>(null)
-  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
+  const orbitAngleRef = useRef(Math.PI * 0.5)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
 
@@ -46,8 +46,11 @@ export default function MoonComponent({ moonData, parentId }: MoonProps) {
       groupRef.current.position.x = Math.cos(angle) * moonData.orbitRadius
       groupRef.current.position.z = Math.sin(angle) * moonData.orbitRadius
     }
+    // Moons are tidally locked — rotation period ≈ orbital period
+    // Use inverse of orbital period for visible rotation
     if (meshRef.current) {
-      meshRef.current.rotation.y += delta * 0.5 * timeSpeed
+      const rotationFactor = 50 / Math.max(moonData.orbitalPeriod, 1)
+      meshRef.current.rotation.y += delta * rotationFactor * timeSpeed
     }
   })
 
