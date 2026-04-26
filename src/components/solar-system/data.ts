@@ -18,7 +18,8 @@ export interface PlanetData {
   radius: number // visual radius (scaled for display)
   orbitRadius: number // visual distance from sun
   orbitSpeed: number // speed factor
-  rotationSpeed: number
+  rotationSpeed: number // relative to Earth=1.0
+  initialAngle: number // starting orbital angle in radians (deterministic)
   color: string
   emissiveColor?: string
   emissiveIntensity?: number
@@ -93,9 +94,10 @@ export const planets: PlanetData[] = [
     name: 'Mercury',
     type: 'Terrestrial Planet',
     radius: 0.25,
-    orbitRadius: 5,
+    orbitRadius: 5.0,
     orbitSpeed: 4.15,
-    rotationSpeed: 0.002,
+    rotationSpeed: 0.017,
+    initialAngle: 4.40,
     color: '#8C7E6D',
     hasAtmosphere: false,
     axialTilt: 0.03,
@@ -123,9 +125,10 @@ export const planets: PlanetData[] = [
     name: 'Venus',
     type: 'Terrestrial Planet',
     radius: 0.45,
-    orbitRadius: 7.5,
+    orbitRadius: 6.8,
     orbitSpeed: 1.62,
-    rotationSpeed: -0.001,
+    rotationSpeed: -0.004,
+    initialAngle: 3.18,
     color: '#C4A882',
     hasAtmosphere: true,
     atmosphereColor: '#E8D5A3',
@@ -155,9 +158,10 @@ export const planets: PlanetData[] = [
     name: 'Earth',
     type: 'Terrestrial Planet',
     radius: 0.5,
-    orbitRadius: 10,
+    orbitRadius: 8.5,
     orbitSpeed: 1.0,
-    rotationSpeed: 0.02,
+    rotationSpeed: 1.0,
+    initialAngle: 1.75,
     color: '#4B7BE5',
     hasAtmosphere: true,
     atmosphereColor: '#87CEEB',
@@ -201,9 +205,10 @@ export const planets: PlanetData[] = [
     name: 'Mars',
     type: 'Terrestrial Planet',
     radius: 0.35,
-    orbitRadius: 13,
+    orbitRadius: 10.5,
     orbitSpeed: 0.53,
-    rotationSpeed: 0.019,
+    rotationSpeed: 0.97,
+    initialAngle: 6.20,
     color: '#C1440E',
     hasAtmosphere: true,
     atmosphereColor: '#D4856A',
@@ -258,7 +263,8 @@ export const planets: PlanetData[] = [
     radius: 1.2,
     orbitRadius: 20,
     orbitSpeed: 0.084,
-    rotationSpeed: 0.04,
+    rotationSpeed: 2.4,
+    initialAngle: 0.60,
     color: '#C88B3A',
     hasAtmosphere: true,
     atmosphereColor: '#D4A04A',
@@ -335,7 +341,8 @@ export const planets: PlanetData[] = [
     radius: 1.0,
     orbitRadius: 27,
     orbitSpeed: 0.034,
-    rotationSpeed: 0.038,
+    rotationSpeed: 2.25,
+    initialAngle: 1.40,
     color: '#EAD6A6',
     hasAtmosphere: true,
     atmosphereColor: '#F0E0B0',
@@ -429,7 +436,8 @@ export const planets: PlanetData[] = [
     radius: 0.7,
     orbitRadius: 35,
     orbitSpeed: 0.012,
-    rotationSpeed: -0.03,
+    rotationSpeed: -1.4,
+    initialAngle: 5.13,
     color: '#9FC4C7',
     hasAtmosphere: true,
     atmosphereColor: '#B0D8DB',
@@ -501,7 +509,8 @@ export const planets: PlanetData[] = [
     radius: 0.65,
     orbitRadius: 42,
     orbitSpeed: 0.006,
-    rotationSpeed: 0.032,
+    rotationSpeed: 1.49,
+    initialAngle: 4.80,
     color: '#3E54E8',
     hasAtmosphere: true,
     atmosphereColor: '#5070FF',
@@ -665,8 +674,8 @@ export const humanArtifacts: HumanArtifactData[] = [
   },
 ]
 
-export const ASTEROID_BELT_INNER = 15
-export const ASTEROID_BELT_OUTER = 18
+export const ASTEROID_BELT_INNER = 12
+export const ASTEROID_BELT_OUTER = 15
 export const ASTEROID_COUNT = 2000
 
 export const KUIPER_BELT_INNER = 46
@@ -683,10 +692,12 @@ export interface DwarfPlanetData {
   rotationSpeed: number
   color: string
   orbitInclination: number // degrees
+  initialAngle: number // starting orbital angle in radians
   diameter: number
   distanceFromSun: number
   orbitalPeriod: number
   funFacts: string[]
+  textureUrl?: string
 }
 
 export interface CometData {
@@ -713,12 +724,14 @@ export const dwarfPlanets: DwarfPlanetData[] = [
     radius: 0.15,
     orbitRadius: 48,
     orbitSpeed: 0.004,
-    rotationSpeed: -0.01,
+    rotationSpeed: -0.15,
     color: '#C4A882',
     orbitInclination: 17,
+    initialAngle: 3.90,
     diameter: 2377,
     distanceFromSun: 5906.4,
     orbitalPeriod: 90560,
+    textureUrl: '/textures/pluto.jpg',
     funFacts: [
       'Pluto was reclassified from planet to dwarf planet in 2006',
       'Pluto has a heart-shaped nitrogen ice glacier called Tombaugh Regio',
@@ -731,11 +744,12 @@ export const dwarfPlanets: DwarfPlanetData[] = [
     name: 'Ceres',
     type: 'Dwarf Planet',
     radius: 0.1,
-    orbitRadius: 16.5,
+    orbitRadius: 13.5,
     orbitSpeed: 0.21,
-    rotationSpeed: 0.015,
+    rotationSpeed: 0.38,
     color: '#8B8682',
     orbitInclination: 10.6,
+    initialAngle: 2.10,
     diameter: 940,
     distanceFromSun: 413.7,
     orbitalPeriod: 1682,
@@ -752,10 +766,11 @@ export const dwarfPlanets: DwarfPlanetData[] = [
     type: 'Dwarf Planet',
     radius: 0.14,
     orbitRadius: 58,
-    orbitSpeed: 0.002,
-    rotationSpeed: 0.008,
+    orbitSpeed: 0.012,
+    rotationSpeed: 0.08,
     color: '#D4D0C8',
     orbitInclination: 44,
+    initialAngle: 1.20,
     diameter: 2326,
     distanceFromSun: 10125,
     orbitalPeriod: 204199,
@@ -772,10 +787,11 @@ export const dwarfPlanets: DwarfPlanetData[] = [
     type: 'Dwarf Planet',
     radius: 0.11,
     orbitRadius: 53,
-    orbitSpeed: 0.003,
-    rotationSpeed: 0.01,
+    orbitSpeed: 0.015,
+    rotationSpeed: 0.3,
     color: '#B8A898',
     orbitInclination: 29,
+    initialAngle: 4.50,
     diameter: 1430,
     distanceFromSun: 6850,
     orbitalPeriod: 111845,
@@ -792,10 +808,11 @@ export const dwarfPlanets: DwarfPlanetData[] = [
     type: 'Dwarf Planet',
     radius: 0.12,
     orbitRadius: 51,
-    orbitSpeed: 0.003,
-    rotationSpeed: 0.04, // Very fast rotation
+    orbitSpeed: 0.015,
+    rotationSpeed: 1.6, // Very fast rotation — 3.9h period
     color: '#E8E0D0',
     orbitInclination: 28.2,
+    initialAngle: 0.80,
     diameter: 1560,
     distanceFromSun: 6452,
     orbitalPeriod: 103774,
@@ -1026,7 +1043,7 @@ export const centaurs: CentaurData[] = [
     radius: 0.06,
     orbitRadius: 30,
     orbitEccentricity: 0.38,
-    orbitSpeed: 0.01,
+    orbitSpeed: 0.02,
     orbitInclination: 6.9,
     color: '#9090A0',
     diameter: 218,
@@ -1044,7 +1061,7 @@ export const centaurs: CentaurData[] = [
     radius: 0.07,
     orbitRadius: 28,
     orbitEccentricity: 0.17,
-    orbitSpeed: 0.01,
+    orbitSpeed: 0.02,
     orbitInclination: 23.4,
     color: '#A0A0B0',
     hasRings: true,
@@ -1066,7 +1083,7 @@ export const scatteredDiscObjects: ScatteredDiscObjectData[] = [
     radius: 0.1,
     orbitRadius: 65,
     orbitEccentricity: 0.85,
-    orbitSpeed: 0.001,
+    orbitSpeed: 0.015,
     orbitInclination: 11.9,
     color: '#C09070',
     diameter: 995,
@@ -1085,7 +1102,7 @@ export const scatteredDiscObjects: ScatteredDiscObjectData[] = [
     radius: 0.12,
     orbitRadius: 60,
     orbitEccentricity: 0.19,
-    orbitSpeed: 0.001,
+    orbitSpeed: 0.015,
     orbitInclination: 30.7,
     color: '#C08080',
     diameter: 1535,
@@ -1103,7 +1120,7 @@ export const scatteredDiscObjects: ScatteredDiscObjectData[] = [
     radius: 0.09,
     orbitRadius: 54,
     orbitEccentricity: 0.04,
-    orbitSpeed: 0.001,
+    orbitSpeed: 0.018,
     orbitInclination: 8.0,
     color: '#B0A090',
     hasRings: true,
@@ -1122,7 +1139,7 @@ export const scatteredDiscObjects: ScatteredDiscObjectData[] = [
     radius: 0.08,
     orbitRadius: 50,
     orbitEccentricity: 0.22,
-    orbitSpeed: 0.001,
+    orbitSpeed: 0.018,
     orbitInclination: 20.6,
     color: '#909080',
     diameter: 917,

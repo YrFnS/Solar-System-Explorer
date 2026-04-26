@@ -162,6 +162,7 @@ function SDOSurface({ data }: { data: ScatteredDiscObjectData }) {
 
 export default function ScatteredDiscObject({ data }: ScatteredDiscObjectProps) {
   const groupRef = useRef<THREE.Group>(null!)
+  const spinRef = useRef<THREE.Group>(null!)
   const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
@@ -185,6 +186,9 @@ export default function ScatteredDiscObject({ data }: ScatteredDiscObjectProps) 
       groupRef.current.position.z = Math.sin(angle) * r
       groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * r * 0.3
     }
+    if (spinRef.current) {
+      spinRef.current.rotation.y += delta * 0.3 * timeSpeed
+    }
   })
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -196,7 +200,7 @@ export default function ScatteredDiscObject({ data }: ScatteredDiscObjectProps) 
 
   return (
     <group ref={groupRef}>
-      <group onClick={handleClick}>
+      <group ref={spinRef} onClick={handleClick}>
         <SDOSurface data={data} />
         {/* Clickable hit area - larger invisible sphere for easier selection */}
         <mesh>

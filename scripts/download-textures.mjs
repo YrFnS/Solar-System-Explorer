@@ -6,15 +6,21 @@ const TEXTURES = [
   { name: 'sun.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_sun.jpg' },
   { name: 'mercury.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_mercury.jpg' },
   { name: 'venus.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_venus_surface.jpg' },
+  { name: 'venus_atmosphere.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_venus_atmosphere.jpg' },
   { name: 'earth.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_earth_daymap.jpg' },
   { name: 'earth_clouds.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_earth_clouds.jpg' },
+  { name: 'earth_night.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_earth_nightmap.jpg' },
   { name: 'moon.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_moon.jpg' },
   { name: 'mars.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_mars.jpg' },
   { name: 'jupiter.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_jupiter.jpg' },
   { name: 'saturn.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_saturn.jpg' },
   { name: 'saturn_ring.png', url: 'https://www.solarsystemscope.com/textures/download/2k_saturn_ring_alpha.png' },
   { name: 'uranus.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_uranus.jpg' },
-  { name: 'neptune.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_neptune.jpg' }
+  { name: 'neptune.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_neptune.jpg' },
+  // Pluto — Solar System Scope doesn't have Pluto; use their Ceres fictional (icy rocky body)
+  { name: 'pluto.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_ceres_fictional.jpg' },
+  // Eris — fictional icy dwarf planet texture
+  { name: 'eris.jpg', url: 'https://www.solarsystemscope.com/textures/download/2k_haumea_fictional.jpg' },
 ];
 
 const DIR = path.join(process.cwd(), 'public', 'textures');

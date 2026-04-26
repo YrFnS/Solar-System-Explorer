@@ -703,8 +703,9 @@ function SelectionRings({ color, radius }: { color: string; radius: number }) {
 
 export default function Planet({ data }: PlanetProps) {
   const groupRef = useRef<THREE.Group>(null!)
-  const planetGroupRef = useRef<THREE.Group>(null!)
-  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
+  // spinRef is the inner group that actually rotates around the tilted axis
+  const spinRef = useRef<THREE.Group>(null!)
+  const orbitAngleRef = useRef(data.initialAngle)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
@@ -718,9 +719,9 @@ export default function Planet({ data }: PlanetProps) {
       groupRef.current.position.x = Math.cos(angle) * data.orbitRadius
       groupRef.current.position.z = Math.sin(angle) * data.orbitRadius
     }
-    if (planetGroupRef.current) {
-      // Multiply by 50 to make the texture rotation visually noticeable since we removed the fast shader animations
-      planetGroupRef.current.rotation.y += delta * data.rotationSpeed * 50 * timeSpeed * useSolarSystemStore.getState().rotationSpeedMultiplier
+    if (spinRef.current) {
+      // rotationSpeed is relative to Earth=1.0; Earth rotates ~0.5 rad/s at timeSpeed=1
+      spinRef.current.rotation.y += delta * data.rotationSpeed * 0.5 * timeSpeed * useSolarSystemStore.getState().rotationSpeedMultiplier
     }
   })
 
@@ -742,27 +743,31 @@ export default function Planet({ data }: PlanetProps) {
 
       {/* Planet group — translated to orbit position */}
       <group ref={groupRef}>
-        <group ref={planetGroupRef}>
-          {/* Planet surface */}
-          <group onClick={handleClick}>
-            {data.textureUrl ? (
-              <TexturedPlanetSurface data={data} />
-            ) : (
-              <ColorPlanetSurface data={data} />
+        {/* Axial tilt wrapper — rotates the whole planet+rings around Z by the tilt angle */}
+        <group rotation={[0, 0, (data.axialTilt * Math.PI) / 180]}>
+          {/* Spin group — rotates around Y (which is now the tilted axis) */}
+          <group ref={spinRef}>
+            {/* Planet surface */}
+            <group onClick={handleClick}>
+              {data.textureUrl ? (
+                <TexturedPlanetSurface data={data} />
+              ) : (
+                <ColorPlanetSurface data={data} />
+              )}
+              {/* Clickable hit area - larger invisible sphere for easier selection */}
+              <mesh>
+                <sphereGeometry args={[Math.max(data.radius * 1.8, 0.4), 16, 16]} />
+                <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+              </mesh>
+            </group>
+
+            {/* Atmosphere */}
+            {data.hasAtmosphere && data.atmosphereColor && data.atmosphereScale && (
+              <Atmosphere color={data.atmosphereColor} scale={data.atmosphereScale} radius={data.radius} planetId={data.id} />
             )}
-            {/* Clickable hit area - larger invisible sphere for easier selection */}
-            <mesh>
-              <sphereGeometry args={[Math.max(data.radius * 1.8, 0.4), 16, 16]} />
-              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-            </mesh>
           </group>
 
-          {/* Atmosphere - with planetId for enhanced per-planet effects */}
-          {data.hasAtmosphere && data.atmosphereColor && data.atmosphereScale && (
-            <Atmosphere color={data.atmosphereColor} scale={data.atmosphereScale} radius={data.radius} planetId={data.id} />
-          )}
-
-          {/* Rings */}
+          {/* Rings stay outside spin but inside tilt (rings are in equatorial plane) */}
           {data.hasRings && (
             <Rings
               innerRadius={data.ringInnerRadius || 1.2}
@@ -774,7 +779,7 @@ export default function Planet({ data }: PlanetProps) {
             />
           )}
 
-          {/* Selection indicator - animated pulsing rings */}
+          {/* Selection indicator */}
           {isSelected && <SelectionRings color={data.color} radius={data.radius} />}
           {/* Axial tilt indicator when selected */}
           {isSelected && <AxialTiltIndicator tilt={data.axialTilt} radius={data.radius} />}

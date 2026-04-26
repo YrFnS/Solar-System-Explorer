@@ -2,6 +2,7 @@
 
 import { useRef, useMemo } from 'react'
 import { useFrame, ThreeEvent } from '@react-three/fiber'
+import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { DwarfPlanetData } from './data'
 import { useSolarSystemStore } from './store'
@@ -9,6 +10,16 @@ import PlanetLabel from './PlanetLabel'
 
 interface DwarfPlanetProps {
   data: DwarfPlanetData
+}
+
+function TexturedDwarfPlanetSurface({ data }: { data: DwarfPlanetData }) {
+  const texture = useTexture(data.textureUrl!)
+  return (
+    <mesh>
+      <sphereGeometry args={[data.radius, 64, 64]} />
+      <meshStandardMaterial map={texture} roughness={0.9} metalness={0.1} />
+    </mesh>
+  )
 }
 
 function DwarfPlanetSurface({ data }: { data: DwarfPlanetData }) {
@@ -160,7 +171,8 @@ function DwarfSelectionRings({ color, radius }: { color: string; radius: number 
 
 export default function DwarfPlanet({ data }: DwarfPlanetProps) {
   const groupRef = useRef<THREE.Group>(null!)
-  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
+  const spinRef = useRef<THREE.Group>(null!)
+  const orbitAngleRef = useRef(data.initialAngle)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
@@ -179,6 +191,9 @@ export default function DwarfPlanet({ data }: DwarfPlanetProps) {
       groupRef.current.position.z = Math.sin(angle) * data.orbitRadius
       groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * data.orbitRadius * 0.3
     }
+    if (spinRef.current) {
+      spinRef.current.rotation.y += delta * data.rotationSpeed * 0.5 * timeSpeed
+    }
   })
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -190,8 +205,12 @@ export default function DwarfPlanet({ data }: DwarfPlanetProps) {
 
   return (
     <group ref={groupRef}>
-      <group onClick={handleClick}>
-        <DwarfPlanetSurface data={data} />
+      <group ref={spinRef} onClick={handleClick}>
+        {data.textureUrl ? (
+          <TexturedDwarfPlanetSurface data={data} />
+        ) : (
+          <DwarfPlanetSurface data={data} />
+        )}
         {/* Clickable hit area - larger invisible sphere for easier selection */}
         <mesh>
           <sphereGeometry args={[Math.max(data.radius * 2.5, 0.4), 16, 16]} />

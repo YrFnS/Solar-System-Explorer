@@ -14,7 +14,7 @@ interface MoonProps {
 import { useTexture } from '@react-three/drei'
 
 function TexturedMoon({ moonData, meshRef, handleClick }: any) {
-  const texture = useTexture(moonData.textureUrl!)
+  const texture = useTexture(moonData.textureUrl!) as THREE.Texture
   return (
     <mesh ref={meshRef} onClick={handleClick}>
       <sphereGeometry args={[moonData.radius, 32, 32]} />

@@ -256,10 +256,10 @@ function CameraController() {
       enableZoom
       enableRotate
       minDistance={1.5}
-      maxDistance={250}
-      zoomSpeed={0.8}
+      maxDistance={1200}
+      zoomSpeed={1.2}
       rotateSpeed={0.5}
-      panSpeed={0.5}
+      panSpeed={0.8}
       enableDamping
       dampingFactor={0.05}
       autoRotate={autoRotate}
