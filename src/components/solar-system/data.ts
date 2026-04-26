@@ -8,6 +8,7 @@ export interface MoonData {
   distanceFromPlanet: number // real distance in thousand km
   orbitalPeriod: number // in Earth days
   funFact: string
+  textureUrl?: string
 }
 
 export interface PlanetData {
@@ -42,6 +43,10 @@ export interface PlanetData {
   axialTilt: number // axial tilt in degrees
   funFacts: string[]
   moons: MoonData[]
+  textureUrl?: string
+  bumpMapUrl?: string
+  cloudMapUrl?: string
+  ringTextureUrl?: string
 }
 
 export interface HumanArtifactData {
@@ -56,6 +61,7 @@ export interface HumanArtifactData {
   funFact: string
   launchYear: number
   distance: string
+  modelUrl?: string
 }
 
 // Scale factors for visualization
@@ -78,6 +84,7 @@ export const sunData = {
     'About 1 million Earths could fit inside the Sun',
     'The Sun generates energy through nuclear fusion of hydrogen into helium',
   ],
+  textureUrl: '/textures/sun.jpg',
 }
 
 export const planets: PlanetData[] = [
@@ -108,6 +115,7 @@ export const planets: PlanetData[] = [
       'Mercury has no atmosphere to retain heat',
       'It has a massive iron core that takes up 75% of the planet\'s radius',
     ],
+    textureUrl: '/textures/mercury.jpg',
     moons: [],
   },
   {
@@ -139,6 +147,7 @@ export const planets: PlanetData[] = [
       'Venus is the hottest planet despite not being closest to the Sun',
       'Its atmospheric pressure is 90 times that of Earth',
     ],
+    textureUrl: '/textures/venus.jpg',
     moons: [],
   },
   {
@@ -170,6 +179,8 @@ export const planets: PlanetData[] = [
       'Earth\'s rotation is gradually slowing down',
       'Earth has a powerful magnetic field that protects us from solar radiation',
     ],
+    textureUrl: '/textures/earth.jpg',
+    cloudMapUrl: '/textures/earth_clouds.jpg',
     moons: [
       {
         name: 'Moon',
@@ -181,6 +192,7 @@ export const planets: PlanetData[] = [
         distanceFromPlanet: 384.4,
         orbitalPeriod: 27.3,
         funFact: 'The Moon is slowly drifting away from Earth at about 3.8 cm per year',
+        textureUrl: '/textures/moon.jpg',
       },
     ],
   },
@@ -213,6 +225,7 @@ export const planets: PlanetData[] = [
       'A year on Mars is almost twice as long as an Earth year',
       'Mars has seasons similar to Earth due to its axial tilt',
     ],
+    textureUrl: '/textures/mars.jpg',
     moons: [
       {
         name: 'Phobos',
@@ -267,6 +280,7 @@ export const planets: PlanetData[] = [
       'Jupiter has the shortest day of all planets — just under 10 hours',
       'Jupiter\'s magnetic field is 20,000 times stronger than Earth\'s',
     ],
+    textureUrl: '/textures/jupiter.jpg',
     moons: [
       {
         name: 'Io',
@@ -348,6 +362,8 @@ export const planets: PlanetData[] = [
       'Winds on Saturn can reach 1,800 km/h',
       'Saturn\'s rings span up to 282,000 km but are only about 10 meters thick',
     ],
+    textureUrl: '/textures/saturn.jpg',
+    ringTextureUrl: '/textures/saturn_ring.png',
     moons: [
       {
         name: 'Titan',
@@ -440,6 +456,8 @@ export const planets: PlanetData[] = [
       'Its blue-green color comes from methane in the atmosphere',
       'Uranus has 13 known rings',
     ],
+    textureUrl: '/textures/uranus.jpg',
+    ringTextureUrl: '/textures/saturn_ring.png',
     moons: [
       {
         name: 'Titania',
@@ -510,6 +528,7 @@ export const planets: PlanetData[] = [
       'It takes Neptune 165 Earth years to orbit the Sun',
       'Neptune has completed only one orbit since its discovery in 1846',
     ],
+    textureUrl: '/textures/neptune.jpg',
     moons: [
       {
         name: 'Triton',

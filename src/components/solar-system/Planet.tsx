@@ -15,7 +15,51 @@ interface PlanetProps {
   data: PlanetData
 }
 
-function PlanetSurface({ data }: { data: PlanetData }) {
+import { useTexture } from '@react-three/drei'
+
+function TexturedPlanetSurface({ data }: { data: PlanetData }) {
+  const meshRef = useRef<THREE.Mesh>(null!)
+  
+  const textures = useTexture({
+    map: data.textureUrl!,
+  })
+
+  const cloudTexture = data.cloudMapUrl ? useTexture(data.cloudMapUrl) : null
+  const cloudRef = useRef<THREE.Mesh>(null!)
+
+  useFrame((_, delta) => {
+    if (cloudRef.current) {
+      cloudRef.current.rotation.y += delta * 0.03
+    }
+  })
+
+  return (
+    <group>
+      <mesh ref={meshRef}>
+        <sphereGeometry args={[data.radius, 64, 64]} />
+        <meshStandardMaterial 
+          map={textures.map}
+          roughness={data.type === 'Gas Giant' || data.type === 'Ice Giant' ? 0.4 : 0.8}
+          metalness={data.type === 'Gas Giant' ? 0.1 : 0.2}
+        />
+      </mesh>
+      {cloudTexture && (
+        <mesh ref={cloudRef}>
+          <sphereGeometry args={[data.radius * 1.015, 64, 64]} />
+          <meshStandardMaterial
+            map={cloudTexture}
+            transparent
+            opacity={0.6}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+          />
+        </mesh>
+      )}
+    </group>
+  )
+}
+
+function ColorPlanetSurface({ data }: { data: PlanetData }) {
   const meshRef = useRef<THREE.Mesh>(null!)
 
   const material = useMemo(() => {
@@ -675,7 +719,8 @@ export default function Planet({ data }: PlanetProps) {
       groupRef.current.position.z = Math.sin(angle) * data.orbitRadius
     }
     if (planetGroupRef.current) {
-      planetGroupRef.current.rotation.y += delta * data.rotationSpeed * timeSpeed * useSolarSystemStore.getState().rotationSpeedMultiplier
+      // Multiply by 50 to make the texture rotation visually noticeable since we removed the fast shader animations
+      planetGroupRef.current.rotation.y += delta * data.rotationSpeed * 50 * timeSpeed * useSolarSystemStore.getState().rotationSpeedMultiplier
     }
   })
 
@@ -700,7 +745,11 @@ export default function Planet({ data }: PlanetProps) {
         <group ref={planetGroupRef}>
           {/* Planet surface */}
           <group onClick={handleClick}>
-            <PlanetSurface data={data} />
+            {data.textureUrl ? (
+              <TexturedPlanetSurface data={data} />
+            ) : (
+              <ColorPlanetSurface data={data} />
+            )}
             {/* Clickable hit area - larger invisible sphere for easier selection */}
             <mesh>
               <sphereGeometry args={[Math.max(data.radius * 1.8, 0.4), 16, 16]} />
@@ -721,6 +770,7 @@ export default function Planet({ data }: PlanetProps) {
               color={data.ringColor || '#D4C090'}
               opacity={data.ringOpacity || 0.6}
               planetRadius={data.radius}
+              textureUrl={data.ringTextureUrl}
             />
           )}
 

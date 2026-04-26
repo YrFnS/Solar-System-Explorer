@@ -1,10 +1,36 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, Suspense, Component } from 'react'
 import { useFrame, ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useGLTF } from '@react-three/drei'
 import { humanArtifacts, planets } from './data'
 import { useSolarSystemStore } from './store'
+
+class CatchBoundary extends Component<{fallback: React.ReactNode, children: React.ReactNode}, { hasError: boolean }> {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  render() { return this.state.hasError ? this.props.fallback : this.props.children }
+}
+
+function GLTFModel({ url, scale }: { url: string; scale: number }) {
+  const { scene } = useGLTF(url)
+  const clone = useMemo(() => scene.clone(), [scene])
+  return <primitive object={clone} scale={scale} />
+}
+
+function ArtifactRenderer({ artifact, fallback }: { artifact: any, fallback: React.ReactNode }) {
+  if (artifact.modelUrl) {
+    return (
+      <CatchBoundary fallback={fallback}>
+        <Suspense fallback={fallback}>
+          <GLTFModel url={artifact.modelUrl} scale={artifact.size || 1} />
+        </Suspense>
+      </CatchBoundary>
+    )
+  }
+  return <>{fallback}</>
+}
 
 function ISSArtifact({
   artifact,
@@ -46,30 +72,22 @@ function ISSArtifact({
   return (
     <group ref={groupRef}>
       <group onClick={handleClick}>
-        {/* Main body - habitat modules */}
-        <mesh>
-          <capsuleGeometry args={[0.015, 0.04, 4, 8]} />
-          <meshStandardMaterial
-            color="#CCCCCC"
-            emissive="#AAAACC"
-            emissiveIntensity={0.2}
-            metalness={0.9}
-            roughness={0.1}
-          />
-        </mesh>
-        {/* Solar panels */}
-        <mesh position={[0, 0, 0]} rotation={[0, 0, 0]}>
-          <boxGeometry args={[0.1, 0.002, 0.03]} />
-          <meshStandardMaterial
-            color="#2244AA"
-            emissive="#1133AA"
-            emissiveIntensity={0.3}
-            metalness={0.5}
-            roughness={0.3}
-          />
-        </mesh>
-        {/* Glow for visibility */}
-        <pointLight color="#8888FF" intensity={0.15} distance={1.5} />
+        <ArtifactRenderer 
+          artifact={artifact} 
+          fallback={
+            <>
+              <mesh>
+                <capsuleGeometry args={[0.015, 0.04, 4, 8]} />
+                <meshStandardMaterial color="#CCCCCC" emissive="#AAAACC" emissiveIntensity={0.2} metalness={0.9} roughness={0.1} />
+              </mesh>
+              <mesh position={[0, 0, 0]} rotation={[0, 0, 0]}>
+                <boxGeometry args={[0.1, 0.002, 0.03]} />
+                <meshStandardMaterial color="#2244AA" emissive="#1133AA" emissiveIntensity={0.3} metalness={0.5} roughness={0.3} />
+              </mesh>
+              <pointLight color="#8888FF" intensity={0.15} distance={1.5} />
+            </>
+          } 
+        />
       </group>
     </group>
   )
@@ -113,28 +131,22 @@ function VoyagerArtifact({
   return (
     <group ref={groupRef}>
       <group onClick={handleClick}>
-        {/* Spacecraft body */}
-        <mesh>
-          <boxGeometry args={[0.03, 0.02, 0.04]} />
-          <meshStandardMaterial
-            color="#D4A050"
-            emissive="#D4A050"
-            emissiveIntensity={0.4}
-            metalness={0.7}
-            roughness={0.3}
-          />
-        </mesh>
-        {/* Antenna dish */}
-        <mesh position={[0, 0.02, 0]} rotation={[0.3, 0, 0]}>
-          <coneGeometry args={[0.02, 0.015, 8]} />
-          <meshStandardMaterial
-            color="#CCCCCC"
-            metalness={0.8}
-            roughness={0.2}
-          />
-        </mesh>
-        {/* Signal glow */}
-        <pointLight color="#FFD700" intensity={0.3} distance={3} />
+        <ArtifactRenderer 
+          artifact={artifact} 
+          fallback={
+            <>
+              <mesh>
+                <boxGeometry args={[0.03, 0.02, 0.04]} />
+                <meshStandardMaterial color="#D4A050" emissive="#D4A050" emissiveIntensity={0.4} metalness={0.7} roughness={0.3} />
+              </mesh>
+              <mesh position={[0, 0.02, 0]} rotation={[0.3, 0, 0]}>
+                <coneGeometry args={[0.02, 0.015, 8]} />
+                <meshStandardMaterial color="#CCCCCC" metalness={0.8} roughness={0.2} />
+              </mesh>
+              <pointLight color="#FFD700" intensity={0.3} distance={3} />
+            </>
+          } 
+        />
       </group>
     </group>
   )
@@ -178,27 +190,22 @@ function HubbleArtifact({
   return (
     <group ref={groupRef}>
       <group onClick={handleClick}>
-        {/* Telescope tube */}
-        <mesh>
-          <cylinderGeometry args={[0.015, 0.02, 0.05, 8]} />
-          <meshStandardMaterial
-            color="#AABBCC"
-            emissive="#8899BB"
-            emissiveIntensity={0.2}
-            metalness={0.8}
-            roughness={0.2}
-          />
-        </mesh>
-        {/* Solar panels */}
-        <mesh rotation={[0, 0, Math.PI / 4]}>
-          <boxGeometry args={[0.08, 0.002, 0.025]} />
-          <meshStandardMaterial
-            color="#3344AA"
-            emissive="#2233AA"
-            emissiveIntensity={0.3}
-          />
-        </mesh>
-        <pointLight color="#6688FF" intensity={0.12} distance={1.5} />
+        <ArtifactRenderer 
+          artifact={artifact} 
+          fallback={
+            <>
+              <mesh>
+                <cylinderGeometry args={[0.015, 0.02, 0.05, 8]} />
+                <meshStandardMaterial color="#AABBCC" emissive="#8899BB" emissiveIntensity={0.2} metalness={0.8} roughness={0.2} />
+              </mesh>
+              <mesh rotation={[0, 0, Math.PI / 4]}>
+                <boxGeometry args={[0.08, 0.002, 0.025]} />
+                <meshStandardMaterial color="#3344AA" emissive="#2233AA" emissiveIntensity={0.3} />
+              </mesh>
+              <pointLight color="#6688FF" intensity={0.12} distance={1.5} />
+            </>
+          } 
+        />
       </group>
     </group>
   )

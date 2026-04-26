@@ -2,6 +2,7 @@
 
 import { useRef, useMemo } from 'react'
 import { useFrame, ThreeEvent, useThree } from '@react-three/fiber'
+import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { sunData } from './data'
 import { useSolarSystemStore } from './store'
@@ -403,6 +404,8 @@ export default function Sun() {
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
 
+  const sunTexture = useTexture(sunData.textureUrl!)
+
   useFrame((_, delta) => {
     if (meshRef.current) {
       meshRef.current.rotation.y += delta * 0.05
@@ -414,100 +417,6 @@ export default function Sun() {
     setSelectedBody('sun')
   }
 
-  const sunMaterial = useMemo(() => {
-    return new THREE.ShaderMaterial({
-      uniforms: {
-        time: { value: 0 },
-        color1: { value: new THREE.Color('#FDB813') },
-        color2: { value: new THREE.Color('#FF8C00') },
-        color3: { value: new THREE.Color('#FFD700') },
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        varying vec3 vNormal;
-        varying vec3 vPosition;
-        uniform float time;
-        
-        void main() {
-          vUv = uv;
-          vNormal = normalize(normalMatrix * normal);
-          vPosition = position;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        varying vec2 vUv;
-        varying vec3 vNormal;
-        varying vec3 vPosition;
-        uniform float time;
-        uniform vec3 color1;
-        uniform vec3 color2;
-        uniform vec3 color3;
-        
-        // Simple noise
-        float hash(vec2 p) {
-          return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-        }
-        
-        float noise(vec2 p) {
-          vec2 i = floor(p);
-          vec2 f = fract(p);
-          f = f * f * (3.0 - 2.0 * f);
-          float a = hash(i);
-          float b = hash(i + vec2(1.0, 0.0));
-          float c = hash(i + vec2(0.0, 1.0));
-          float d = hash(i + vec2(1.0, 1.0));
-          return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-        }
-        
-        float fbm(vec2 p) {
-          float value = 0.0;
-          float amplitude = 0.5;
-          for (int i = 0; i < 6; i++) {
-            value += amplitude * noise(p);
-            p *= 2.0;
-            amplitude *= 0.5;
-          }
-          return value;
-        }
-        
-        void main() {
-          vec2 uv = vUv;
-          float n = fbm(uv * 8.0 + time * 0.1);
-          float n2 = fbm(uv * 12.0 - time * 0.15);
-          float n3 = fbm(uv * 4.0 + time * 0.05);
-          
-          vec3 col = mix(color1, color2, n);
-          col = mix(col, color3, n2 * 0.4);
-          
-          // Sunspots (dark patches)
-          float spots = fbm(uv * 20.0 + time * 0.03);
-          col = mix(col, col * 0.4, smoothstep(0.55, 0.65, spots) * 0.6);
-          
-          // Bright granulation
-          float granules = fbm(uv * 30.0 + time * 0.08);
-          col += vec3(0.2, 0.1, 0.0) * smoothstep(0.6, 0.75, granules);
-          
-          // Edge darkening (limb darkening)
-          float fresnel = pow(1.0 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 1.5);
-          col = mix(col, color2 * 0.5, fresnel * 0.4);
-          
-          // Emission boost
-          col *= 1.3;
-          
-          gl_FragColor = vec4(col, 1.0);
-        }
-      `,
-    })
-  }, [])
-
-  useFrame((_, delta) => {
-    if (meshRef.current) {
-      const mat = meshRef.current.material as THREE.ShaderMaterial
-      mat.uniforms.time.value += delta
-    }
-  })
-
   const isSelected = selectedBody === 'sun'
 
   return (
@@ -515,10 +424,10 @@ export default function Sun() {
       {/* Main sun sphere */}
       <mesh
         ref={meshRef}
-        material={sunMaterial}
         onClick={handleClick}
       >
         <sphereGeometry args={[sunData.radius, 64, 64]} />
+        <meshBasicMaterial map={sunTexture} />
       </mesh>
 
       {/* Corona effect */}

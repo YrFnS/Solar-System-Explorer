@@ -11,6 +11,27 @@ interface MoonProps {
   parentId: string
 }
 
+import { useTexture } from '@react-three/drei'
+
+function TexturedMoon({ moonData, meshRef, handleClick }: any) {
+  const texture = useTexture(moonData.textureUrl!)
+  return (
+    <mesh ref={meshRef} onClick={handleClick}>
+      <sphereGeometry args={[moonData.radius, 32, 32]} />
+      <meshStandardMaterial map={texture} roughness={0.9} metalness={0.1} />
+    </mesh>
+  )
+}
+
+function ColorMoon({ moonData, meshRef, handleClick }: any) {
+  return (
+    <mesh ref={meshRef} onClick={handleClick}>
+      <sphereGeometry args={[moonData.radius, 16, 16]} />
+      <meshStandardMaterial color={moonData.color} roughness={0.9} metalness={0.1} />
+    </mesh>
+  )
+}
+
 export default function MoonComponent({ moonData, parentId }: MoonProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const meshRef = useRef<THREE.Mesh>(null)
@@ -26,7 +47,7 @@ export default function MoonComponent({ moonData, parentId }: MoonProps) {
       groupRef.current.position.z = Math.sin(angle) * moonData.orbitRadius
     }
     if (meshRef.current) {
-      meshRef.current.rotation.y += delta * 0.01 * timeSpeed
+      meshRef.current.rotation.y += delta * 0.5 * timeSpeed
     }
   })
 
@@ -37,14 +58,11 @@ export default function MoonComponent({ moonData, parentId }: MoonProps) {
 
   return (
     <group ref={groupRef}>
-      <mesh ref={meshRef} onClick={handleClick}>
-        <sphereGeometry args={[moonData.radius, 16, 16]} />
-        <meshStandardMaterial
-          color={moonData.color}
-          roughness={0.9}
-          metalness={0.1}
-        />
-      </mesh>
+      {moonData.textureUrl ? (
+        <TexturedMoon moonData={moonData} meshRef={meshRef} handleClick={handleClick} />
+      ) : (
+        <ColorMoon moonData={moonData} meshRef={meshRef} handleClick={handleClick} />
+      )}
     </group>
   )
 }

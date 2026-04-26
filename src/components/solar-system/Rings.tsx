@@ -10,9 +10,100 @@ interface RingsProps {
   color: string
   opacity: number
   planetRadius: number
+  textureUrl?: string
 }
 
-export default function Rings({ innerRadius, outerRadius, color, opacity, planetRadius }: RingsProps) {
+import { useTexture } from '@react-three/drei'
+
+function TexturedRing({ innerRadius, outerRadius, opacity, planetRadius, textureUrl }: Omit<RingsProps, 'color'>) {
+  const texture = useTexture(textureUrl!)
+  const ringRef = useRef<THREE.Mesh>(null!)
+  
+  const geometry = useMemo(() => {
+    const geo = new THREE.RingGeometry(innerRadius, outerRadius, 128, 4)
+    const pos = geo.attributes.position
+    const uv = geo.attributes.uv
+    const v3 = new THREE.Vector3()
+
+    // SolarSystemScope's ring textures are 1D horizontal strips. 
+    // We map the distance from center (inner..outer) to the X axis of the texture.
+    for (let i = 0; i < pos.count; i++) {
+      v3.fromBufferAttribute(pos, i)
+      const r = v3.length()
+      // u is 0 at inner radius, 1 at outer radius
+      const u = (r - innerRadius) / (outerRadius - innerRadius)
+      // v is technically not used since it's a 1D gradient strip, but we can set it to 0.5
+      uv.setXY(i, u, 0.5)
+    }
+    return geo
+  }, [innerRadius, outerRadius])
+
+  // Ring shadow on planet
+  const shadowGeometry = useMemo(() => {
+    const segments = 128
+    const geo = new THREE.CircleGeometry(planetRadius * 0.98, segments)
+    const pos = geo.attributes.position
+    const shadowAlpha = new Float32Array(pos.count)
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i)
+      const y = pos.getY(i)
+      const dist = Math.sqrt(x * x + y * y) / (planetRadius * 0.98)
+      const shadowIntensity = (1.0 - dist * dist) * 0.2
+      shadowAlpha[i] = Math.max(0, shadowIntensity)
+    }
+    geo.setAttribute('aShadowAlpha', new THREE.BufferAttribute(shadowAlpha, 1))
+    return geo
+  }, [planetRadius])
+
+  return (
+    <>
+      <mesh
+        ref={ringRef}
+        geometry={geometry}
+        rotation={[Math.PI * 0.35, 0, 0]}
+        renderOrder={2}
+      >
+        <meshBasicMaterial 
+          map={texture} 
+          transparent 
+          opacity={opacity * 1.5} 
+          side={THREE.DoubleSide} 
+          depthWrite={false} 
+        />
+      </mesh>
+
+      {/* Ring shadow on planet surface */}
+      <mesh
+        geometry={shadowGeometry}
+        rotation={[Math.PI * 0.35, 0, 0]}
+        position={[0, -planetRadius * 0.02, -planetRadius * 0.1]}
+        renderOrder={1}
+      >
+        <shaderMaterial
+          vertexShader={`
+            attribute float aShadowAlpha;
+            varying float vShadowAlpha;
+            void main() {
+              vShadowAlpha = aShadowAlpha;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `}
+          fragmentShader={`
+            varying float vShadowAlpha;
+            void main() {
+              gl_FragColor = vec4(0.0, 0.0, 0.0, vShadowAlpha);
+            }
+          `}
+          transparent
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+    </>
+  )
+}
+
+function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius }: Omit<RingsProps, 'textureUrl'>) {
   const ringRef = useRef<THREE.Mesh>(null!)
   const timeRef = useRef(0)
 
@@ -206,4 +297,11 @@ export default function Rings({ innerRadius, outerRadius, color, opacity, planet
       </mesh>
     </>
   )
+}
+
+export default function Rings(props: RingsProps) {
+  if (props.textureUrl) {
+    return <TexturedRing {...props} />
+  }
+  return <ProceduralRing {...props} />
 }
