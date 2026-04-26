@@ -157,7 +157,7 @@ function CentaurSurface({ data }: { data: CentaurData }) {
 export default function Centaur({ data }: CentaurProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const spinRef = useRef<THREE.Group>(null!)
-  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
+  const orbitAngleRef = useRef(data.initialAngle)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
@@ -181,7 +181,7 @@ export default function Centaur({ data }: CentaurProps) {
       groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * r * 0.3
     }
     if (spinRef.current) {
-      spinRef.current.rotation.y += delta * 0.25 * timeSpeed
+      spinRef.current.rotation.y += delta * data.rotationSpeed * 0.5 * timeSpeed
     }
   })
 

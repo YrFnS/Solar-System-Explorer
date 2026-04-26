@@ -163,7 +163,7 @@ function SDOSurface({ data }: { data: ScatteredDiscObjectData }) {
 export default function ScatteredDiscObject({ data }: ScatteredDiscObjectProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const spinRef = useRef<THREE.Group>(null!)
-  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
+  const orbitAngleRef = useRef(data.initialAngle)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)

@@ -155,7 +155,7 @@ function CometSelectionRings({ color, radius }: { color: string; radius: number 
 export default function Comet({ data }: CometProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const meshRef = useRef<THREE.Mesh>(null)
-  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
+  const orbitAngleRef = useRef(data.initialAngle)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
@@ -179,7 +179,7 @@ export default function Comet({ data }: CometProps) {
       groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * r * 0.4
     }
     if (meshRef.current) {
-      meshRef.current.rotation.y += delta * 0.01 * timeSpeed
+      meshRef.current.rotation.y += delta * (data.diameter > 20 ? 0.1 : 0.5) * timeSpeed
     }
   })
 
