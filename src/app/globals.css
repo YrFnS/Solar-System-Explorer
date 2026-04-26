@@ -1,0 +1,799 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: oklch(0 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.1 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.1 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.2 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.2 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.2 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.1 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.2 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-black text-foreground;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  html {
+    overflow: hidden;
+  }
+}
+
+/* Custom scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Canvas styling */
+canvas {
+  display: block;
+}
+
+/* Shrink animation for progress bars */
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* Smooth glow pulse for minimap selected indicators */
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.2); }
+}
+
+/* Smooth float animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+/* Slide in from right */
+@keyframes slide-in-right {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Slide out to right */
+@keyframes slide-out-right {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(100%); opacity: 0; }
+}
+
+/* Slide up from bottom for mobile bottom sheet */
+@keyframes slide-up-bottom {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Slide down to bottom for mobile bottom sheet */
+@keyframes slide-down-bottom {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(100%); opacity: 0; }
+}
+
+/* Slide in from left for controls panel */
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+/* Slide out to left for controls panel */
+@keyframes slide-out-left {
+  from { transform: translateX(0); opacity: 1; }
+  to { transform: translateX(-100%); opacity: 0; }
+}
+
+/* Subtle glow pulse for event banner */
+@keyframes subtle-glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(251, 191, 36, 0.1); }
+  50% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.25); }
+}
+
+/* Orbit progress bar fill animation */
+@keyframes orbit-progress-fill {
+  from { width: 0%; }
+}
+
+/* Planet orb rotation */
+@keyframes planet-orb-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Planet orb glow ring pulse */
+@keyframes planet-orb-glow {
+  0%, 100% { opacity: 0.3; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 0.6; transform: translate(-50%, -50%) scale(1.15); }
+}
+
+/* Ripple effect */
+@keyframes ripple {
+  0% { transform: scale(0); opacity: 0.5; }
+  100% { transform: scale(4); opacity: 0; }
+}
+
+/* Header gradient animation */
+@keyframes header-gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Gentle pulse for controls icon */
+@keyframes gentle-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Pulsing border glow for selected navigate buttons */
+@keyframes border-glow-pulse {
+  0%, 100% { box-shadow: 0 0 4px currentColor; }
+  50% { box-shadow: 0 0 12px currentColor, 0 0 20px currentColor; }
+}
+
+/* Arrow indicator bounce */
+@keyframes arrow-bounce {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(3px); }
+}
+
+/* Search dropdown slide down */
+@keyframes dropdown-slide-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Utility classes for animations */
+.animate-slide-in-right {
+  animation: slide-in-right 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-out-right {
+  animation: slide-out-right 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-up-bottom {
+  animation: slide-up-bottom 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-down-bottom {
+  animation: slide-down-bottom 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-subtle-glow-pulse {
+  animation: subtle-glow-pulse 2s ease-in-out infinite;
+}
+
+.animate-planet-orb-rotate {
+  animation: planet-orb-rotate 20s linear infinite;
+}
+
+.animate-planet-orb-glow {
+  animation: planet-orb-glow 2.5s ease-in-out infinite;
+}
+
+.animate-ripple {
+  animation: ripple 0.6s ease-out forwards;
+}
+
+.animate-header-gradient {
+  background-size: 200% 200%;
+  animation: header-gradient-shift 6s ease infinite;
+}
+
+.animate-gentle-pulse {
+  animation: gentle-pulse 2s ease-in-out infinite;
+}
+
+.animate-border-glow-pulse {
+  animation: border-glow-pulse 1.5s ease-in-out infinite;
+}
+
+.animate-dropdown-slide-down {
+  animation: dropdown-slide-down 0.2s ease-out forwards;
+}
+
+.animate-orbit-progress-fill {
+  animation: orbit-progress-fill 0.8s ease-out forwards;
+}
+
+/* ──────── Task 5: New CSS Animations ──────── */
+
+/* Welcome splash fade-out */
+@keyframes welcome-fade-out {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.02); filter: blur(8px); }
+}
+
+.animate-welcome-fade-out {
+  animation: welcome-fade-out 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Orbit diagram spin — for small orbit diagram in info panel header */
+@keyframes orbit-diagram-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-orbit-diagram-spin {
+  animation: orbit-diagram-spin 6s linear infinite;
+}
+
+/* Aurora shimmer — for minimap glow effect */
+@keyframes aurora-shimmer {
+  0% { opacity: 0.15; transform: translateX(-30%) scaleX(0.8); }
+  25% { opacity: 0.4; transform: translateX(-10%) scaleX(1.1); }
+  50% { opacity: 0.25; transform: translateX(10%) scaleX(0.9); }
+  75% { opacity: 0.5; transform: translateX(30%) scaleX(1.15); }
+  100% { opacity: 0.15; transform: translateX(-30%) scaleX(0.8); }
+}
+
+.animate-aurora-shimmer {
+  animation: aurora-shimmer 4s ease-in-out infinite;
+}
+
+/* Fun fact fade — for cycling fun facts in info panel */
+@keyframes fun-fact-fade {
+  0% { opacity: 0; transform: translateY(6px); }
+  10% { opacity: 1; transform: translateY(0); }
+  85% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
+.animate-fun-fact-fade {
+  animation: fun-fact-fade 5s ease-in-out forwards;
+}
+
+/* Temperature pulse — for temperature bar animation */
+@keyframes temperature-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(239, 68, 68, 0.2); }
+  50% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.4), 0 0 20px rgba(251, 191, 36, 0.15); }
+}
+
+.animate-temperature-pulse {
+  animation: temperature-pulse 2.5s ease-in-out infinite;
+}
+
+/* Glow text animation — for splash screen title */
+@keyframes glow-text {
+  0%, 100% { filter: drop-shadow(0 0 8px rgba(251,191,36,0.3)); }
+  50% { filter: drop-shadow(0 0 20px rgba(251,191,36,0.6)) drop-shadow(0 0 40px rgba(251,146,60,0.2)); }
+}
+
+.animate-glow-text {
+  animation: glow-text 3s ease-in-out infinite;
+}
+
+/* Sparkle twinkle — for celestial event banner particles */
+@keyframes sparkle-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0); }
+  50% { opacity: 0.8; transform: scale(1); }
+}
+
+.animate-sparkle-twinkle {
+  animation: sparkle-twinkle 1.5s ease-in-out infinite;
+}
+
+/* Selected planet prominent pulse — for minimap */
+@keyframes prominent-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(2); opacity: 0; }
+}
+
+.animate-prominent-pulse {
+  animation: prominent-pulse 1.5s ease-out infinite;
+}
+
+/* Minimap starfield twinkle */
+@keyframes starfield-twinkle {
+  0%, 100% { opacity: 0.1; }
+  50% { opacity: 0.3; }
+}
+
+/* ──────── Task 7-a: Enhanced Styling Animations ──────── */
+
+/* Glass morphism shimmer — subtle light sweep across glass panels */
+@keyframes glass-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-glass-shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.03) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: glass-shimmer 8s ease-in-out infinite;
+}
+
+/* Panel fade-in with scale for smooth open transitions */
+@keyframes panel-fade-in {
+  from { opacity: 0; transform: scale(0.96); filter: blur(4px); }
+  to { opacity: 1; transform: scale(1); filter: blur(0); }
+}
+
+.animate-panel-fade-in {
+  animation: panel-fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Panel fade-out for smooth close */
+@keyframes panel-fade-out {
+  from { opacity: 1; transform: scale(1); filter: blur(0); }
+  to { opacity: 0; transform: scale(0.96); filter: blur(4px); }
+}
+
+.animate-panel-fade-out {
+  animation: panel-fade-out 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Toggle switch glow when active */
+@keyframes toggle-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(251, 191, 36, 0.2); }
+  50% { box-shadow: 0 0 12px rgba(251, 191, 36, 0.4), 0 0 20px rgba(251, 191, 36, 0.1); }
+}
+
+.animate-toggle-glow {
+  animation: toggle-glow 2s ease-in-out infinite;
+}
+
+/* Gradient border rotate — for planet color gradient borders */
+@keyframes gradient-border-rotate {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradient-border {
+  background-size: 200% 200%;
+  animation: gradient-border-rotate 4s ease infinite;
+}
+
+/* Button press depth effect */
+@keyframes btn-press {
+  0% { transform: scale(1); }
+  50% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+.animate-btn-press {
+  animation: btn-press 0.15s ease-in-out;
+}
+
+/* Smooth section divider gradient */
+@keyframes divider-shimmer {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.7; }
+}
+
+.animate-divider-shimmer {
+  animation: divider-shimmer 3s ease-in-out infinite;
+}
+
+/* Slider thumb pulse */
+@keyframes slider-thumb-pulse {
+  0%, 100% { box-shadow: 0 0 4px rgba(251, 191, 36, 0.3); }
+  50% { box-shadow: 0 0 10px rgba(251, 191, 36, 0.5), 0 0 16px rgba(251, 191, 36, 0.15); }
+}
+
+/* Float up and fade — for toast notifications */
+@keyframes float-up-fade {
+  0% { opacity: 0; transform: translateY(8px) scale(0.95); }
+  15% { opacity: 1; transform: translateY(0) scale(1); }
+  85% { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-8px) scale(0.95); }
+}
+
+.animate-float-up-fade {
+  animation: float-up-fade 3s ease-in-out forwards;
+}
+
+/* Notification bell ring */
+@keyframes bell-ring {
+  0%, 100% { transform: rotate(0); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-12deg); }
+  30% { transform: rotate(8deg); }
+  40% { transform: rotate(-5deg); }
+  50% { transform: rotate(0); }
+}
+
+.animate-bell-ring {
+  animation: bell-ring 0.8s ease-in-out;
+}
+
+/* Custom slider track and thumb styling */
+.slider-planet [data-orientation="horizontal"] > span[data-orientation="horizontal"] {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(251,191,36,0.3), rgba(251,191,36,0.6));
+}
+
+.slider-planet button[role="slider"] {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #FBBF24, #F97316);
+  border: 2px solid rgba(255,255,255,0.2);
+  box-shadow: 0 0 8px rgba(251,191,36,0.3);
+  transition: box-shadow 0.2s, transform 0.15s;
+}
+
+.slider-planet button[role="slider"]:hover {
+  box-shadow: 0 0 14px rgba(251,191,36,0.5), 0 0 24px rgba(251,191,36,0.15);
+  transform: scale(1.15);
+}
+
+.slider-planet button[role="slider"]:focus {
+  box-shadow: 0 0 14px rgba(251,191,36,0.5), 0 0 24px rgba(251,191,36,0.15);
+}
+
+/* Enhanced glass morphism utility */
+.glass-panel {
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(20px) saturate(1.3);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 4px 30px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 0 0 1px rgba(255, 255, 255, 0.02);
+}
+
+.glass-panel-strong {
+  background: rgba(0, 0, 0, 0.80);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 
+    0 8px 40px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+/* Enhanced scrollbar for panels */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Focus button gradient border on hover */
+.focus-btn-gradient {
+  position: relative;
+  overflow: hidden;
+}
+.focus-btn-gradient::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.1) 100%);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.focus-btn-gradient:hover::before {
+  opacity: 1;
+}
+
+/* ──────── Task 4: Styling Polish Animations ──────── */
+
+/* Minimap scanning line animation */
+@keyframes scan-line {
+  0% { left: -10%; opacity: 0; }
+  10% { opacity: 0.6; }
+  90% { opacity: 0.6; }
+  100% { left: 110%; opacity: 0; }
+}
+
+.animate-scan-line {
+  animation: scan-line 4s ease-in-out infinite;
+}
+
+/* Speed waveform bar animation */
+@keyframes waveform-bar {
+  0%, 100% { transform: scaleY(0.3); }
+  50% { transform: scaleY(1); }
+}
+
+/* Live indicator pulse */
+@keyframes live-pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.5); }
+  100% { opacity: 0; transform: scale(2); }
+}
+
+.animate-live-pulse {
+  animation: live-pulse 1.5s ease-out infinite;
+}
+
+/* Sparkle float around planet orb */
+@keyframes sparkle-float {
+  0% { opacity: 0; transform: translate(0, 0) scale(0); }
+  20% { opacity: 1; transform: translate(var(--sx), var(--sy)) scale(1); }
+  80% { opacity: 0.8; transform: translate(calc(var(--sx) * 2), calc(var(--sy) * 2)) scale(0.8); }
+  100% { opacity: 0; transform: translate(calc(var(--sx) * 3), calc(var(--sy) * 3)) scale(0); }
+}
+
+.animate-sparkle-float {
+  animation: sparkle-float var(--duration, 2s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+/* Animated gradient border for info panel */
+@keyframes info-gradient-border {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-info-gradient-border {
+  background-size: 300% 100%;
+  animation: info-gradient-border 6s ease infinite;
+}
+
+/* Fun fact glow effect */
+@keyframes fun-fact-glow {
+  0%, 100% { box-shadow: 0 0 4px rgba(251, 191, 36, 0.05), inset 0 0 4px rgba(251, 191, 36, 0.02); }
+  50% { box-shadow: 0 0 16px rgba(251, 191, 36, 0.15), inset 0 0 8px rgba(251, 191, 36, 0.05); }
+}
+
+.animate-fun-fact-glow {
+  animation: fun-fact-glow 3s ease-in-out infinite;
+}
+
+/* Minimap glow trail for selected planet */
+@keyframes glow-trail {
+  0% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 0; transform: scale(2.5); }
+  100% { opacity: 0; transform: scale(3.5); }
+}
+
+.animate-glow-trail {
+  animation: glow-trail 2s ease-out infinite;
+}
+
+/* Speed preset transition glow */
+@keyframes preset-glow-pulse {
+  0%, 100% { box-shadow: 0 0 6px rgba(251, 191, 36, 0.15); }
+  50% { box-shadow: 0 0 14px rgba(251, 191, 36, 0.35), 0 0 24px rgba(251, 191, 36, 0.1); }
+}
+
+.animate-preset-glow {
+  animation: preset-glow-pulse 2s ease-in-out infinite;
+}
+
+/* Toggle row hover slide effect */
+.toggle-row-hover {
+  transition: all 0.2s ease;
+  border-radius: 6px;
+  padding: 4px 6px;
+  margin: -4px -6px;
+}
+.toggle-row-hover:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Gradient text utility for time display */
+.gradient-text-time {
+  background: linear-gradient(135deg, #93C5FD, #60A5FA, #818CF8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glassmorphism tooltip for minimap */
+.glass-tooltip {
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px) saturate(1.5);
+  -webkit-backdrop-filter: blur(12px) saturate(1.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Distance indicator styles */
+.distance-indicator-bar {
+  background: linear-gradient(90deg,
+    rgba(52, 211, 153, 0.15) 0%,
+    rgba(52, 211, 153, 0.3) 30%,
+    rgba(251, 191, 36, 0.3) 60%,
+    rgba(239, 68, 68, 0.3) 100%
+  );
+}
+
+/* Moon list item style */
+.moon-item {
+  transition: all 0.2s ease;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.moon-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Enhanced section gradient divider */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(251, 191, 36, 0.08) 15%,
+    rgba(255, 255, 255, 0.1) 50%,
+    rgba(251, 191, 36, 0.08) 85%,
+    transparent 100%
+  );
+}
+
+/* Sun logo glow effect */
+.sun-logo-glow {
+  position: relative;
+}
+.sun-logo-glow::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.3) 0%, transparent 70%);
+  animation: sun-glow-pulse 2.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes sun-glow-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.2); }
+}
+
+/* Speed waveform visualization */
+.speed-waveform {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 10px;
+}
+.speed-waveform-bar {
+  width: 2px;
+  border-radius: 1px;
+  background: linear-gradient(to top, rgba(251, 191, 36, 0.3), rgba(251, 191, 36, 0.7));
+  transform-origin: bottom;
+  transition: transform 0.3s ease;
+}
+
+/* Timeline mini visualization */
+.timeline-mini {
+  position: relative;
+  height: 20px;
+}
+.timeline-mini-dot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  transition: all 0.3s ease;
+}
+.timeline-mini-line {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(251,191,36,0.15), rgba(255,255,255,0.05));
+  transform: translateY(-50%);
+}
+.timeline-mini-active {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(251,191,36,0.3), rgba(251,191,36,0.7));
+  transform: translateY(-50%);
+  border-radius: 1px;
+  transition: width 0.5s ease;
+}
+
+/* Quick action button icon animation */
+.quick-action-icon {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.quick-action-icon:hover .quick-action-icon {
+  transform: scale(1.15) rotate(-5deg);
+}
