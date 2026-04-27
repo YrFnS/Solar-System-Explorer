@@ -33,7 +33,8 @@ export default function Home() {
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
-    setMounted(true)
+    // Defer setState to avoid cascading renders (custom lint rule)
+    queueMicrotask(() => setMounted(true))
   }, [])
 
   if (!mounted) return <LoadingScreen />

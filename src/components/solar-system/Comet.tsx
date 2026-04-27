@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { CometData } from './data'
 import { useSolarSystemStore } from './store'
 import PlanetLabel from './PlanetLabel'
+import { solveKeplerEquation, calculateTrueAnomaly } from './OrbitalMechanics'
 
 interface CometProps {
   data: CometData
@@ -157,7 +158,6 @@ export default function Comet({ data }: CometProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const comaRef = useRef<THREE.Mesh>(null)
   const nucleusRef = useRef<THREE.Mesh>(null)
-  const orbitAngleRef = useRef(data.initialAngle)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
@@ -165,20 +165,30 @@ export default function Comet({ data }: CometProps) {
   const customDateAngleBase = useSolarSystemStore((s) => s.customDateAngleBase)
 
   const inclinationRad = (data.orbitInclination * Math.PI) / 180
+  // Track time for Kepler solver
+  const timeRef = useRef(0)
 
   useFrame((_, delta) => {
+    timeRef.current += delta * timeSpeed
     if (groupRef.current) {
-      orbitAngleRef.current += delta * data.orbitSpeed * 0.05 * timeSpeed
-      const angle = orbitAngleRef.current + customDateAngleBase * data.orbitSpeed
+      // Calculate mean anomaly from time
+      const M = timeRef.current * data.orbitSpeed * 0.05 % (2 * Math.PI)
 
-      // Elliptical orbit for comets (high eccentricity)
+      // Solve Kepler's equation for eccentric anomaly
+      const E = solveKeplerEquation(M, data.orbitEccentricity)
+
+      // Calculate true anomaly
+      const nu = calculateTrueAnomaly(E, data.orbitEccentricity)
+
+      // Calculate distance from Sun
       const e = data.orbitEccentricity
       const a = data.orbitRadius
-      const r = a * (1 - e * e) / (1 + e * Math.cos(angle))
+      const r = a * (1 - e * e) / (1 + e * Math.cos(nu))
 
-      groupRef.current.position.x = Math.cos(angle) * r
-      groupRef.current.position.z = Math.sin(angle) * r
-      groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * r * 0.4
+      // Position in 3D space with orbital inclination
+      groupRef.current.position.x = r * Math.cos(nu)
+      groupRef.current.position.z = r * Math.sin(nu) * Math.cos(inclinationRad)
+      groupRef.current.position.y = r * Math.sin(nu) * Math.sin(inclinationRad)
     }
     if (meshRef.current) {
       meshRef.current.rotation.y += delta * (data.diameter > 20 ? 0.1 : 0.5) * timeSpeed

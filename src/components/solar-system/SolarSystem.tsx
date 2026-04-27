@@ -2,7 +2,7 @@
 
 import { useRef, useEffect, useCallback } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { OrbitControls, FlyControls } from '@react-three/drei'
 import { EffectComposer, Bloom } from '@react-three/postprocessing'
 import * as THREE from 'three'
 import Sun from './Sun'
@@ -16,6 +16,8 @@ import { AsteroidBelt, KuiperBelt } from './AsteroidBelt'
 import TrojanAsteroids from './TrojanAsteroids'
 import OortCloud from './OortCloud'
 import Heliosphere from './Heliosphere'
+import CentaurBelt from './CentaurBelt'
+import ScatteredDiscBelt from './ScatteredDiscBelt'
 import StarField from './StarField'
 import Constellations from './Constellations'
 import DistanceRuler from './DistanceRuler'
@@ -26,6 +28,14 @@ import GravityWells from './GravityWells'
 import BlackHole from './BlackHole'
 import Wormhole from './Wormhole'
 import OrbitLine from './OrbitLine'
+import SolarWind from './SolarWind'
+import ZodiacalLight from './ZodiacalLight'
+import NearEarthObjects from './NearEarthObjects'
+import SpawnedObjects from './SpawnedObjects'
+import CollisionDetector from './CollisionDetector'
+import ExplosionsRenderer from './ExplosionsRenderer'
+import GalacticNeighborhood from './GalacticNeighborhood'
+import SoundManager from './SoundManager'
 import { planets, sunData, dwarfPlanets, comets, interstellarObjects, centaurs, scatteredDiscObjects, blackHoles, wormholes } from './data'
 import { useSolarSystemStore } from './store'
 
@@ -68,6 +78,7 @@ function CameraController() {
   const autoRotate = useSolarSystemStore((s) => s.autoRotate)
   const cameraPosition = useSolarSystemStore((s) => s.cameraPosition)
   const setCameraPosition = useSolarSystemStore((s) => s.setCameraPosition)
+  const cameraMode = useSolarSystemStore((s) => s.cameraMode)
   const { camera } = useThree()
 
   const isAnimating = useRef(false)
@@ -249,6 +260,10 @@ function CameraController() {
     }
   })
 
+  if (cameraMode === 'fly') {
+    return null // FlyControls handles its own camera
+  }
+
   return (
     <OrbitControls
       ref={controlsRef}
@@ -284,6 +299,8 @@ function KeyboardControls() {
   const setScreenshotMode = useSolarSystemStore((s) => s.setScreenshotMode)
   const screenshotMode = useSolarSystemStore((s) => s.screenshotMode)
   const toggleFollowMode = useSolarSystemStore((s) => s.toggleFollowMode)
+  const cameraMode = useSolarSystemStore((s) => s.cameraMode)
+  const setCameraMode = useSolarSystemStore((s) => s.setCameraMode)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -355,11 +372,16 @@ function KeyboardControls() {
           e.preventDefault()
           toggleFollowMode()
           break
+        case 'm':
+        case 'M':
+          e.preventDefault()
+          setCameraMode(cameraMode === 'orbit' ? 'fly' : 'orbit')
+          break
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigateNext, navigatePrev, setTimeSpeed, timeSpeed, togglePause, resetCamera, startTour, stopTour, isTourMode, nextTourStep, prevTourStep, toggleAutoRotate, setScreenshotMode, screenshotMode, toggleFollowMode])
+  }, [navigateNext, navigatePrev, setTimeSpeed, timeSpeed, togglePause, resetCamera, startTour, stopTour, isTourMode, nextTourStep, prevTourStep, toggleAutoRotate, setScreenshotMode, screenshotMode, toggleFollowMode, cameraMode, setCameraMode])
 
   return null
 }
@@ -367,6 +389,9 @@ function KeyboardControls() {
 export default function SolarSystem() {
   const showBlackHole = useSolarSystemStore((s) => s.showBlackHole)
   const showWormhole = useSolarSystemStore((s) => s.showWormhole)
+  const cameraMode = useSolarSystemStore((s) => s.cameraMode)
+  const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
+  const isPaused = useSolarSystemStore((s) => s.isPaused)
 
   return (
     <>
@@ -376,8 +401,20 @@ export default function SolarSystem() {
       {/* Camera controller */}
       <CameraController />
 
+      {/* Free fly controls */}
+      {cameraMode === 'fly' && (
+        <FlyControls
+          movementSpeed={50}
+          rollSpeed={0.5}
+          dragToLook={true}
+        />
+      )}
+
       {/* Keyboard controls */}
       <KeyboardControls />
+
+      {/* Sound manager */}
+      <SoundManager />
 
       {/* Reference grid plane */}
       <ReferenceGrid />
@@ -385,8 +422,17 @@ export default function SolarSystem() {
       {/* Background nebula/milky way */}
       <Nebula />
 
+      {/* Galactic neighborhood - Alpha Centauri, Galactic Center */}
+      <GalacticNeighborhood />
+
       {/* Background stars */}
       <StarField />
+
+      {/* Solar wind particles */}
+      <SolarWind />
+
+      {/* Zodiacal light */}
+      <ZodiacalLight />
 
       {/* Meteor shower */}
       <MeteorShower />
@@ -452,17 +498,33 @@ export default function SolarSystem() {
       {/* Asteroid belt */}
       <AsteroidBelt />
 
+      {/* Near Earth Objects */}
+      <NearEarthObjects />
+
       {/* Trojan Asteroids at Jupiter L4/L5 */}
       <TrojanAsteroids />
 
       {/* Kuiper belt */}
       <KuiperBelt />
 
+      {/* Centaur Belt */}
+      <CentaurBelt />
+
+      {/* Scattered Disc Belt */}
+      <ScatteredDiscBelt />
+
       {/* Heliosphere */}
       <Heliosphere />
 
       {/* Oort cloud */}
       <OortCloud />
+
+      {/* Spawned objects */}
+      <SpawnedObjects />
+
+      {/* Collision detection and explosions */}
+      <CollisionDetector />
+      <ExplosionsRenderer />
 
       {/* Black Holes */}
       {showBlackHole && blackHoles.map((bh) => (
@@ -477,7 +539,14 @@ export default function SolarSystem() {
       {/* Human artifacts */}
       <HumanArtifacts />
 
-
+      {/* Post-processing effects */}
+      <EffectComposer>
+        <Bloom
+          luminanceThreshold={0.8}
+          luminanceSmoothing={0.9}
+          intensity={1.5}
+        />
+      </EffectComposer>
     </>
   )
 }

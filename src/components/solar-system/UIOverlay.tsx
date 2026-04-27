@@ -297,6 +297,24 @@ function ControlsPanel() {
   const setShowBlackHole = useSolarSystemStore((s) => s.setShowBlackHole)
   const showWormhole = useSolarSystemStore((s) => s.showWormhole)
   const setShowWormhole = useSolarSystemStore((s) => s.setShowWormhole)
+  const showCentaurs = useSolarSystemStore((s) => s.showCentaurs)
+  const setShowCentaurs = useSolarSystemStore((s) => s.setShowCentaurs)
+  const showScatteredDisc = useSolarSystemStore((s) => s.showScatteredDisc)
+  const setShowScatteredDisc = useSolarSystemStore((s) => s.setShowScatteredDisc)
+  const realisticDistances = useSolarSystemStore((s) => s.realisticDistances)
+  const setRealisticDistances = useSolarSystemStore((s) => s.setRealisticDistances)
+  const realisticSizes = useSolarSystemStore((s) => s.realisticSizes)
+  const setRealisticSizes = useSolarSystemStore((s) => s.setRealisticSizes)
+  const showPhenomena = useSolarSystemStore((s) => s.showPhenomena)
+  const setShowPhenomena = useSolarSystemStore((s) => s.setShowPhenomena)
+  const showSolarWind = useSolarSystemStore((s) => s.showSolarWind)
+  const setShowSolarWind = useSolarSystemStore((s) => s.setShowSolarWind)
+  const showZodiacalLight = useSolarSystemStore((s) => s.showZodiacalLight)
+  const setShowZodiacalLight = useSolarSystemStore((s) => s.setShowZodiacalLight)
+  const showGalacticNeighborhood = useSolarSystemStore((s) => s.showGalacticNeighborhood)
+  const setShowGalacticNeighborhood = useSolarSystemStore((s) => s.setShowGalacticNeighborhood)
+  const cameraMode = useSolarSystemStore((s) => s.cameraMode)
+  const setCameraMode = useSolarSystemStore((s) => s.setCameraMode)
   const customDate = useSolarSystemStore((s) => s.customDate)
   const setCustomDate = useSolarSystemStore((s) => s.setCustomDate)
   const autoRotate = useSolarSystemStore((s) => s.autoRotate)
@@ -315,6 +333,9 @@ function ControlsPanel() {
   const addBookmarkAction = useSolarSystemStore((s) => s.addBookmark)
   const removeBookmarkAction = useSolarSystemStore((s) => s.removeBookmark)
   const loadBookmarkAction = useSolarSystemStore((s) => s.loadBookmark)
+  const spawnObject = useSolarSystemStore((s) => s.spawnObject)
+  const spawnedObjects = useSolarSystemStore((s) => s.spawnedObjects)
+  const removeSpawnedObject = useSolarSystemStore((s) => s.removeSpawnedObject)
   const rotationSpeedMultiplier = useSolarSystemStore((s) => s.rotationSpeedMultiplier)
   const setRotationSpeedMultiplier = useSolarSystemStore((s) => s.setRotationSpeedMultiplier)
   const [showShortcuts, setShowShortcuts] = useState(false)
@@ -567,6 +588,8 @@ function ControlsPanel() {
                 <ToggleRow icon={<Tag className="w-3 h-3" />} label="Labels" checked={showLabels} onChange={setShowLabels} />
                 <ToggleRow icon={<Sparkles className="w-3 h-3" />} label="Asteroid Belt" checked={showAsteroidBelt} onChange={setShowAsteroidBelt} />
                 <ToggleRow icon={<Sparkles className="w-3 h-3" />} label="Kuiper Belt" checked={showKuiperBelt} onChange={setShowKuiperBelt} />
+                <ToggleRow icon={<Sparkles className="w-3 h-3" />} label="Centaurs" checked={showCentaurs} onChange={setShowCentaurs} />
+                <ToggleRow icon={<Sparkles className="w-3 h-3" />} label="Scattered Disc" checked={showScatteredDisc} onChange={setShowScatteredDisc} />
                 <ToggleRow icon={<Cloud className="w-3 h-3" />} label="Nebula" checked={showNebula} onChange={setShowNebula} />
                 <ToggleRow icon={<Footprints className="w-3 h-3" />} label="Orbital Trails" checked={showTrails} onChange={setShowTrails} />
                 <ToggleRow icon={<RefreshCw className="w-3 h-3" />} label="Auto Rotate" checked={autoRotate} onChange={() => toggleAutoRotate()} />
@@ -579,6 +602,71 @@ function ControlsPanel() {
                 <ToggleRow icon={<Sparkles className="w-3 h-3" />} label="Jupiter Trojans" checked={showTrojans} onChange={setShowTrojans} />
                 <ToggleRow icon={<Circle className="w-3 h-3 text-amber-600/70" />} label="Black Hole" checked={showBlackHole} onChange={setShowBlackHole} />
                 <ToggleRow icon={<GitMerge className="w-3 h-3 text-purple-400/70" />} label="Wormhole" checked={showWormhole} onChange={setShowWormhole} />
+                <ToggleRow icon={<Navigation className="w-3 h-3" />} label="Free Fly (M)" checked={cameraMode === 'fly'} onChange={() => setCameraMode(cameraMode === 'orbit' ? 'fly' : 'orbit')} />
+                <ToggleRow icon={<Sparkles className="w-3 h-3" />} label="Solar Wind" checked={showSolarWind} onChange={setShowSolarWind} />
+                <ToggleRow icon={<Sparkles className="w-3 h-3" />} label="Zodiacal Light" checked={showZodiacalLight} onChange={setShowZodiacalLight} />
+                <ToggleRow icon={<Shield className="w-3 h-3" />} label="Phenomena" checked={showPhenomena} onChange={setShowPhenomena} />
+                <ToggleRow icon={<Star className="w-3 h-3" />} label="Galactic Neighborhood" checked={showGalacticNeighborhood} onChange={setShowGalacticNeighborhood} />
+              </div>
+
+              <div className="section-divider" />
+
+              {/* Scale toggles */}
+              <div className="space-y-2">
+                <label className="text-[11px] text-white/50 flex items-center gap-1.5">
+                  <Map className="w-3 h-3" />
+                  Scale Mode
+                </label>
+                <ToggleRow icon={<Ruler className="w-3 h-3" />} label="Realistic Distances" checked={realisticDistances} onChange={setRealisticDistances} />
+                <ToggleRow icon={<Activity className="w-3 h-3" />} label="Realistic Sizes" checked={realisticSizes} onChange={setRealisticSizes} />
+              </div>
+
+              <div className="section-divider" />
+
+              {/* Spawn Menu */}
+              <div className="space-y-2">
+                <label className="text-[11px] text-white/50 flex items-center gap-1.5">
+                  <Rocket className="w-3 h-3" />
+                  Spawn Objects ({spawnedObjects.length}/10)
+                </label>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => spawnObject('comet')}
+                    disabled={spawnedObjects.length >= 10}
+                    className="flex-1 text-[9px] px-2 py-1.5 rounded-lg transition-all bg-blue-500/15 text-blue-400 border border-blue-500/30 hover:bg-blue-500/25 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Comet
+                  </button>
+                  <button
+                    onClick={() => spawnObject('asteroid')}
+                    disabled={spawnedObjects.length >= 10}
+                    className="flex-1 text-[9px] px-2 py-1.5 rounded-lg transition-all bg-gray-500/15 text-gray-400 border border-gray-500/30 hover:bg-gray-500/25 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Asteroid
+                  </button>
+                  <button
+                    onClick={() => spawnObject('interstellar')}
+                    disabled={spawnedObjects.length >= 10}
+                    className="flex-1 text-[9px] px-2 py-1.5 rounded-lg transition-all bg-orange-500/15 text-orange-400 border border-orange-500/30 hover:bg-orange-500/25 disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Interstellar
+                  </button>
+                </div>
+                {spawnedObjects.length > 0 && (
+                  <div className="space-y-1 mt-1">
+                    {spawnedObjects.map((obj) => (
+                      <div key={obj.id} className="flex items-center justify-between bg-white/5 rounded-lg px-2 py-1">
+                        <span className="text-[9px] text-white/70">{obj.name}</span>
+                        <button
+                          onClick={() => removeSpawnedObject(obj.id)}
+                          className="text-white/30 hover:text-red-400 text-[8px]"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="section-divider" />

@@ -4,9 +4,10 @@ import { useRef, useMemo } from 'react'
 import { useFrame, ThreeEvent } from '@react-three/fiber'
 import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
-import { DwarfPlanetData } from './data'
+import { DwarfPlanetData, MoonData } from './data'
 import { useSolarSystemStore } from './store'
 import PlanetLabel from './PlanetLabel'
+import MoonComponent from './Moon'
 
 interface DwarfPlanetProps {
   data: DwarfPlanetData
@@ -182,6 +183,9 @@ export default function DwarfPlanet({ data }: DwarfPlanetProps) {
   // Convert inclination to radians
   const inclinationRad = (data.orbitInclination * Math.PI) / 180
 
+  // Special handling for Pluto-Charon binary system
+  const isPlutoBinary = data.id === 'pluto' && data.moons && data.moons.length > 0
+
   useFrame((_, delta) => {
     if (groupRef.current) {
       orbitAngleRef.current += delta * data.orbitSpeed * 0.05 * timeSpeed
@@ -203,20 +207,39 @@ export default function DwarfPlanet({ data }: DwarfPlanetProps) {
 
   const isSelected = selectedBody === data.id
 
+  // Pluto-Charon barycenter parameters
+  // The barycenter is ~0.6 Pluto radii from Pluto's center toward Charon
+  // (Charon mass is ~11.6% of Pluto, but for visual purposes we use 0.18 ratio)
+  const BARYCENTER_RATIO = 0.18 // offset from Pluto toward Charon as fraction of orbit radius
+
   return (
     <group ref={groupRef}>
-      <group ref={spinRef} onClick={handleClick}>
-        {data.textureUrl ? (
-          <TexturedDwarfPlanetSurface data={data} />
-        ) : (
-          <DwarfPlanetSurface data={data} />
-        )}
-        {/* Clickable hit area - larger invisible sphere for easier selection */}
-        <mesh>
-          <sphereGeometry args={[Math.max(data.radius * 2.5, 0.4), 16, 16]} />
-          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-        </mesh>
-      </group>
+      {isPlutoBinary ? (
+        // Pluto-Charon binary system: both orbit the barycenter
+        <PlutoCharonSystem
+          data={data}
+          moons={data.moons!}
+          spinRef={spinRef}
+          isSelected={isSelected}
+          handleClick={handleClick}
+          BARYCENTER_RATIO={BARYCENTER_RATIO}
+          showLabels={showLabels}
+        />
+      ) : (
+        // Normal dwarf planet (single body)
+        <group ref={spinRef} onClick={handleClick}>
+          {data.textureUrl ? (
+            <TexturedDwarfPlanetSurface data={data} />
+          ) : (
+            <DwarfPlanetSurface data={data} />
+          )}
+          {/* Clickable hit area - larger invisible sphere for easier selection */}
+          <mesh>
+            <sphereGeometry args={[Math.max(data.radius * 2.5, 0.4), 16, 16]} />
+            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+          </mesh>
+        </group>
+      )}
 
       {/* Selection indicator - animated pulsing rings */}
       {isSelected && <DwarfSelectionRings color={data.color} radius={data.radius} />}
@@ -232,9 +255,102 @@ export default function DwarfPlanet({ data }: DwarfPlanetProps) {
         distance={2}
       />
 
-      {showLabels && (
+      {showLabels && !isPlutoBinary && (
         <PlanetLabel name={data.name} offset={data.radius + 0.3} bodyId={data.id} />
       )}
     </group>
+  )
+}
+
+// Separate component for Pluto-Charon binary system
+interface PlutoCharonSystemProps {
+  data: DwarfPlanetData
+  moons: MoonData[]
+  spinRef: React.RefObject<THREE.Group>
+  isSelected: boolean
+  handleClick: (e: ThreeEvent<MouseEvent>) => void
+  BARYCENTER_RATIO: number
+  showLabels: boolean
+}
+
+function PlutoCharonSystem({ data, moons, spinRef, isSelected, handleClick, BARYCENTER_RATIO, showLabels }: PlutoCharonSystemProps) {
+  const charonRef = useRef<THREE.Group>(null!)
+  const charonLabelRef = useRef<THREE.Group>(null!)
+  // Charon starts opposite to Pluto's initial position (pi offset)
+  const charonAngleRef = useRef(Math.PI * 0.5 + data.initialAngle)
+  const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
+
+  const charon = moons.find(m => m.name === 'Charon')
+
+  useFrame((_, delta) => {
+    if (charonRef.current && charon) {
+      // Charon orbits the barycenter
+      charonAngleRef.current += delta * (charon?.orbitSpeed || 0.15) * 0.05 * timeSpeed
+      const angle = charonAngleRef.current
+
+      // Distance from barycenter to Charon (Charon's full orbit radius minus barycenter offset)
+      const charonDistFromBarycenter = charon!.orbitRadius * (1 - BARYCENTER_RATIO)
+
+      charonRef.current.position.x = Math.cos(angle) * charonDistFromBarycenter
+      charonRef.current.position.z = Math.sin(angle) * charonDistFromBarycenter
+
+      // Sync label position with Charon mesh
+      if (charonLabelRef.current) {
+        charonLabelRef.current.position.x = charonRef.current.position.x
+        charonLabelRef.current.position.z = charonRef.current.position.z
+      }
+    }
+
+    // Pluto wobbles around the barycenter (opposite to Charon's direction)
+    // The barycenter is at the group's position, and we offset Pluto slightly
+    if (spinRef.current && charon) {
+      // Pluto orbits the barycenter at BARYCENTER_RATIO * orbitRadius, opposite to Charon
+      const plutoDistFromBarycenter = charon!.orbitRadius * BARYCENTER_RATIO
+      const charonAngle = charonAngleRef.current
+      // Pluto moves opposite to Charon (180 degrees out of phase)
+      spinRef.current.position.x = -Math.cos(charonAngle) * plutoDistFromBarycenter
+      spinRef.current.position.z = -Math.sin(charonAngle) * plutoDistFromBarycenter
+    }
+  })
+
+  if (!charon) return null
+
+  return (
+    <>
+      {/* Pluto (with spinRef handling the wobble) */}
+      <group ref={spinRef} onClick={handleClick}>
+        {data.textureUrl ? (
+          <TexturedDwarfPlanetSurface data={data} />
+        ) : (
+          <DwarfPlanetSurface data={data} />
+        )}
+        <mesh>
+          <sphereGeometry args={[Math.max(data.radius * 2.5, 0.4), 16, 16]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      </group>
+
+      {/* Charon orbiting the barycenter */}
+      <group ref={charonRef}>
+        <mesh onClick={(e: ThreeEvent<MouseEvent>) => {
+          e.stopPropagation()
+          useSolarSystemStore.getState().setSelectedBody('pluto-charon')
+        }}>
+          <sphereGeometry args={[charon.radius, 32, 32]} />
+          <meshStandardMaterial color={charon.color} roughness={0.9} metalness={0.1} />
+        </mesh>
+      </group>
+
+      {/* Pluto label */}
+      {showLabels && (
+        <PlanetLabel name="Pluto" offset={data.radius + 0.3} bodyId={data.id} />
+      )}
+      {/* Charon label */}
+      {showLabels && charon && (
+        <group ref={charonLabelRef}>
+          <PlanetLabel name="Charon" offset={charon.radius + 0.2} bodyId="pluto-charon" />
+        </group>
+      )}
+    </>
   )
 }

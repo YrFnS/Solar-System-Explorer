@@ -138,6 +138,7 @@ export default function MoonComponent({ moonData, parentId }: MoonProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const meshRef = useRef<THREE.Mesh>(null)
   const orbitAngleRef = useRef(Math.PI * 0.5)
+  const tidalOffsetRef = useRef(0)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
 
@@ -148,11 +149,13 @@ export default function MoonComponent({ moonData, parentId }: MoonProps) {
       groupRef.current.position.x = Math.cos(angle) * moonData.orbitRadius
       groupRef.current.position.z = Math.sin(angle) * moonData.orbitRadius
     }
-    // Moons are tidally locked — rotation period ≈ orbital period
-    // Use inverse of orbital period for visible rotation
+    // Tidal locking: moon rotates such that the same face always points to the planet
+    // Rotation period equals orbital period
     if (meshRef.current) {
-      const rotationFactor = 50 / Math.max(moonData.orbitalPeriod, 1)
-      meshRef.current.rotation.y += delta * rotationFactor * timeSpeed
+      const angle = orbitAngleRef.current
+      // Set rotation to face the planet - the negative orbital angle keeps the same face toward the parent
+      // tidalOffsetRef accounts for initial orientation so the correct "leading" face points to planet
+      meshRef.current.rotation.y = -angle + tidalOffsetRef.current
     }
   })
 

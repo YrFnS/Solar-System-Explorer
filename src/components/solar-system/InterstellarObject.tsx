@@ -6,6 +6,7 @@ import * as THREE from 'three'
 import { InterstellarObjectData } from './data'
 import { useSolarSystemStore } from './store'
 import PlanetLabel from './PlanetLabel'
+import { solveKeplerEquation, calculateTrueAnomaly } from './OrbitalMechanics'
 
 interface InterstellarObjectProps {
   data: InterstellarObjectData
@@ -135,7 +136,6 @@ function InterstellarSelectionRings({ color, radius }: { color: string; radius: 
 export default function InterstellarObject({ data }: InterstellarObjectProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const meshRef = useRef<THREE.Mesh>(null)
-  const animProgressRef = useRef(0)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
@@ -145,32 +145,36 @@ export default function InterstellarObject({ data }: InterstellarObjectProps) {
   // Objects come from far away, curve around the Sun, and leave
   // We loop the animation for visibility
   const inclinationRad = (data.orbitInclination * Math.PI) / 180
+  // Track time for Kepler solver
+  const timeRef = useRef(0)
 
   // Scale for 'Oumuamua's elongated shape
   const isOumuamua = data.id === 'oumuamua'
   const objectScale = isOumuamua ? new THREE.Vector3(3, 0.3, 0.3) : new THREE.Vector3(1, 1, 1)
 
   useFrame((_, delta) => {
+    timeRef.current += delta * timeSpeed
     if (groupRef.current) {
-      // Animate progress along hyperbolic path (0 to 1 and loop)
-      animProgressRef.current += delta * data.orbitSpeed * 0.02 * timeSpeed
-      if (animProgressRef.current > 1) animProgressRef.current -= 1
+      // For hyperbolic trajectories, use negative semi-major axis
+      // Mean anomaly increases linearly with time
+      const M = timeRef.current * data.orbitSpeed * 0.02 % (2 * Math.PI)
 
-      const t = animProgressRef.current
-      // Map progress to a hyperbolic-like path
-      // t: 0 = far approach, 0.5 = perihelion, 1 = far departure
-      const angle = (t - 0.5) * Math.PI * 1.5 // sweep from -135° to +135° around perihelion
+      // Solve Kepler's equation for hyperbolic eccentric anomaly
+      const H = solveKeplerEquation(M, data.orbitEccentricity)
+
+      // Calculate true anomaly for hyperbolic case
+      const nu = calculateTrueAnomaly(H, data.orbitEccentricity)
+
+      // Calculate distance using hyperbolic form
+      // r = a * (e^2 - 1) / (1 + e * cos(nu)) where a is negative for hyperbolic
       const e = data.orbitEccentricity
       const a = data.orbitRadius
-      // For hyperbolic orbits, use the conic section formula
-      // r = a * (e^2 - 1) / (1 + e * cos(trueAnomaly))
-      // But we clamp to keep objects visible
-      const denom = 1 + e * Math.cos(angle)
-      const r = denom > 0.1 ? Math.min(a * (e * e - 1) / denom, 80) : 80
+      const r = Math.min(a * (e * e - 1) / (1 + e * Math.cos(nu)), 80)
 
-      groupRef.current.position.x = Math.cos(angle) * r
-      groupRef.current.position.z = Math.sin(angle) * r
-      groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * r * 0.3
+      // Position in 3D space with orbital inclination
+      groupRef.current.position.x = r * Math.cos(nu)
+      groupRef.current.position.z = r * Math.sin(nu) * Math.cos(inclinationRad)
+      groupRef.current.position.y = r * Math.sin(nu) * Math.sin(inclinationRad)
     }
 
     // Tumble for 'Oumuamua

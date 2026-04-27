@@ -311,7 +311,7 @@ function JWSTArtifact({
       groupRef.current.position.z = parentZ + Math.sin(angle) * artifact.orbitRadius
       groupRef.current.position.y = Math.sin(angle * 2) * 0.1
 
-      groupRef.current.rotation.y += delta * 0.05
+      groupRef.current.rotation.y += delta * 0.02
     }
   })
 
@@ -320,38 +320,138 @@ function JWSTArtifact({
     setSelectedBody(artifact.id)
   }
 
+  // JWST sunshield dimensions: ~22m x 12m (tennis court size)
+  // Primary mirror: 6.5m diameter, 18 hexagonal segments
+  const sunshieldWidth = 0.6
+  const sunshieldDepth = 0.35
+  const sunshieldGap = 0.008
+
   return (
     <group ref={groupRef}>
       <group onClick={handleClick}>
         <ArtifactRenderer
           artifact={artifact}
           fallback={
-            <>
-              {/* Main bus/body */}
-              <mesh>
-                <boxGeometry args={[0.03, 0.02, 0.04]} />
-                <meshStandardMaterial color="#DAA520" emissive="#B8860B" emissiveIntensity={0.3} metalness={0.9} roughness={0.2} />
+            <group scale={0.5}>
+              {/* Sunshield booms (left and right extentions) */}
+              <mesh position={[0, -0.08, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <boxGeometry args={[sunshieldWidth * 1.1, 0.006, 0.008]} />
+                <meshStandardMaterial color="#888888" metalness={0.8} roughness={0.3} />
               </mesh>
-              {/* Sunshield layers (AOCI shape) - 5 hexagonal layers */}
-              <mesh position={[0, 0.015, 0]} scale={[1.5, 0.3, 1.5]}>
-                <cylinderGeometry args={[0.04, 0.04, 0.002, 6]} />
-                <meshStandardMaterial color="#F0E68C" metalness={0.7} roughness={0.3} transparent opacity={0.7} />
+
+              {/* Sunshield layers - 5 distinct layers (layer 1 = top, layer 5 = bottom) */}
+              {[0, 1, 2, 3, 4].map((i) => {
+                const scale = 1 - i * 0.04
+                const yPos = -0.08 + i * sunshieldGap
+                const opacity = 0.85 - i * 0.1
+                const color = i % 2 === 0 ? '#F5F5DC' : '#E8E8D0'
+                return (
+                  <mesh key={`sunshield-${i}`} position={[0, yPos, 0]} scale={[scale, 1, scale]}>
+                    <boxGeometry args={[sunshieldWidth, 0.003, sunshieldDepth]} />
+                    <meshStandardMaterial
+                      color={color}
+                      metalness={0.3}
+                      roughness={0.6}
+                      transparent
+                      opacity={opacity}
+                      side={THREE.DoubleSide}
+                    />
+                  </mesh>
+                )
+              })}
+
+              {/* Sunshield frame edges */}
+              <mesh position={[sunshieldWidth / 2, -0.08, 0]}>
+                <boxGeometry args={[0.005, 0.04, sunshieldDepth * 1.02]} />
+                <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.4} />
               </mesh>
-              <mesh position={[0, 0.018, 0]} scale={[1.3, 0.25, 1.3]}>
-                <cylinderGeometry args={[0.035, 0.035, 0.002, 6]} />
-                <meshStandardMaterial color="#EEE8AA" metalness={0.7} roughness={0.3} transparent opacity={0.6} />
+              <mesh position={[-sunshieldWidth / 2, -0.08, 0]}>
+                <boxGeometry args={[0.005, 0.04, sunshieldDepth * 1.02]} />
+                <meshStandardMaterial color="#666666" metalness={0.7} roughness={0.4} />
               </mesh>
-              <mesh position={[0, 0.021, 0]} scale={[1.1, 0.2, 1.1]}>
-                <cylinderGeometry args={[0.03, 0.03, 0.002, 6]} />
-                <meshStandardMaterial color="#FAFAD2" metalness={0.7} roughness={0.3} transparent opacity={0.5} />
+
+              {/* Spacecraft bus (center module below sunshield) */}
+              <mesh position={[0, -0.13, 0]}>
+                <boxGeometry args={[0.12, 0.06, 0.1]} />
+                <meshStandardMaterial color="#8B8B8B" metalness={0.7} roughness={0.4} />
               </mesh>
-              {/* Primary mirror (gold coated) */}
-              <mesh position={[0, -0.015, 0]}>
-                <boxGeometry args={[0.025, 0.002, 0.025]} />
-                <meshStandardMaterial color="#FFD700" emissive="#DAA520" emissiveIntensity={0.5} metalness={1.0} roughness={0.1} />
+
+              {/* Solar panels on bus */}
+              <mesh position={[0, -0.16, 0.06]} rotation={[0.3, 0, 0]}>
+                <boxGeometry args={[0.2, 0.002, 0.08]} />
+                <meshStandardMaterial color="#1a1a4a" emissive="#0a0a2a" emissiveIntensity={0.2} metalness={0.5} roughness={0.5} />
               </mesh>
-              <pointLight color="#FFE4B5" intensity={0.2} distance={2} />
-            </>
+              <mesh position={[0, -0.16, -0.06]} rotation={[-0.3, 0, 0]}>
+                <boxGeometry args={[0.2, 0.002, 0.08]} />
+                <meshStandardMaterial color="#1a1a4a" emissive="#0a0a2a" emissiveIntensity={0.2} metalness={0.5} roughness={0.5} />
+              </mesh>
+
+              {/* Primary mirror backplane (gold coated support structure) */}
+              <mesh position={[0, -0.08, 0]}>
+                <cylinderGeometry args={[0.25, 0.25, 0.015, 6]} />
+                <meshStandardMaterial color="#B8860B" metalness={0.9} roughness={0.2} />
+              </mesh>
+
+              {/* Primary mirror - 18 hexagonal segments arranged in honeycomb */}
+              {Array.from({ length: 3 }).map((_, ring) => {
+                const segmentsInRing = ring === 0 ? 1 : ring === 1 ? 6 : 12
+                const radius = ring * 0.082
+                return Array.from({ length: segmentsInRing }).map((__, j) => {
+                  const angleOffset = ring === 1 ? (Math.PI / 6) : 0
+                  const angle = angleOffset + (j / segmentsInRing) * Math.PI * 2
+                  const x = Math.cos(angle) * radius
+                  const z = Math.sin(angle) * radius
+                  const hexSize = ring === 0 ? 0.075 : ring === 1 ? 0.072 : 0.068
+                  return (
+                    <mesh key={`mirror-${ring}-${j}`} position={[x, -0.09, z]} rotation={[Math.PI / 2, 0, 0]}>
+                      <cylinderGeometry args={[hexSize, hexSize, 0.012, 6]} />
+                      <meshStandardMaterial
+                        color="#FFD700"
+                        emissive="#DAA520"
+                        emissiveIntensity={0.4}
+                        metalness={1.0}
+                        roughness={0.1}
+                      />
+                    </mesh>
+                  )
+                })
+              })}
+
+              {/* Primary mirror center segment */}
+              <mesh position={[0, -0.09, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.065, 0.065, 0.012, 6]} />
+                <meshStandardMaterial color="#FFD700" emissive="#DAA520" emissiveIntensity={0.4} metalness={1.0} roughness={0.1} />
+              </mesh>
+
+              {/* Secondary mirror tripod struts */}
+              <mesh position={[0.05, -0.06, 0.05]} rotation={[0.5, 0, 0.3]}>
+                <cylinderGeometry args={[0.003, 0.003, 0.18, 6]} />
+                <meshStandardMaterial color="#444444" metalness={0.8} roughness={0.3} />
+              </mesh>
+              <mesh position={[-0.05, -0.06, 0.05]} rotation={[0.5, 0, -0.3]}>
+                <cylinderGeometry args={[0.003, 0.003, 0.18, 6]} />
+                <meshStandardMaterial color="#444444" metalness={0.8} roughness={0.3} />
+              </mesh>
+              <mesh position={[0, -0.06, -0.06]} rotation={[-0.5, 0, 0]}>
+                <cylinderGeometry args={[0.003, 0.003, 0.15, 6]} />
+                <meshStandardMaterial color="#444444" metalness={0.8} roughness={0.3} />
+              </mesh>
+
+              {/* Secondary mirror (gold coated circle) */}
+              <mesh position={[0, -0.02, 0]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.035, 0.035, 0.008, 16]} />
+                <meshStandardMaterial color="#FFD700" emissive="#DAA520" emissiveIntensity={0.5} metalness={1.0} roughness={0.05} />
+              </mesh>
+
+              {/* Secondary mirror support ring */}
+              <mesh position={[0, -0.02, 0]}>
+                <torusGeometry args={[0.04, 0.004, 8, 16]} />
+                <meshStandardMaterial color="#666666" metalness={0.8} roughness={0.3} />
+              </mesh>
+
+              {/* Gold tint light */}
+              <pointLight color="#FFD700" intensity={0.25} distance={1.5} />
+            </group>
           }
         />
       </group>

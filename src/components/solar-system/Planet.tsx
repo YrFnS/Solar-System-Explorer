@@ -19,43 +19,52 @@ import { useTexture } from '@react-three/drei'
 
 function TexturedPlanetSurface({ data }: { data: PlanetData }) {
   const meshRef = useRef<THREE.Mesh>(null!)
-  
-  const textures = useTexture({
-    map: data.textureUrl!,
-  })
 
-  const cloudTexture = data.cloudMapUrl ? useTexture(data.cloudMapUrl) : null
-  const cloudRef = useRef<THREE.Mesh>(null!)
+   
+  const texture = useTexture(data.textureUrl!) as any
 
-  useFrame((_, delta) => {
-    if (cloudRef.current) {
-      cloudRef.current.rotation.y += delta * 0.03
-    }
-  })
+  // Cloud rotation - slightly faster than Earth rotation (0.5 rad/s at timeSpeed=1)
+  // Earth rotation: data.rotationSpeed * 0.5, clouds should be slightly faster
+  const cloudRotationSpeed = data.id === 'earth' ? 0.65 : 0.03
 
   return (
     <group>
       <mesh ref={meshRef}>
         <sphereGeometry args={[data.radius, 64, 64]} />
-        <meshStandardMaterial 
-          map={textures.map}
+        <meshStandardMaterial
+          map={texture}
           roughness={data.type === 'Gas Giant' || data.type === 'Ice Giant' ? 0.4 : 0.8}
           metalness={data.type === 'Gas Giant' ? 0.1 : 0.2}
         />
       </mesh>
-      {cloudTexture && (
-        <mesh ref={cloudRef}>
-          <sphereGeometry args={[data.radius * 1.015, 64, 64]} />
-          <meshStandardMaterial
-            map={cloudTexture}
-            transparent
-            opacity={0.6}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-          />
-        </mesh>
-      )}
     </group>
+  )
+}
+
+function CloudLayer({ data }: { data: PlanetData }) {
+  const cloudRef = useRef<THREE.Mesh>(null!)
+   
+  const cloudTexture = useTexture(data.cloudMapUrl!) as any
+
+  const cloudRotationSpeed = data.id === 'earth' ? 0.65 : 0.03
+
+  useFrame((_, delta) => {
+    if (cloudRef.current) {
+      cloudRef.current.rotation.y += delta * cloudRotationSpeed * useSolarSystemStore.getState().timeSpeed
+    }
+  })
+
+  return (
+    <mesh ref={cloudRef}>
+      <sphereGeometry args={[data.radius * 1.015, 64, 64]} />
+      <meshStandardMaterial
+        map={cloudTexture}
+        transparent
+        opacity={0.6}
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </mesh>
   )
 }
 
@@ -769,6 +778,9 @@ export default function Planet({ data }: PlanetProps) {
                 <meshBasicMaterial transparent opacity={0} depthWrite={false} />
               </mesh>
             </group>
+
+            {/* Cloud layer */}
+            {data.cloudMapUrl && <CloudLayer data={data} />}
 
             {/* Atmosphere */}
             {data.hasAtmosphere && data.atmosphereColor && data.atmosphereScale && (

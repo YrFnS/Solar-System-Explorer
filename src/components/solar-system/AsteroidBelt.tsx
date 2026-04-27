@@ -6,6 +6,8 @@ import * as THREE from 'three'
 import { ASTEROID_BELT_INNER, ASTEROID_BELT_OUTER, ASTEROID_COUNT, KUIPER_BELT_INNER, KUIPER_BELT_OUTER, KUIPER_COUNT } from './data'
 import { useSolarSystemStore } from './store'
 
+type GeometryType = 'dodecahedron' | 'ring'
+
 interface ParticleInfo {
   angle: number
   radius: number
@@ -27,6 +29,7 @@ function ParticleBelt({
   color,
   size,
   ySpread,
+  geometryType,
 }: {
   innerRadius: number
   outerRadius: number
@@ -34,9 +37,19 @@ function ParticleBelt({
   color: string
   size: number
   ySpread: number
+  geometryType: GeometryType
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null!)
   const dummy = useMemo(() => new THREE.Object3D(), [])
+
+  const geometry = useMemo(() => {
+    if (geometryType === 'ring') {
+      const geo = new THREE.RingGeometry(0.3, 0.5, 4)
+      geo.rotateX(Math.PI / 2)
+      return geo
+    }
+    return new THREE.DodecahedronGeometry(1, 0)
+  }, [geometryType])
 
   // Use ref for mutable particle data
   const particleDataRef = useRef<ParticleInfo[]>([])
@@ -84,8 +97,7 @@ function ParticleBelt({
   })
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
-      <dodecahedronGeometry args={[1, 0]} />
+    <instancedMesh ref={meshRef} args={[geometry, undefined, count]}>
       <meshStandardMaterial
         color={color}
         roughness={0.9}
@@ -110,6 +122,7 @@ export function AsteroidBelt() {
       color="#8B7D6B"
       size={0.03}
       ySpread={0.5}
+      geometryType="dodecahedron"
     />
   )
 }
@@ -127,6 +140,7 @@ export function KuiperBelt() {
       color="#6B7B8B"
       size={0.025}
       ySpread={1.0}
+      geometryType="ring"
     />
   )
 }

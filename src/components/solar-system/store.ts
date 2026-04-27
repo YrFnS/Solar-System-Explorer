@@ -32,6 +32,20 @@ export interface Bookmark {
   timestamp: number
 }
 
+export interface SpawnedObject {
+  id: string
+  type: 'comet' | 'asteroid' | 'interstellar'
+  name: string
+  color: string
+  radius: number
+  orbitRadius: number
+  orbitSpeed: number
+  orbitInclination: number
+  orbitEccentricity: number
+  initialAngle: number
+  parentId: string | null
+}
+
 export interface SolarSystemState {
   selectedBody: string | null
   timeSpeed: number
@@ -59,6 +73,7 @@ export interface SolarSystemState {
   comparisonMode: boolean
   comparisonBody2: string | null
   showConstellations: boolean
+  showGalacticNeighborhood: boolean
   rulerTarget: string | null
   customDate: Date | null
   customDateAngleBase: number
@@ -73,6 +88,16 @@ export interface SolarSystemState {
   showTrojans: boolean
   showBlackHole: boolean
   showWormhole: boolean
+  showCentaurs: boolean
+  showScatteredDisc: boolean
+  cameraMode: 'orbit' | 'fly'
+  realisticDistances: boolean
+  realisticSizes: boolean
+  showPhenomena: boolean
+  showSolarWind: boolean
+  showZodiacalLight: boolean
+  explosions: { id: string; position: [number, number, number]; color: string; timestamp: number }[]
+  spawnedObjects: SpawnedObject[]
 
   setSelectedBody: (body: string | null) => void
   dismissEvent: () => void
@@ -111,6 +136,7 @@ export interface SolarSystemState {
   setComparisonMode: (mode: boolean) => void
   setComparisonBody2: (body: string | null) => void
   setShowConstellations: (show: boolean) => void
+  setShowGalacticNeighborhood: (show: boolean) => void
   setRulerTarget: (target: string | null) => void
   setCustomDate: (date: Date | null) => void
   setShowTimeline: (show: boolean) => void
@@ -122,6 +148,8 @@ export interface SolarSystemState {
   setShowTrojans: (show: boolean) => void
   setShowBlackHole: (show: boolean) => void
   setShowWormhole: (show: boolean) => void
+  setShowCentaurs: (show: boolean) => void
+  setShowScatteredDisc: (show: boolean) => void
 }
 
 const NAVIGABLE_BODIES = [
@@ -177,6 +205,7 @@ export const useSolarSystemStore = create<SolarSystemState>((set, get) => ({
   comparisonMode: false,
   comparisonBody2: null,
   showConstellations: false,
+  showGalacticNeighborhood: false,
   rulerTarget: null,
   customDate: null,
   customDateAngleBase: 0,
@@ -190,6 +219,16 @@ export const useSolarSystemStore = create<SolarSystemState>((set, get) => ({
   showTrojans: true,
   showBlackHole: true,
   showWormhole: true,
+  showCentaurs: true,
+  showScatteredDisc: true,
+  cameraMode: 'orbit',
+  realisticDistances: false,
+  realisticSizes: false,
+  showPhenomena: true,
+  showSolarWind: true,
+  showZodiacalLight: true,
+  explosions: [],
+  spawnedObjects: [],
   bookmarks: typeof window !== 'undefined'
     ? (() => {
         try {
@@ -292,6 +331,7 @@ export const useSolarSystemStore = create<SolarSystemState>((set, get) => ({
   setComparisonMode: (mode) => set({ comparisonMode: mode }),
   setComparisonBody2: (body) => set({ comparisonBody2: body }),
   setShowConstellations: (show) => set({ showConstellations: show }),
+  setShowGalacticNeighborhood: (show) => set({ showGalacticNeighborhood: show }),
   setRulerTarget: (target) => set({ rulerTarget: target }),
   setShowTimeline: (show) => set({ showTimeline: show }),
   addScreenshot: (dataUrl) => set((s) => ({ screenshotGallery: [...s.screenshotGallery, dataUrl] })),
@@ -302,6 +342,43 @@ export const useSolarSystemStore = create<SolarSystemState>((set, get) => ({
   setShowTrojans: (show) => set({ showTrojans: show }),
   setShowBlackHole: (show) => set({ showBlackHole: show }),
   setShowWormhole: (show) => set({ showWormhole: show }),
+  setShowCentaurs: (show) => set({ showCentaurs: show }),
+  setShowScatteredDisc: (show) => set({ showScatteredDisc: show }),
+  setCameraMode: (mode) => set({ cameraMode: mode }),
+  setRealisticDistances: (show) => set({ realisticDistances: show }),
+  setRealisticSizes: (show) => set({ realisticSizes: show }),
+  setShowPhenomena: (show) => set({ showPhenomena: show }),
+  setShowSolarWind: (show) => set({ showSolarWind: show }),
+  setShowZodiacalLight: (show) => set({ showZodiacalLight: show }),
+  addExplosion: (position: [number, number, number], color: string) => {
+    const id = `exp-${Date.now()}`
+    set((s) => ({ explosions: [...s.explosions, { id, position, color, timestamp: Date.now() }] }))
+    setTimeout(() => {
+      set((s) => ({ explosions: s.explosions.filter((e) => e.id !== id) }))
+    }, 2000)
+  },
+  spawnObject: (type: 'comet' | 'asteroid' | 'interstellar') => {
+    const id = `${type}_${Date.now()}`
+    const names = { comet: 'Comet', asteroid: 'Asteroid', interstellar: 'Interstellar Visitor' }
+    const colors = { comet: '#88ccff', asteroid: '#888888', interstellar: '#ff6644' }
+    const state = get()
+    if (state.spawnedObjects.length >= 10) return // Max 10 spawned objects
+    const obj: SpawnedObject = {
+      id,
+      type,
+      name: `${names[type]} ${state.spawnedObjects.filter(o => o.type === type).length + 1}`,
+      color: colors[type],
+      radius: type === 'comet' ? 0.3 : type === 'asteroid' ? 0.15 : 0.2,
+      orbitRadius: type === 'comet' ? 15 + Math.random() * 25 : type === 'asteroid' ? 5 + Math.random() * 10 : 10 + Math.random() * 20,
+      orbitSpeed: 0.001 + Math.random() * 0.005,
+      orbitInclination: Math.random() * 30,
+      orbitEccentricity: type === 'interstellar' ? 1.2 + Math.random() * 0.5 : 0.1 + Math.random() * 0.4,
+      initialAngle: Math.random() * Math.PI * 2,
+      parentId: null,
+    }
+    set((s) => ({ spawnedObjects: [...s.spawnedObjects, obj] }))
+  },
+  removeSpawnedObject: (id: string) => set((s) => ({ spawnedObjects: s.spawnedObjects.filter((o) => o.id !== id) })),
   setCustomDate: (date) => {
     const angleBase = date
       ? ((date.getTime() - Date.now()) / (1000 * 60 * 60 * 24 * 365.25)) * 2 * Math.PI
