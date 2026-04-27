@@ -235,13 +235,25 @@ function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius
         uniform float opacity;
         uniform float time;
         void main() {
-          // Subtle shimmer/sparkle effect along the ring
-          float shimmer = sin(vUv.x * 80.0 + time * 0.5) * 0.03 + sin(vUv.x * 120.0 - time * 0.3) * 0.02 + 1.0;
+          // Enhanced ice crystal shimmer/sparkle - more pronounced
+          float shimmer1 = sin(vUv.x * 80.0 + time * 0.8) * 0.05 + sin(vUv.x * 120.0 - time * 0.5) * 0.03 + 1.0;
+          float shimmer2 = sin(vUv.x * 200.0 + time * 1.5) * 0.02;
+          float shimmer3 = sin(vUv.x * 350.0 - time * 2.0) * 0.015;
+          float shimmer = shimmer1 + shimmer2 + shimmer3;
+
+          // Ice sparkle - random bright points
+          float sparkle = step(0.97, sin(vUv.x * 500.0 + time * 3.0) * sin(vUv.x * 300.0 - time * 2.5)) * 0.3;
+
           vec3 finalColor = vRingColor * shimmer;
-          // Slight specular highlight on bright portions
-          float spec = pow(max(vRingAlpha, 0.0), 2.0) * 0.15;
-          finalColor += vec3(1.0, 0.95, 0.85) * spec;
-          gl_FragColor = vec4(finalColor, vRingAlpha * opacity * shimmer);
+
+          // Stronger specular highlight on bright portions - ice reflection
+          float spec = pow(max(vRingAlpha, 0.0), 1.5) * 0.25;
+          finalColor += vec3(1.0, 0.98, 0.95) * spec;
+
+          // Add sparkle (ice crystals catching light)
+          finalColor += vec3(1.0, 0.98, 1.0) * sparkle * vRingAlpha;
+
+          gl_FragColor = vec4(finalColor, vRingAlpha * opacity);
         }
       `,
       transparent: true,

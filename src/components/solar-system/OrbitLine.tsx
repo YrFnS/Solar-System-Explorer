@@ -32,7 +32,6 @@ export default function OrbitLine({ radius, color = '#ffffff', opacity = 0.08, p
 
   if (!showOrbitLines) return null
 
-  // Highlight orbit of selected planet
   const isHighlighted = planetId && selectedBody === planetId
   const finalOpacity = isHighlighted ? 0.35 : opacity
   const finalColor = isHighlighted
@@ -43,7 +42,6 @@ export default function OrbitLine({ radius, color = '#ffffff', opacity = 0.08, p
 
   return (
     <>
-      {/* Glow layer for highlighted orbit — wider, more transparent */}
       {isHighlighted && (
         <line>
           <bufferGeometry>
@@ -57,11 +55,9 @@ export default function OrbitLine({ radius, color = '#ffffff', opacity = 0.08, p
             transparent
             opacity={0.12}
             depthWrite={false}
-            linewidth={3}
           />
         </line>
       )}
-      {/* Main orbit line */}
       <line>
         <bufferGeometry>
           <bufferAttribute

@@ -322,11 +322,12 @@ function ColorPlanetSurface({ data }: { data: PlanetData }) {
             vec3 rust = vec3(0.75, 0.25, 0.08);
             vec3 darkRust = vec3(0.5, 0.15, 0.05);
             color = mix(rust, darkRust, terrain);
-            
-            // Polar caps
-            float polar = smoothstep(0.12, 0.03, uv.y) + smoothstep(0.88, 0.97, uv.y);
-            color = mix(color, vec3(0.9, 0.85, 0.8), polar * 0.6);
-            
+
+            // Polar caps - enhanced ice visibility (water ice + CO2 frost)
+            float polar = smoothstep(0.14, 0.02, uv.y) + smoothstep(0.86, 0.98, uv.y);
+            vec3 iceWhite = vec3(0.92, 0.88, 0.85);
+            color = mix(color, iceWhite, polar * 0.75);
+
             // Olympus Mons region
             float volcano = length((uv - vec2(0.35, 0.4)) * vec2(2.0, 3.0));
             color = mix(color, vec3(0.6, 0.3, 0.15), smoothstep(0.1, 0.04, volcano) * 0.5);
@@ -342,7 +343,7 @@ function ColorPlanetSurface({ data }: { data: PlanetData }) {
             color = mix(color, color * 1.1, clouds2);
           }
           
-          // Mercury - cratered, gray
+          // Mercury - cratered, gray with ice deposits in polar craters
           if (isMercury > 0.5) {
             float craters = fbm(uv * 25.0);
             float craters2 = fbm(uv * 12.0 + 0.5);
@@ -351,6 +352,14 @@ function ColorPlanetSurface({ data }: { data: PlanetData }) {
             color = mix(gray1, gray2, craters);
             // Subtle crater shadows
             color = mix(color, color * 0.6, smoothstep(0.55, 0.62, craters2) * 0.5);
+
+            // Ice deposits in shadowed polar craters (water ice confirmed at poles)
+            float polarIce = smoothstep(0.92, 0.97, uv.y) + smoothstep(0.08, 0.03, uv.y);
+            // Only show ice in dark crater-like regions
+            float craterShadow = smoothstep(0.55, 0.62, craters2);
+            float iceMask = polarIce * craterShadow;
+            vec3 iceColor = vec3(0.88, 0.85, 0.82);
+            color = mix(color, iceColor, iceMask * 0.7);
           }
           
           // Default surface variation (fallback for any unhandled rocky bodies)

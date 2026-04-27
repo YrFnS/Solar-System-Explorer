@@ -34,7 +34,7 @@ function ColorMoon({ moonData, meshRef, handleClick }: any) {
 
 function EnceladusGeysers() {
   const geyserRef = useRef<THREE.Points>(null!)
-  const particleCount = 60
+  const particleCount = 180
 
   const [positions, velocities] = useMemo(() => {
     const pos = new Float32Array(particleCount * 3)
@@ -48,10 +48,10 @@ function EnceladusGeysers() {
       pos[i * 3 + 1] = 0.08 + Math.random() * 0.02
       pos[i * 3 + 2] = Math.sin(angle) * r
 
-      // Velocity upward and outward
-      vel[i * 3] = (Math.random() - 0.5) * 0.15
-      vel[i * 3 + 1] = 0.3 + Math.random() * 0.2
-      vel[i * 3 + 2] = (Math.random() - 0.5) * 0.15
+      // Velocity upward and outward with more variety
+      vel[i * 3] = (Math.random() - 0.5) * 0.25
+      vel[i * 3 + 1] = 0.25 + Math.random() * 0.35
+      vel[i * 3 + 2] = (Math.random() - 0.5) * 0.25
     }
 
     return [pos, vel]
@@ -73,11 +73,13 @@ function EnceladusGeysers() {
       vertexShader: `
         attribute float size;
         varying float vAlpha;
+        varying float vDist;
         void main() {
+          vAlpha = 0.6 + 0.4 * size;
           vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = size * (5.0 / -mvPos.z);
+          gl_PointSize = size * (8.0 / -mvPos.z);
+          gl_PointSize = clamp(gl_PointSize, 1.0, 12.0);
           gl_Position = projectionMatrix * mvPos;
-          vAlpha = 0.8;
         }
       `,
       fragmentShader: `
@@ -85,8 +87,10 @@ function EnceladusGeysers() {
         void main() {
           float d = length(gl_PointCoord - vec2(0.5));
           if (d > 0.5) discard;
-          float alpha = smoothstep(0.5, 0.0, d) * vAlpha;
-          gl_FragColor = vec4(0.9, 0.95, 1.0, alpha);
+          float alpha = smoothstep(0.5, 0.1, d) * vAlpha;
+          // Ice blue-white color with slight sparkle
+          vec3 iceColor = mix(vec3(0.85, 0.92, 1.0), vec3(1.0, 1.0, 1.0), smoothstep(0.2, 0.0, d));
+          gl_FragColor = vec4(iceColor, alpha);
         }
       `,
       transparent: true,

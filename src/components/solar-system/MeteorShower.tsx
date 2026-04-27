@@ -4,7 +4,7 @@ import { useRef, useMemo } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
-const METEOR_COUNT = 40
+const METEOR_COUNT = 100
 const METEOR_SPEED_MIN = 40
 const METEOR_SPEED_MAX = 80
 const METEOR_TAIL_LENGTH = 12

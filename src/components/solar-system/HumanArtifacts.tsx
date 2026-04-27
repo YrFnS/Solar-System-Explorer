@@ -46,11 +46,16 @@ function ISSArtifact({
   const planet = planets.find((p) => p.id === artifact.parentId)
 
   useFrame((_, delta) => {
-    if (groupRef.current && planet) {
-      parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
-      const parentAngle = parentAngleRef.current
-      const parentX = Math.cos(parentAngle) * planet.orbitRadius
-      const parentZ = Math.sin(parentAngle) * planet.orbitRadius
+    if (groupRef.current) {
+      let parentX = 0
+      let parentZ = 0
+
+      if (planet) {
+        parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
+        const parentAngle = parentAngleRef.current
+        parentX = Math.cos(parentAngle) * planet.orbitRadius
+        parentZ = Math.sin(parentAngle) * planet.orbitRadius
+      }
 
       orbitAngleRef.current += delta * artifact.orbitSpeed * 0.05 * timeSpeed
       const angle = orbitAngleRef.current
@@ -72,21 +77,48 @@ function ISSArtifact({
   return (
     <group ref={groupRef}>
       <group onClick={handleClick}>
-        <ArtifactRenderer 
-          artifact={artifact} 
+        <ArtifactRenderer
+          artifact={artifact}
           fallback={
             <>
-              <mesh>
-                <capsuleGeometry args={[0.015, 0.04, 4, 8]} />
-                <meshStandardMaterial color="#CCCCCC" emissive="#AAAACC" emissiveIntensity={0.2} metalness={0.9} roughness={0.1} />
+              {/* Main truss backbone */}
+              <mesh rotation={[0, 0, Math.PI / 2]}>
+                <boxGeometry args={[0.18, 0.008, 0.008]} />
+                <meshStandardMaterial color="#CCCCCC" metalness={0.8} roughness={0.2} />
               </mesh>
-              <mesh position={[0, 0, 0]} rotation={[0, 0, 0]}>
-                <boxGeometry args={[0.1, 0.002, 0.03]} />
-                <meshStandardMaterial color="#2244AA" emissive="#1133AA" emissiveIntensity={0.3} metalness={0.5} roughness={0.3} />
+              {/* Central module (Unity node) */}
+              <mesh>
+                <cylinderGeometry args={[0.012, 0.012, 0.025, 8]} />
+                <meshStandardMaterial color="#EEEEEE" metalness={0.7} roughness={0.3} />
+              </mesh>
+              {/* Starboard solar array */}
+              <mesh position={[0.06, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <boxGeometry args={[0.005, 0.06, 0.03]} />
+                <meshStandardMaterial color="#1a3a7a" metalness={0.5} roughness={0.4} emissive="#0a1a3a" emissiveIntensity={0.3} />
+              </mesh>
+              {/* Port solar array */}
+              <mesh position={[-0.06, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <boxGeometry args={[0.005, 0.06, 0.03]} />
+                <meshStandardMaterial color="#1a3a7a" metalness={0.5} roughness={0.4} emissive="#0a1a3a" emissiveIntensity={0.3} />
+              </mesh>
+              {/* Zarya module */}
+              <mesh position={[0.05, 0, 0]}>
+                <cylinderGeometry args={[0.01, 0.01, 0.015, 8]} />
+                <meshStandardMaterial color="#AAAAAA" metalness={0.7} roughness={0.3} />
+              </mesh>
+              {/* Destiny lab */}
+              <mesh position={[-0.05, 0, 0]}>
+                <cylinderGeometry args={[0.01, 0.01, 0.02, 8]} />
+                <meshStandardMaterial color="#EEEEEE" metalness={0.7} roughness={0.3} />
+              </mesh>
+              {/* Quest airlock */}
+              <mesh position={[0, 0, 0.01]}>
+                <cylinderGeometry args={[0.006, 0.006, 0.01, 8]} />
+                <meshStandardMaterial color="#DDDDDD" metalness={0.6} roughness={0.4} />
               </mesh>
               <pointLight color="#8888FF" intensity={0.15} distance={1.5} />
             </>
-          } 
+          }
         />
       </group>
     </group>
@@ -104,21 +136,29 @@ function VoyagerArtifact({
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
 
+  // Voyager orbits the Sun directly - find planet parent or handle 'sun' case
   const planet = planets.find((p) => p.id === artifact.parentId)
 
   useFrame((_, delta) => {
-    if (groupRef.current && planet) {
-      parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
-      const parentAngle = parentAngleRef.current
-      const parentX = Math.cos(parentAngle) * planet.orbitRadius
-      const parentZ = Math.sin(parentAngle) * planet.orbitRadius
+    if (groupRef.current) {
+      let parentX = 0
+      let parentZ = 0
+      let parentOrbitSpeed = artifact.orbitSpeed
+
+      if (planet) {
+        parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
+        const parentAngle = parentAngleRef.current
+        parentX = Math.cos(parentAngle) * planet.orbitRadius
+        parentZ = Math.sin(parentAngle) * planet.orbitRadius
+        parentOrbitSpeed = planet.orbitSpeed
+      }
 
       orbitAngleRef.current += delta * artifact.orbitSpeed * 0.05 * timeSpeed
       const angle = orbitAngleRef.current
 
-      // Voyager is far from its parent planet
-      groupRef.current.position.x = Math.cos(angle) * artifact.orbitRadius
-      groupRef.current.position.z = Math.sin(angle) * artifact.orbitRadius
+      // Voyager orbits the Sun at vast distances
+      groupRef.current.position.x = parentX + Math.cos(angle) * artifact.orbitRadius
+      groupRef.current.position.z = parentZ + Math.sin(angle) * artifact.orbitRadius
       groupRef.current.position.y = Math.sin(angle * 0.5) * 0.5
     }
   })
@@ -131,21 +171,38 @@ function VoyagerArtifact({
   return (
     <group ref={groupRef}>
       <group onClick={handleClick}>
-        <ArtifactRenderer 
-          artifact={artifact} 
+        <ArtifactRenderer
+          artifact={artifact}
           fallback={
             <>
+              {/* Main bus body */}
               <mesh>
-                <boxGeometry args={[0.03, 0.02, 0.04]} />
+                <boxGeometry args={[0.04, 0.025, 0.06]} />
                 <meshStandardMaterial color="#D4A050" emissive="#D4A050" emissiveIntensity={0.4} metalness={0.7} roughness={0.3} />
               </mesh>
-              <mesh position={[0, 0.02, 0]} rotation={[0.3, 0, 0]}>
-                <coneGeometry args={[0.02, 0.015, 8]} />
-                <meshStandardMaterial color="#CCCCCC" metalness={0.8} roughness={0.2} />
+              {/* High-gain dish antenna (gold) */}
+              <mesh position={[0, 0.025, 0]} rotation={[1.2, 0, 0]}>
+                <coneGeometry args={[0.035, 0.015, 16]} />
+                <meshStandardMaterial color="#FFD700" emissive="#DAA520" emissiveIntensity={0.5} metalness={0.9} roughness={0.1} />
+              </mesh>
+              {/* Gold Record (圆盘) */}
+              <mesh position={[0.03, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[0.015, 0.015, 0.003, 16]} />
+                <meshStandardMaterial color="#CC9966" metalness={0.8} roughness={0.2} />
+              </mesh>
+              {/* Nuclear power source (RTG) */}
+              <mesh position={[-0.02, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[0.008, 0.008, 0.04, 8]} />
+                <meshStandardMaterial color="#888888" metalness={0.7} roughness={0.3} />
+              </mesh>
+              {/* Magnetometer boom */}
+              <mesh position={[0, -0.02, 0.03]} rotation={[0.3, 0, 0]}>
+                <boxGeometry args={[0.002, 0.002, 0.06]} />
+                <meshStandardMaterial color="#666666" metalness={0.6} roughness={0.4} />
               </mesh>
               <pointLight color="#FFD700" intensity={0.3} distance={3} />
             </>
-          } 
+          }
         />
       </group>
     </group>
@@ -153,6 +210,82 @@ function VoyagerArtifact({
 }
 
 function HubbleArtifact({
+  artifact,
+}: {
+  artifact: (typeof humanArtifacts)[0]
+}) {
+  const groupRef = useRef<THREE.Group>(null!)
+  const orbitAngleRef = useRef(0.5)
+  const parentAngleRef = useRef(0.3)
+  const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
+  const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
+
+  const planet = planets.find((p) => p.id === artifact.parentId)
+
+  useFrame((_, delta) => {
+    if (groupRef.current) {
+      let parentX = 0
+      let parentZ = 0
+
+      if (planet) {
+        parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
+        const parentAngle = parentAngleRef.current
+        parentX = Math.cos(parentAngle) * planet.orbitRadius
+        parentZ = Math.sin(parentAngle) * planet.orbitRadius
+      }
+
+      orbitAngleRef.current += delta * artifact.orbitSpeed * 0.05 * timeSpeed
+      const angle = orbitAngleRef.current
+      groupRef.current.position.x = parentX + Math.cos(angle) * artifact.orbitRadius
+      groupRef.current.position.z = parentZ + Math.sin(angle) * artifact.orbitRadius
+      groupRef.current.position.y = Math.sin(angle * 3) * 0.03
+
+      groupRef.current.rotation.y += delta * 0.1
+    }
+  })
+
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation()
+    setSelectedBody(artifact.id)
+  }
+
+  return (
+    <group ref={groupRef}>
+      <group onClick={handleClick}>
+        <ArtifactRenderer
+          artifact={artifact}
+          fallback={
+            <>
+              {/* Main telescope tube */}
+              <mesh rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.02, 0.025, 0.07, 16]} />
+                <meshStandardMaterial color="#AABBCC" emissive="#8899BB" emissiveIntensity={0.2} metalness={0.8} roughness={0.2} />
+              </mesh>
+              {/* Primary mirror (gold, at bottom) */}
+              <mesh position={[0, 0, 0.036]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[0.025, 0.025, 0.002, 16]} />
+                <meshStandardMaterial color="#FFD700" emissive="#DAA520" emissiveIntensity={0.5} metalness={1.0} roughness={0.1} />
+              </mesh>
+              {/* Secondary mirror support */}
+              <mesh position={[0, 0, -0.04]}>
+                <cylinderGeometry args={[0.005, 0.005, 0.015, 8]} />
+                <meshStandardMaterial color="#888888" metalness={0.7} roughness={0.3} />
+              </mesh>
+              {/* Solar panels (bus-mounted) */}
+              <mesh position={[0, 0, 0.01]} rotation={[0, Math.PI / 2, 0]}>
+                <boxGeometry args={[0.06, 0.001, 0.02]} />
+                <meshStandardMaterial color="#3344AA" emissive="#2233AA" emissiveIntensity={0.3} metalness={0.5} roughness={0.4} />
+              </mesh>
+              <pointLight color="#6688FF" intensity={0.12} distance={1.5} />
+            </>
+          }
+        />
+      </group>
+    </group>
+  )
+}
+
+function JWSTArtifact({
   artifact,
 }: {
   artifact: (typeof humanArtifacts)[0]
@@ -176,9 +309,9 @@ function HubbleArtifact({
       const angle = orbitAngleRef.current
       groupRef.current.position.x = parentX + Math.cos(angle) * artifact.orbitRadius
       groupRef.current.position.z = parentZ + Math.sin(angle) * artifact.orbitRadius
-      groupRef.current.position.y = Math.sin(angle * 3) * 0.03
+      groupRef.current.position.y = Math.sin(angle * 2) * 0.1
 
-      groupRef.current.rotation.y += delta * 0.1
+      groupRef.current.rotation.y += delta * 0.05
     }
   })
 
@@ -190,21 +323,254 @@ function HubbleArtifact({
   return (
     <group ref={groupRef}>
       <group onClick={handleClick}>
-        <ArtifactRenderer 
-          artifact={artifact} 
+        <ArtifactRenderer
+          artifact={artifact}
+          fallback={
+            <>
+              {/* Main bus/body */}
+              <mesh>
+                <boxGeometry args={[0.03, 0.02, 0.04]} />
+                <meshStandardMaterial color="#DAA520" emissive="#B8860B" emissiveIntensity={0.3} metalness={0.9} roughness={0.2} />
+              </mesh>
+              {/* Sunshield layers (AOCI shape) - 5 hexagonal layers */}
+              <mesh position={[0, 0.015, 0]} scale={[1.5, 0.3, 1.5]}>
+                <cylinderGeometry args={[0.04, 0.04, 0.002, 6]} />
+                <meshStandardMaterial color="#F0E68C" metalness={0.7} roughness={0.3} transparent opacity={0.7} />
+              </mesh>
+              <mesh position={[0, 0.018, 0]} scale={[1.3, 0.25, 1.3]}>
+                <cylinderGeometry args={[0.035, 0.035, 0.002, 6]} />
+                <meshStandardMaterial color="#EEE8AA" metalness={0.7} roughness={0.3} transparent opacity={0.6} />
+              </mesh>
+              <mesh position={[0, 0.021, 0]} scale={[1.1, 0.2, 1.1]}>
+                <cylinderGeometry args={[0.03, 0.03, 0.002, 6]} />
+                <meshStandardMaterial color="#FAFAD2" metalness={0.7} roughness={0.3} transparent opacity={0.5} />
+              </mesh>
+              {/* Primary mirror (gold coated) */}
+              <mesh position={[0, -0.015, 0]}>
+                <boxGeometry args={[0.025, 0.002, 0.025]} />
+                <meshStandardMaterial color="#FFD700" emissive="#DAA520" emissiveIntensity={0.5} metalness={1.0} roughness={0.1} />
+              </mesh>
+              <pointLight color="#FFE4B5" intensity={0.2} distance={2} />
+            </>
+          }
+        />
+      </group>
+    </group>
+  )
+}
+
+function EarthOrbitArtifact({
+  artifact,
+}: {
+  artifact: (typeof humanArtifacts)[0]
+}) {
+  const groupRef = useRef<THREE.Group>(null!)
+  const orbitAngleRef = useRef(Math.random() * Math.PI * 2)
+  const parentAngleRef = useRef(0.3)
+  const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
+  const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
+
+  const planet = planets.find((p) => p.id === artifact.parentId)
+
+  useFrame((_, delta) => {
+    if (groupRef.current) {
+      let parentX = 0
+      let parentZ = 0
+
+      if (planet) {
+        parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
+        const parentAngle = parentAngleRef.current
+        parentX = Math.cos(parentAngle) * planet.orbitRadius
+        parentZ = Math.sin(parentAngle) * planet.orbitRadius
+      }
+
+      orbitAngleRef.current += delta * artifact.orbitSpeed * 0.05 * timeSpeed
+      const angle = orbitAngleRef.current
+      groupRef.current.position.x = parentX + Math.cos(angle) * artifact.orbitRadius
+      groupRef.current.position.z = parentZ + Math.sin(angle) * artifact.orbitRadius
+      groupRef.current.position.y = Math.sin(angle * 2) * 0.05
+
+      groupRef.current.rotation.y += delta * 0.2
+    }
+  })
+
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation()
+    setSelectedBody(artifact.id)
+  }
+
+  // Build shape based on artifact type
+  const renderFallback = () => {
+    const s = artifact.size
+
+    // GPS satellite - bus with solar panels
+    if (artifact.id === 'gps') {
+      return (
+        <>
+          <mesh>
+            <boxGeometry args={[s * 0.6, s * 0.5, s * 0.4]} />
+            <meshStandardMaterial color={artifact.color} metalness={0.6} roughness={0.4} />
+          </mesh>
+          <mesh position={[0, s * 0.3, 0]} rotation={[0, 0, 0]}>
+            <boxGeometry args={[s * 1.8, s * 0.05, s * 0.6]} />
+            <meshStandardMaterial color="#1a3a6a" metalness={0.5} roughness={0.4} emissive="#0a1a3a" emissiveIntensity={0.2} />
+          </mesh>
+          <mesh position={[0, -s * 0.3, 0]} rotation={[0, 0, 0]}>
+            <boxGeometry args={[s * 1.8, s * 0.05, s * 0.6]} />
+            <meshStandardMaterial color="#1a3a6a" metalness={0.5} roughness={0.4} emissive="#0a1a3a" emissiveIntensity={0.2} />
+          </mesh>
+        </>
+      )
+    }
+
+    // Tiangong - space station module
+    if (artifact.id === 'tiangong') {
+      return (
+        <>
+          <mesh rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[s * 0.4, s * 0.4, s * 1.5, 16]} />
+            <meshStandardMaterial color={artifact.color} metalness={0.7} roughness={0.3} />
+          </mesh>
+          <mesh position={[s * 0.6, 0, 0]}>
+            <cylinderGeometry args={[s * 0.25, s * 0.25, s * 0.6, 16]} />
+            <meshStandardMaterial color="#CCCCCC" metalness={0.7} roughness={0.3} />
+          </mesh>
+          <mesh position={[-s * 0.6, 0, 0]}>
+            <cylinderGeometry args={[s * 0.25, s * 0.25, s * 0.6, 16]} />
+            <meshStandardMaterial color="#CCCCCC" metalness={0.7} roughness={0.3} />
+          </mesh>
+          <mesh position={[0, s * 0.4, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <boxGeometry args={[s * 0.05, s * 1.2, s * 0.3]} />
+            <meshStandardMaterial color="#1a3a7a" metalness={0.5} roughness={0.4} />
+          </mesh>
+        </>
+      )
+    }
+
+    // Chandra - X-ray telescope (similar to Hubble but different proportions)
+    if (artifact.id === 'chandra') {
+      return (
+        <>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[s * 0.3, s * 0.4, s * 1.2, 12]} />
+            <meshStandardMaterial color="#AA8844" metalness={0.8} roughness={0.2} emissive="#664422" emissiveIntensity={0.2} />
+          </mesh>
+          <mesh position={[0, 0, s * 0.65]} rotation={[Math.PI / 2, 0, 0]}>
+            <coneGeometry args={[s * 0.35, s * 0.3, 12]} />
+            <meshStandardMaterial color="#FFD700" metalness={0.9} roughness={0.1} emissive="#DAA520" emissiveIntensity={0.3} />
+          </mesh>
+          <mesh position={[0, s * 0.35, s * 0.8]}>
+            <boxGeometry args={[s * 0.08, s * 0.7, s * 0.03]} />
+            <meshStandardMaterial color="#666666" metalness={0.6} roughness={0.4} />
+          </mesh>
+        </>
+      )
+    }
+
+    // Starlink - flat rectangular satellite with phased array
+    if (artifact.id?.startsWith('starlink')) {
+      return (
+        <>
+          <mesh>
+            <boxGeometry args={[s * 0.4, s * 0.15, s * 0.5]} />
+            <meshStandardMaterial color="#333333" metalness={0.5} roughness={0.5} />
+          </mesh>
+          <mesh position={[0, s * 0.1, 0]}>
+            <boxGeometry args={[s * 0.35, s * 0.02, s * 0.45]} />
+            <meshStandardMaterial color="#1a1a1a" metalness={0.6} roughness={0.4} emissive="#111111" emissiveIntensity={0.1} />
+          </mesh>
+          <mesh position={[0, -s * 0.1, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <boxGeometry args={[s * 0.08, s * 0.01, s * 0.3]} />
+            <meshStandardMaterial color="#2244AA" emissive="#1122AA" emissiveIntensity={0.3} metalness={0.5} roughness={0.3} />
+          </mesh>
+        </>
+      )
+    }
+
+    // Default satellite
+    return (
+      <>
+        <mesh>
+          <boxGeometry args={[s * 0.5, s * 0.4, s * 0.6]} />
+          <meshStandardMaterial color={artifact.color} metalness={0.6} roughness={0.4} emissive={artifact.color} emissiveIntensity={0.15} />
+        </mesh>
+        <mesh position={[0, s * 0.35, 0]}>
+          <boxGeometry args={[s * 1.2, s * 0.05, s * 0.4]} />
+          <meshStandardMaterial color="#1a3a7a" metalness={0.5} roughness={0.4} emissive="#0a1a3a" emissiveIntensity={0.2} />
+        </mesh>
+      </>
+    )
+  }
+
+  return (
+    <group ref={groupRef}>
+      <group onClick={handleClick}>
+        <ArtifactRenderer
+          artifact={artifact}
+          fallback={renderFallback()}
+        />
+      </group>
+    </group>
+  )
+}
+
+function ParkerArtifact({
+  artifact,
+}: {
+  artifact: (typeof humanArtifacts)[0]
+}) {
+  const groupRef = useRef<THREE.Group>(null!)
+  const orbitAngleRef = useRef(0.5)
+  const parentAngleRef = useRef(0.3)
+  const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
+  const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
+
+  const planet = planets.find((p) => p.id === artifact.parentId)
+
+  useFrame((_, delta) => {
+    if (groupRef.current) {
+      let parentX = 0
+      let parentZ = 0
+
+      if (planet) {
+        parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
+        const parentAngle = parentAngleRef.current
+        parentX = Math.cos(parentAngle) * planet.orbitRadius
+        parentZ = Math.sin(parentAngle) * planet.orbitRadius
+      }
+
+      orbitAngleRef.current += delta * artifact.orbitSpeed * 0.05 * timeSpeed
+      const angle = orbitAngleRef.current
+      groupRef.current.position.x = parentX + Math.cos(angle) * artifact.orbitRadius
+      groupRef.current.position.z = parentZ + Math.sin(angle) * artifact.orbitRadius
+      groupRef.current.position.y = Math.sin(angle * 3) * 0.3
+    }
+  })
+
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation()
+    setSelectedBody(artifact.id)
+  }
+
+  return (
+    <group ref={groupRef}>
+      <group onClick={handleClick}>
+        <ArtifactRenderer
+          artifact={artifact}
           fallback={
             <>
               <mesh>
-                <cylinderGeometry args={[0.015, 0.02, 0.05, 8]} />
-                <meshStandardMaterial color="#AABBCC" emissive="#8899BB" emissiveIntensity={0.2} metalness={0.8} roughness={0.2} />
+                <boxGeometry args={[0.02, 0.015, 0.02]} />
+                <meshStandardMaterial color="#FF6347" emissive="#FF4500" emissiveIntensity={0.3} metalness={0.7} roughness={0.3} />
               </mesh>
-              <mesh rotation={[0, 0, Math.PI / 4]}>
-                <boxGeometry args={[0.08, 0.002, 0.025]} />
-                <meshStandardMaterial color="#3344AA" emissive="#2233AA" emissiveIntensity={0.3} />
+              {/* Heat shield (white) */}
+              <mesh position={[0, -0.012, 0]}>
+                <coneGeometry args={[0.015, 0.01, 8]} />
+                <meshStandardMaterial color="#FFFFFF" metalness={0.3} roughness={0.6} />
               </mesh>
-              <pointLight color="#6688FF" intensity={0.12} distance={1.5} />
+              <pointLight color="#FF6347" intensity={0.15} distance={1.5} />
             </>
-          } 
+          }
         />
       </group>
     </group>
@@ -225,11 +591,16 @@ function GenericOrbitArtifact({
   const planet = planets.find((p) => p.id === artifact.parentId)
 
   useFrame((_, delta) => {
-    if (groupRef.current && planet) {
-      parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
-      const parentAngle = parentAngleRef.current
-      const parentX = Math.cos(parentAngle) * planet.orbitRadius
-      const parentZ = Math.sin(parentAngle) * planet.orbitRadius
+    if (groupRef.current) {
+      let parentX = 0
+      let parentZ = 0
+
+      if (planet) {
+        parentAngleRef.current += delta * planet.orbitSpeed * 0.05 * timeSpeed
+        const parentAngle = parentAngleRef.current
+        parentX = Math.cos(parentAngle) * planet.orbitRadius
+        parentZ = Math.sin(parentAngle) * planet.orbitRadius
+      }
 
       orbitAngleRef.current += delta * artifact.orbitSpeed * 0.05 * timeSpeed
       const angle = orbitAngleRef.current
@@ -273,6 +644,15 @@ export default function HumanArtifacts() {
         }
         if (artifact.id === 'hubble') {
           return <HubbleArtifact key={artifact.id} artifact={artifact} />
+        }
+        if (artifact.id === 'jwst') {
+          return <JWSTArtifact key={artifact.id} artifact={artifact} />
+        }
+        if (artifact.id === 'parker') {
+          return <ParkerArtifact key={artifact.id} artifact={artifact} />
+        }
+        if (artifact.id.startsWith('starlink') || artifact.id === 'gps' || artifact.id === 'tiangong' || artifact.id === 'chandra') {
+          return <EarthOrbitArtifact key={artifact.id} artifact={artifact} />
         }
         return <GenericOrbitArtifact key={artifact.id} artifact={artifact} />
       })}

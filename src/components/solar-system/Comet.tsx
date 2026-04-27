@@ -155,6 +155,8 @@ function CometSelectionRings({ color, radius }: { color: string; radius: number 
 export default function Comet({ data }: CometProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const meshRef = useRef<THREE.Mesh>(null)
+  const comaRef = useRef<THREE.Mesh>(null)
+  const nucleusRef = useRef<THREE.Mesh>(null)
   const orbitAngleRef = useRef(data.initialAngle)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
@@ -181,6 +183,18 @@ export default function Comet({ data }: CometProps) {
     if (meshRef.current) {
       meshRef.current.rotation.y += delta * (data.diameter > 20 ? 0.1 : 0.5) * timeSpeed
     }
+    // Coma pulse effect
+    if (comaRef.current) {
+      const pulse = 0.95 + 0.1 * Math.sin(Date.now() * 0.003)
+      comaRef.current.scale.setScalar(pulse)
+    }
+    // Nucleus glow based on distance from sun
+    if (nucleusRef.current) {
+      const distFromSun = groupRef.current.position.length()
+      const brightness = Math.min(1.0, 30.0 / Math.max(distFromSun, 1.0))
+      const mat = nucleusRef.current.material as THREE.MeshStandardMaterial
+      mat.emissiveIntensity = 0.5 + brightness * 0.8
+    }
   })
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -192,14 +206,39 @@ export default function Comet({ data }: CometProps) {
 
   return (
     <group ref={groupRef}>
+      {/* Nucleus - bright core */}
+      <mesh ref={nucleusRef} onClick={handleClick}>
+        <sphereGeometry args={[data.radius * 0.4, 16, 16]} />
+        <meshStandardMaterial
+          color="#FFFFFF"
+          emissive={data.tailColor}
+          emissiveIntensity={1.0}
+          roughness={0.3}
+          metalness={0.1}
+        />
+      </mesh>
+      {/* Main body - comet nucleus with ice/dust */}
       <mesh ref={meshRef} onClick={handleClick}>
         <sphereGeometry args={[data.radius, 16, 16]} />
         <meshStandardMaterial
           color={data.color}
           emissive={data.color}
-          emissiveIntensity={0.3}
+          emissiveIntensity={0.4}
           roughness={0.6}
           metalness={0.1}
+        />
+      </mesh>
+      {/* Coma - fuzzy atmosphere around nucleus */}
+      <mesh ref={comaRef} onClick={handleClick}>
+        <sphereGeometry args={[data.radius * 2.5, 16, 16]} />
+        <meshStandardMaterial
+          color={data.color}
+          emissive={data.color}
+          emissiveIntensity={0.15}
+          transparent
+          opacity={0.15}
+          roughness={1}
+          metalness={0}
         />
       </mesh>
       {/* Clickable hit area */}

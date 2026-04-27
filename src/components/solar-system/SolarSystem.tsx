@@ -256,7 +256,7 @@ function CameraController() {
       enableZoom
       enableRotate
       minDistance={1.5}
-      maxDistance={4000}
+      maxDistance={8000}
       zoomSpeed={1.2}
       rotateSpeed={0.5}
       panSpeed={0.8}

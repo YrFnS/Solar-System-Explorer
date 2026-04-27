@@ -13,10 +13,10 @@ export default function SceneContainer() {
       <div className="absolute inset-0 z-0">
         <Canvas
           camera={{
-            position: [50, 40, 50],
+            position: [80, 60, 80],
             fov: 45,
             near: 0.1,
-            far: 2000,
+            far: 10000,
           }}
           onPointerMissed={() => setSelectedBody(null)}
         >
