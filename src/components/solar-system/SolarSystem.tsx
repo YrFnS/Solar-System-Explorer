@@ -539,14 +539,14 @@ export default function SolarSystem() {
       {/* Human artifacts */}
       <HumanArtifacts />
 
-      {/* Post-processing effects */}
-      <EffectComposer>
+      {/* Post-processing effects - Commented out to fix black screen issue */}
+      {/* <EffectComposer>
         <Bloom
           luminanceThreshold={0.8}
           luminanceSmoothing={0.9}
           intensity={1.5}
         />
-      </EffectComposer>
+      </EffectComposer> */}
     </>
   )
 }
