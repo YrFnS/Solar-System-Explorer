@@ -1,8 +1,9 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, Suspense, Component } from 'react'
 import { useFrame, ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useGLTF } from '@react-three/drei'
 import { InterstellarObjectData } from './data'
 import { useSolarSystemStore } from './store'
 import PlanetLabel from './PlanetLabel'
@@ -10,6 +11,35 @@ import { solveKeplerEquation, calculateTrueAnomaly } from './OrbitalMechanics'
 
 interface InterstellarObjectProps {
   data: InterstellarObjectData
+}
+
+// Simple Error Boundary for model loading
+class CatchBoundary extends Component<{fallback: React.ReactNode, children: React.ReactNode}, { hasError: boolean }> {
+  state = { hasError: false }
+  static getDerivedStateFromError() { return { hasError: true } }
+  render() { return this.state.hasError ? this.props.fallback : this.props.children }
+}
+
+function GLTFModel({ url, scale }: { url: string; scale: number }) {
+  const { scene } = useGLTF(url)
+  const clone = useMemo(() => scene.clone(), [scene])
+  return <primitive object={clone} scale={scale} />
+}
+
+function ModelRenderer({ data, fallback }: { data: InterstellarObjectData, fallback: React.ReactNode }) {
+  if (data.modelUrl) {
+    // Determine an appropriate scale. The model's native scale is very large.
+    // We use a much smaller multiplier to fit the visual scene.
+    const modelScale = data.radius * 0.05
+    return (
+      <CatchBoundary fallback={fallback}>
+        <Suspense fallback={fallback}>
+          <GLTFModel url={data.modelUrl} scale={modelScale} />
+        </Suspense>
+      </CatchBoundary>
+    )
+  }
+  return <>{fallback}</>
 }
 
 function CometTail({ color }: { color: string }) {
@@ -135,7 +165,7 @@ function InterstellarSelectionRings({ color, radius }: { color: string; radius: 
 
 export default function InterstellarObject({ data }: InterstellarObjectProps) {
   const groupRef = useRef<THREE.Group>(null!)
-  const meshRef = useRef<THREE.Mesh>(null)
+  const meshRef = useRef<THREE.Group>(null)
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
   const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
@@ -148,9 +178,9 @@ export default function InterstellarObject({ data }: InterstellarObjectProps) {
   // Track time for Kepler solver
   const timeRef = useRef(0)
 
-  // Scale for 'Oumuamua's elongated shape
+  // Scale for 'Oumuamua's elongated shape (only if no model is provided)
   const isOumuamua = data.id === 'oumuamua'
-  const objectScale = isOumuamua ? new THREE.Vector3(3, 0.3, 0.3) : new THREE.Vector3(1, 1, 1)
+  const objectScale = (isOumuamua && !data.modelUrl) ? new THREE.Vector3(3, 0.3, 0.3) : new THREE.Vector3(1, 1, 1)
 
   useFrame((_, delta) => {
     timeRef.current += delta * timeSpeed
@@ -193,16 +223,23 @@ export default function InterstellarObject({ data }: InterstellarObjectProps) {
 
   return (
     <group ref={groupRef}>
-      <mesh ref={meshRef} onClick={handleClick} scale={objectScale}>
-        <sphereGeometry args={[data.radius, 16, 16]} />
-        <meshStandardMaterial
-          color={data.color}
-          emissive={data.color}
-          emissiveIntensity={0.4}
-          roughness={0.6}
-          metalness={0.1}
+      <group ref={meshRef} onClick={handleClick} scale={objectScale}>
+        <ModelRenderer
+          data={data}
+          fallback={
+            <mesh>
+              <sphereGeometry args={[data.radius, 16, 16]} />
+              <meshStandardMaterial
+                color={data.color}
+                emissive={data.color}
+                emissiveIntensity={0.4}
+                roughness={0.6}
+                metalness={0.1}
+              />
+            </mesh>
+          }
         />
-      </mesh>
+      </group>
       {/* Clickable hit area */}
       <mesh onClick={handleClick}>
         <sphereGeometry args={[Math.max(data.radius * 4, 0.4), 16, 16]} />

@@ -1195,7 +1195,7 @@ export const dwarfPlanets: DwarfPlanetData[] = [
     name: 'Apophis',
     type: 'Near-Earth Asteroid',
     radius: 0.005,
-    orbitRadius: 0.92,
+    orbitRadius: 8.8, // scaled from 0.92 AU
     orbitSpeed: 0.12,
     rotationSpeed: 0.5,
     color: '#888888',
@@ -1216,7 +1216,7 @@ export const dwarfPlanets: DwarfPlanetData[] = [
     name: 'Bennu',
     type: 'Carbonaceous Asteroid',
     radius: 0.004,
-    orbitRadius: 1.12,
+    orbitRadius: 9.4, // scaled from 1.12 AU
     orbitSpeed: 0.09,
     rotationSpeed: 0.2,
     color: '#666666',
@@ -1282,8 +1282,8 @@ export const comets: CometData[] = [
     name: "Halley's Comet",
     type: 'Short-Period Comet',
     radius: 0.04,
-    orbitRadius: 17.8, // average distance
-    orbitEccentricity: 0.967,
+    orbitRadius: 50, // scaled average distance
+    orbitEccentricity: 0.83, // adjusted to keep perihelion ~8.5
     orbitSpeed: 0.02,
     orbitInclination: 162, // retrograde!
     color: '#B0C4DE',
@@ -1302,8 +1302,8 @@ export const comets: CometData[] = [
     name: 'Hale-Bopp',
     type: 'Long-Period Comet',
     radius: 0.05,
-    orbitRadius: 40, // scaled down from 186 to fit visual scale
-    orbitEccentricity: 0.995,
+    orbitRadius: 180, // scaled average distance
+    orbitEccentricity: 0.948, // adjusted to keep perihelion ~9.2 (Earth distance)
     orbitSpeed: 0.001,
     orbitInclination: 89,
     color: '#E0E8F0',
@@ -1322,8 +1322,8 @@ export const comets: CometData[] = [
     name: 'NEOWISE',
     type: 'Long-Period Comet',
     radius: 0.04,
-    orbitRadius: 30, // scaled down from 110 to fit visual scale
-    orbitEccentricity: 0.999,
+    orbitRadius: 200, // scaled average distance
+    orbitEccentricity: 0.975, // adjusted to keep perihelion ~5.0 (Near Mercury)
     orbitSpeed: 0.002,
     orbitInclination: 129,
     color: '#F0E8D0',
@@ -1342,8 +1342,8 @@ export const comets: CometData[] = [
     name: "Encke's Comet",
     type: 'Short-Period Comet',
     radius: 0.03,
-    orbitRadius: 12,
-    orbitEccentricity: 0.848,
+    orbitRadius: 18,
+    orbitEccentricity: 0.694, // adjusted to keep perihelion ~5.5
     orbitSpeed: 0.05,
     orbitInclination: 11.8,
     color: '#C8D0D8',
@@ -1362,8 +1362,8 @@ export const comets: CometData[] = [
     name: 'Tempel 1',
     type: 'Short-Period Comet',
     radius: 0.03,
-    orbitRadius: 4.5,
-    orbitEccentricity: 0.517,
+    orbitRadius: 25,
+    orbitEccentricity: 0.56, // perihelion ~11.0 (Mars distance)
     orbitSpeed: 0.07,
     orbitInclination: 10.5,
     color: '#C8B8A0',
@@ -1382,8 +1382,8 @@ export const comets: CometData[] = [
     name: 'Wild 2',
     type: 'Short-Period Comet',
     radius: 0.03,
-    orbitRadius: 7.8,
-    orbitEccentricity: 0.539,
+    orbitRadius: 28,
+    orbitEccentricity: 0.59, // perihelion ~11.5
     orbitSpeed: 0.04,
     orbitInclination: 3.2,
     color: '#D0C8B0',
@@ -1412,6 +1412,7 @@ export interface InterstellarObjectData {
   tailColor?: string
   diameter: number
   funFacts: string[]
+  modelUrl?: string
 }
 
 export interface CentaurData {
@@ -1450,17 +1451,19 @@ export const interstellarObjects: InterstellarObjectData[] = [
     name: "'Oumuamua",
     type: 'Interstellar Object',
     radius: 0.04,
-    orbitRadius: 40, // perihelion visual distance (sun radius is 2.5)
-    orbitEccentricity: 1.2, // hyperbolic
-    orbitSpeed: 0.03,
-    orbitInclination: 0,
+    orbitRadius: 15.0, // Scaled semi-major axis to keep perihelion (~3.0) outside Sun radius 2.5
+    orbitEccentricity: 1.20113, // Accurate hyperbolic eccentricity
+    orbitSpeed: 0.05, // Slightly increased speed for this interstellar visitor
+    orbitInclination: 122.74, // Accurate retrograde inclination
     color: '#C89080',
     diameter: 230, // ~230m long
+    modelUrl: '/models/oumuamua.glb',
     funFacts: [
       "'Oumuamua was the first confirmed interstellar object to pass through our Solar System",
       "Its elongated, cigar-like shape is unlike anything seen in our Solar System",
+      "As of 2026, it is approximately 53 AU from the Sun, moving away at high speed",
       "It tumbled end over end, completing a rotation every 7-8 hours",
-      "Its extreme eccentricity of ~1.2 confirms it originated outside our Solar System",
+      "Its extreme eccentricity of ~1.20 confirms it originated outside our Solar System",
       "The name means 'scout' or 'messenger' in Hawaiian",
     ],
   },
@@ -1469,18 +1472,18 @@ export const interstellarObjects: InterstellarObjectData[] = [
     name: 'Borisov',
     type: 'Interstellar Object',
     radius: 0.06,
-    orbitRadius: 4, // perihelion ~2 AU
-    orbitEccentricity: 3.3, // extremely hyperbolic
+    orbitRadius: 7.8, // Scaled semi-major axis for perihelion ~18.4 (2.0 AU)
+    orbitEccentricity: 3.36, // Precise hyperbolic eccentricity
     orbitSpeed: 0.02,
-    orbitInclination: 15,
+    orbitInclination: 44.05, // Precise inclination
     color: '#8090C8',
     tailColor: '#8090C8',
     diameter: 1000, // ~1km
     funFacts: [
       "Borisov was the second confirmed interstellar object, discovered in 2019",
       "Unlike 'Oumuamua, Borisov looked like a typical comet with a visible tail",
-      "Its extreme eccentricity of ~3.3 proves it came from another star system",
-      "It was discovered by amateur astronomer Gennadiy Borisov",
+      "Its extreme eccentricity of ~3.36 proves it came from another star system",
+      "As of 2026, it is over 45 AU away from the Sun, heading back into interstellar space",
       "Analysis suggests it formed around a red dwarf star",
     ],
   },
