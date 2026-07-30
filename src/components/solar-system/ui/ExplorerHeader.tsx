@@ -85,7 +85,7 @@ export default function ExplorerHeader({
   }
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-5 sm:pt-4">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-[50] px-3 pt-3 sm:px-5 sm:pt-4">
       <div className="flex items-start justify-between gap-3">
         <div className="pointer-events-auto flex min-w-0 items-center gap-2.5 rounded-2xl border border-white/10 bg-black/60 px-3 py-2 shadow-2xl backdrop-blur-xl sm:px-3.5">
           <div className="relative grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-gradient-to-br from-amber-200 via-orange-400 to-rose-600 shadow-lg shadow-orange-500/20">
