@@ -16,7 +16,6 @@ import {
 } from './body-catalog'
 
 interface SearchPaletteProps {
-  open: boolean
   onClose: () => void
 }
 
@@ -33,7 +32,7 @@ const CATEGORY_LABELS: Record<BodyCatalogEntry['category'], string> = {
   exotic: 'Sandbox',
 }
 
-export default function SearchPalette({ open, onClose }: SearchPaletteProps) {
+export default function SearchPalette({ onClose }: SearchPaletteProps) {
   const [query, setQuery] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -51,12 +50,20 @@ export default function SearchPalette({ open, onClose }: SearchPaletteProps) {
 
     const normalized = query.trim().toLowerCase()
     const spawnedResults: BodyCatalogEntry[] = spawnedObjects
-      .filter((object) => !normalized || object.name.toLowerCase().includes(normalized) || object.type.includes(normalized))
+      .filter((object) => (
+        !normalized
+        || object.name.toLowerCase().includes(normalized)
+        || object.type.includes(normalized)
+      ))
       .map((object) => ({
         id: object.id,
         name: object.name,
         type: `Spawned ${object.type}`,
-        category: object.type === 'interstellar' ? 'interstellar' : object.type === 'comet' ? 'comet' : 'dwarf',
+        category: object.type === 'interstellar'
+          ? 'interstellar'
+          : object.type === 'comet'
+            ? 'comet'
+            : 'dwarf',
         color: object.color,
         searchText: `${object.name} ${object.type} spawned`.toLowerCase(),
       }))
@@ -70,21 +77,19 @@ export default function SearchPalette({ open, onClose }: SearchPaletteProps) {
   }, [query, spawnedObjects])
 
   useEffect(() => {
-    if (!open) return
-    setQuery('')
-    setActiveIndex(0)
     const frame = window.requestAnimationFrame(() => inputRef.current?.focus())
     return () => window.cancelAnimationFrame(frame)
-  }, [open])
+  }, [])
 
-  useEffect(() => {
-    setActiveIndex((index) => Math.min(index, Math.max(0, results.length - 1)))
-  }, [results.length])
-
-  if (!open) return null
+  const safeActiveIndex = Math.min(activeIndex, Math.max(0, results.length - 1))
 
   const choose = (body: BodyCatalogEntry) => {
-    if (comparisonMode && comparisonBody && !comparisonBody2 && body.id !== comparisonBody) {
+    if (
+      comparisonMode
+      && comparisonBody
+      && !comparisonBody2
+      && body.id !== comparisonBody
+    ) {
       setComparisonBody2(body.id)
       setSelectedBody(body.id)
       onClose()
@@ -105,7 +110,12 @@ export default function SearchPalette({ open, onClose }: SearchPaletteProps) {
         className="absolute inset-0 bg-black/65 backdrop-blur-md"
       />
 
-      <div className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-white/12 bg-[#080a10]/97 shadow-[0_35px_100px_rgba(0,0,0,0.75)]">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search celestial bodies"
+        className="relative w-full max-w-xl overflow-hidden rounded-3xl border border-white/12 bg-[#080a10]/97 shadow-[0_35px_100px_rgba(0,0,0,0.75)]"
+      >
         <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3.5">
           <Search className="h-4 w-4 flex-none text-amber-300/80" />
           <input
@@ -122,9 +132,9 @@ export default function SearchPalette({ open, onClose }: SearchPaletteProps) {
               } else if (event.key === 'ArrowUp') {
                 event.preventDefault()
                 setActiveIndex((index) => Math.max(0, index - 1))
-              } else if (event.key === 'Enter' && results[activeIndex]) {
+              } else if (event.key === 'Enter' && results[safeActiveIndex]) {
                 event.preventDefault()
-                choose(results[activeIndex])
+                choose(results[safeActiveIndex])
               } else if (event.key === 'Escape') {
                 event.preventDefault()
                 onClose()
@@ -159,7 +169,7 @@ export default function SearchPalette({ open, onClose }: SearchPaletteProps) {
             </div>
           ) : (
             results.map((body, index) => {
-              const active = index === activeIndex
+              const active = index === safeActiveIndex
               return (
                 <button
                   key={body.id}
@@ -182,7 +192,9 @@ export default function SearchPalette({ open, onClose }: SearchPaletteProps) {
                       {CATEGORY_LABELS[body.category]} · {body.type}
                     </span>
                   </span>
-                  {active ? <CornerDownLeft className="h-3.5 w-3.5 flex-none text-amber-300/70" /> : null}
+                  {active ? (
+                    <CornerDownLeft className="h-3.5 w-3.5 flex-none text-amber-300/70" />
+                  ) : null}
                 </button>
               )
             })
@@ -191,8 +203,13 @@ export default function SearchPalette({ open, onClose }: SearchPaletteProps) {
 
         <div className="flex items-center justify-between border-t border-white/8 px-4 py-2 text-[8px] text-white/25">
           <span className="flex items-center gap-2">
-            <span className="flex items-center gap-1"><ArrowUp className="h-2.5 w-2.5" /><ArrowDown className="h-2.5 w-2.5" /> navigate</span>
-            <span className="flex items-center gap-1"><CornerDownLeft className="h-2.5 w-2.5" /> select</span>
+            <span className="flex items-center gap-1">
+              <ArrowUp className="h-2.5 w-2.5" />
+              <ArrowDown className="h-2.5 w-2.5" /> navigate
+            </span>
+            <span className="flex items-center gap-1">
+              <CornerDownLeft className="h-2.5 w-2.5" /> select
+            </span>
           </span>
           <span>Ctrl/⌘ K</span>
         </div>
