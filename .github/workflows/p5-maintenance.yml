@@ -1,0 +1,50 @@
+name: P5 Maintenance Bundle
+
+on:
+  push:
+    branches:
+      - agent/adaptive-performance
+
+concurrency:
+  group: p5-maintenance-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: Prepare generated maintenance files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Apply deterministic source changes
+        run: node scripts/prepare-p5-maintenance.mjs
+
+      - name: Regenerate Bun lockfile
+        run: bun install
+
+      - name: Package generated files
+        run: |
+          tar -czf p5-maintenance.tar.gz \
+            package.json \
+            bun.lock \
+            src/components/solar-system/ephemeris.ts \
+            src/components/solar-system/store.ts
+
+      - name: Upload maintenance bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: p5-maintenance
+          path: p5-maintenance.tar.gz
+          if-no-files-found: error
+          retention-days: 1
