@@ -11,7 +11,8 @@ An interactive 3D Solar System experience built with **Next.js**, **React Three 
 - **Guided Learning:** Follow focused tours through the inner worlds, giant planets, and small-body frontier with an observation prompt at every stop.
 - **Full 3D System:** Explore the Sun, planets, moons, dwarf planets, asteroid belts, Centaurs, scattered-disc objects, interstellar visitors, and human artifacts.
 - **Interactive Camera:** Zoom, pan, orbit, focus, and continuously follow celestial bodies using the same position engine that renders them.
-- **Information and Comparison Tools:** Review physical facts, compare worlds, measure separation, use the minimap, save bookmarks, and capture screenshots.
+- **Information and Comparison Tools:** Review physical facts, compare worlds, measure separation, use the responsive navigator, save bookmarks, and capture screenshots.
+- **Command Palette:** Search the complete body and mission catalogue with keyboard navigation using `Ctrl/⌘ K` or `/`.
 - **Adaptive Rendering:** Auto, Eco, Balanced, and Ultra profiles scale pixel density, geometry, textures, and particle populations for the current device.
 - **Live Performance Guardrails:** The renderer monitors frame rate, changes detail gracefully, sleeps while paused and idle, and suspends WebGL while the tab is hidden.
 - **Reduced Motion:** A persistent accessibility preference slows decorative fields and disables automatic camera motion.
@@ -39,7 +40,7 @@ The eight major planets use the low-precision **JPL Solar System Dynamics J2000 
 - Approximate validity: **3000 BC through 3000 AD**
 - Intended for education and visualization, not spacecraft navigation or occultation prediction
 
-Dwarf planets, comets, Centaurs, and scattered-disc objects use deterministic two-body educational orbits based on the local catalogue. Interstellar objects use illustrative hyperbolic paths anchored near their documented perihelion epoch. Visual distances remain compressed so the complete system is explorable on one screen; the scientific HUD reports physical units separately.
+Dwarf planets, comets, Centaurs, and scattered-disc objects use deterministic two-body educational orbits based on the local catalogue. Interstellar objects use illustrative hyperbolic paths anchored near their documented perihelion epoch. Visual distances remain compressed so the complete system is explorable on one screen; the scientific inspector reports physical units separately.
 
 For high-precision or observer-specific results, use [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/).
 
@@ -55,15 +56,35 @@ The explorer preserves visual richness without making every device render the sa
 - When the simulation is paused and the camera is idle, React Three Fiber switches to **demand rendering**, allowing the GPU to sleep until interaction resumes.
 - Local textures are generated into 512 px, 1K, and 2K WebP tiers. Eco, Balanced, and Ultra choose the matching tier automatically.
 - Common legacy third-party texture URLs are routed to self-hosted assets, including a local Earth cloud layer.
-- The large HTML interface bundle loads after the core scene becomes interactive.
+- The modular HTML interface loads after the core scene becomes interactive.
 - Quality, motion, and experience-mode preferences persist locally.
 
 Use the render-engine pill near the top-right to select a quality profile or leave it on **Auto**. Mission control is available near the lower-left edge.
+
+## Interface Architecture 🧭
+
+The active interface is composed by `UIOverlayV4` rather than loading the previous multi-thousand-line overlay component. Its responsibilities are separated into focused modules:
+
+- **Explorer header:** current mode, selected destination, ephemeris time, search, history, bookmarks, display controls, and screenshot entry.
+- **Body catalogue and command palette:** one deduplicated index for planets, moons, missions, small bodies, exotic Sandbox objects, and spawned objects.
+- **Live body inspector:** physical facts, current ephemeris distance and speed, Scientific-mode orbital telemetry, focus, bookmarks, measurement, and comparison actions.
+- **Comparison workspace:** side-by-side facts, shared metrics, relative diameter, body swapping, and camera focus.
+- **Display settings:** camera presets, orbit/label aids, belts, outer-system layers, motion, and phenomena controls.
+- **Responsive navigator:** fast Sun/planet/Pluto navigation on desktop and touch devices.
+- **Bookmark library and history timeline:** browser-local destinations and mission-history navigation.
+- **Renderer screenshot bridge:** performs an explicit WebGL render and captures immediately, avoiding an already-cleared drawing buffer.
+- **First-run guide and tour surface:** lightweight onboarding without blocking the 3D scene bundle.
+
+The interface remains semantic HTML above the canvas. Three.js renders the Solar System, while forms, search, scrolling, keyboard focus, and accessibility remain native browser UI.
 
 ## Keyboard Controls ⌨️
 
 | Key | Action |
 | --- | --- |
+| `Ctrl/⌘ K` or `/` | Open catalogue search |
+| `B` | Open bookmarks |
+| `H` | Open space-history timeline |
+| `,` | Open display settings |
 | `1` / `2` / `3` | Explore / Scientific / Sandbox mode |
 | `Space` | Pause or resume while remembering the previous warp speed |
 | `+` / `-` | Move through time-warp presets |
@@ -74,7 +95,7 @@ Use the render-engine pill near the top-right to select a quality profile or lea
 | `R` | Toggle camera auto-rotation |
 | `T` | Start or stop the classic guided tour |
 | `S` | Enter or leave screenshot mode |
-| `Escape` | Stop a tour or reset the camera |
+| `Escape` | Close a surface, stop a tour, or reset the camera |
 
 ## Tech Stack 🛠️
 
@@ -141,7 +162,7 @@ The GitHub Actions `Quality` workflow installs frozen dependencies, validates th
 
 ## Architecture Notes 📝
 
-- The application is client-side and requires no persistent database. Bookmarks, quality, motion, and experience preferences are stored in the browser.
+- The application is client-side and requires no persistent database. Bookmarks, quality, motion, onboarding, and experience preferences are stored in the browser.
 - Simulation state, experience state, and rendering-quality state are separate Zustand stores, while the high-frequency orbital clock remains outside React state.
 - The stable production renderer remains WebGL 2. A future WebGPU/TSL migration should remain isolated and benchmarked rather than replacing the renderer without evidence.
 - Fictional or speculative features such as traversable wormholes are confined to Sandbox-oriented presentation and are not part of the scientific ephemeris model.
