@@ -13,8 +13,9 @@ interface ScreenshotResultDetail {
 }
 
 /**
- * Captures immediately after an explicit renderer pass. This avoids depending
- * on a WebGL drawing buffer that may already have been cleared by the browser.
+ * Captures immediately after an explicit renderer pass. The resulting WebP is
+ * stored as an object URL instead of a base64 string so repeated captures do
+ * not inflate JavaScript heap usage.
  */
 export default function ScreenshotCaptureBridge() {
   const gl = useThree((state) => state.gl)
@@ -24,19 +25,30 @@ export default function ScreenshotCaptureBridge() {
 
   useEffect(() => {
     const complete = (detail: ScreenshotResultDetail) => {
-      window.dispatchEvent(new CustomEvent<ScreenshotResultDetail>(SCREENSHOT_COMPLETE_EVENT, { detail }))
+      window.dispatchEvent(
+        new CustomEvent<ScreenshotResultDetail>(SCREENSHOT_COMPLETE_EVENT, { detail })
+      )
     }
 
     const capture = () => {
       try {
         gl.render(scene, camera)
-        const dataUrl = gl.domElement.toDataURL('image/png')
-        if (!dataUrl || dataUrl === 'data:,') {
-          complete({ ok: false, message: 'The renderer returned an empty image.' })
-          return
-        }
-        addScreenshot(dataUrl)
-        complete({ ok: true })
+        const canvas = gl.domElement
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob || blob.size === 0) {
+              complete({ ok: false, message: 'The renderer returned an empty image.' })
+              return
+            }
+
+            const objectUrl = URL.createObjectURL(blob)
+            addScreenshot(objectUrl)
+            complete({ ok: true })
+          },
+          'image/webp',
+          0.9
+        )
       } catch (error) {
         complete({
           ok: false,
