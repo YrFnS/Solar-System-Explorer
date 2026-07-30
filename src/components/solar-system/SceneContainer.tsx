@@ -15,6 +15,7 @@ import { useSolarSystemStore } from './store'
 import { getQualityProfile, usePerformanceStore } from './performance-store'
 
 installAssetUrlPolicy()
+const INITIAL_SCENE_WARMUP = prepareSceneWarmup()
 
 const UIOverlay = dynamic(() => import('./UIOverlay'), {
   ssr: false,
@@ -68,7 +69,6 @@ export default function SceneContainer() {
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const profile = getQualityProfile({ preset, autoQuality })
-  const [warmupPlan] = useState(() => prepareSceneWarmup())
 
   return (
     <>
@@ -93,7 +93,7 @@ export default function SceneContainer() {
           onPointerMissed={() => setSelectedBody(null)}
         >
           <ScenePerformanceManager />
-          <ProgressiveSceneWarmup plan={warmupPlan} />
+          <ProgressiveSceneWarmup plan={INITIAL_SCENE_WARMUP} />
           <AdaptiveLodManager />
           <SolarSystem />
         </Canvas>
