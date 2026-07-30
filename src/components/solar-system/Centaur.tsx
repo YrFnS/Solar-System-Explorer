@@ -1,14 +1,23 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
-import { useFrame, ThreeEvent } from '@react-three/fiber'
+import { useMemo, useRef } from 'react'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
-import { CentaurData } from './data'
+import type { CentaurData } from './data'
 import { useSolarSystemStore } from './store'
 import PlanetLabel from './PlanetLabel'
 
 interface CentaurProps {
   data: CentaurData
+}
+
+function deterministicAngle(id: string) {
+  let hash = 2166136261
+  for (let index = 0; index < id.length; index++) {
+    hash ^= id.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return ((hash >>> 0) / 4294967296) * Math.PI * 2
 }
 
 function CentaurRings({ color, radius }: { color: string; radius: number }) {
@@ -39,8 +48,8 @@ function CentaurSelectionRings({ color, radius }: { color: string; radius: numbe
     const outerOpacity = 0.55 - 0.25 * Math.sin(t * 3)
     if (outerMatRef.current) outerMatRef.current.opacity = outerOpacity
     if (innerRef.current) {
-      const s = 1 + 0.03 * Math.sin(t * 3)
-      innerRef.current.scale.set(s, s, s)
+      const scale = 1 + 0.03 * Math.sin(t * 3)
+      innerRef.current.scale.set(scale, scale, scale)
     }
   })
 
@@ -125,12 +134,10 @@ function CentaurSurface({ data }: { data: CentaurData }) {
           vec3 dark = baseColor * 0.55;
           color = mix(light, dark, n);
 
-          // Subtle craters
           float craters = fbm(uv * 25.0);
           color = mix(color, color * 0.65, smoothstep(0.55, 0.62, craters) * 0.4);
 
           vec3 lit = color * (ambient + diff * 0.85);
-
           float rim = pow(1.0 - max(dot(normal, vec3(0.0, 0.0, 1.0)), 0.0), 3.0);
           lit += baseColor * rim * 0.15;
 
@@ -142,8 +149,8 @@ function CentaurSurface({ data }: { data: CentaurData }) {
 
   useFrame((_, delta) => {
     if (meshRef.current) {
-      const mat = meshRef.current.material as THREE.ShaderMaterial
-      mat.uniforms.time.value += delta
+      const material = meshRef.current.material as THREE.ShaderMaterial
+      material.uniforms.time.value += delta
     }
   })
 
@@ -157,36 +164,35 @@ function CentaurSurface({ data }: { data: CentaurData }) {
 export default function Centaur({ data }: CentaurProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const spinRef = useRef<THREE.Group>(null!)
-  const orbitAngleRef = useRef(data.initialAngle)
-  const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
-  const selectedBody = useSolarSystemStore((s) => s.selectedBody)
-  const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
-  const showLabels = useSolarSystemStore((s) => s.showLabels)
-  const customDateAngleBase = useSolarSystemStore((s) => s.customDateAngleBase)
+  const orbitAngleRef = useRef(deterministicAngle(data.id))
+  const setSelectedBody = useSolarSystemStore((state) => state.setSelectedBody)
+  const selectedBody = useSolarSystemStore((state) => state.selectedBody)
+  const timeSpeed = useSolarSystemStore((state) => state.timeSpeed)
+  const showLabels = useSolarSystemStore((state) => state.showLabels)
+  const customDateAngleBase = useSolarSystemStore((state) => state.customDateAngleBase)
 
   const inclinationRad = (data.orbitInclination * Math.PI) / 180
+  const rotationSpeed = data.id === 'chariklo' ? 0.09 : 0.12
 
   useFrame((_, delta) => {
     if (groupRef.current) {
       orbitAngleRef.current += delta * data.orbitSpeed * 0.05 * timeSpeed
       const angle = orbitAngleRef.current + customDateAngleBase * data.orbitSpeed
+      const eccentricity = data.orbitEccentricity
+      const semiMajorAxis = data.orbitRadius
+      const radius = semiMajorAxis * (1 - eccentricity * eccentricity) / (1 + eccentricity * Math.cos(angle))
 
-      // Eccentric orbit like comets
-      const e = data.orbitEccentricity
-      const a = data.orbitRadius
-      const r = a * (1 - e * e) / (1 + e * Math.cos(angle))
-
-      groupRef.current.position.x = Math.cos(angle) * r
-      groupRef.current.position.z = Math.sin(angle) * r
-      groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * r * 0.3
+      groupRef.current.position.x = Math.cos(angle) * radius
+      groupRef.current.position.z = Math.sin(angle) * radius
+      groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * radius * 0.3
     }
     if (spinRef.current) {
-      spinRef.current.rotation.y += delta * data.rotationSpeed * 0.5 * timeSpeed
+      spinRef.current.rotation.y += delta * rotationSpeed * 0.5 * timeSpeed
     }
   })
 
-  const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation()
+  const handleClick = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation()
     setSelectedBody(data.id)
   }
 
@@ -196,23 +202,15 @@ export default function Centaur({ data }: CentaurProps) {
     <group ref={groupRef}>
       <group ref={spinRef} onClick={handleClick}>
         <CentaurSurface data={data} />
-        {/* Clickable hit area */}
         <mesh>
           <sphereGeometry args={[Math.max(data.radius * 2.5, 0.4), 16, 16]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
       </group>
 
-      {/* Rings for Chariklo */}
       {data.hasRings && <CentaurRings color={data.color} radius={data.radius} />}
-
-      {/* Selection indicator */}
       {isSelected && <CentaurSelectionRings color={data.color} radius={data.radius} />}
-      {isSelected && (
-        <pointLight color={data.color} intensity={0.5} distance={6} />
-      )}
-
-      {/* Subtle glow for visibility */}
+      {isSelected && <pointLight color={data.color} intensity={0.5} distance={6} />}
       <pointLight color={data.color} intensity={0.08} distance={2} />
 
       {showLabels && (
