@@ -16,24 +16,19 @@ interface ScreenshotResultDetail {
 }
 
 export default function ScreenshotModeOverlay() {
-  const screenshotMode = useSolarSystemStore((state) => state.screenshotMode)
   const screenshotCount = useSolarSystemStore((state) => state.screenshotGallery.length)
   const setScreenshotMode = useSolarSystemStore((state) => state.setScreenshotMode)
   const [captureState, setCaptureState] = useState<CaptureState>('ready')
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
-    if (!screenshotMode) {
-      setCaptureState('ready')
-      setErrorMessage('')
-      return
-    }
+    let resetTimer: number | undefined
 
     const handleComplete = (event: Event) => {
       const result = (event as CustomEvent<ScreenshotResultDetail>).detail
       if (result.ok) {
         setCaptureState('success')
-        window.setTimeout(() => setCaptureState('ready'), 1400)
+        resetTimer = window.setTimeout(() => setCaptureState('ready'), 1400)
       } else {
         setCaptureState('error')
         setErrorMessage(result.message ?? 'Screenshot capture failed.')
@@ -41,10 +36,11 @@ export default function ScreenshotModeOverlay() {
     }
 
     window.addEventListener(SCREENSHOT_COMPLETE_EVENT, handleComplete)
-    return () => window.removeEventListener(SCREENSHOT_COMPLETE_EVENT, handleComplete)
-  }, [screenshotMode])
-
-  if (!screenshotMode) return null
+    return () => {
+      window.removeEventListener(SCREENSHOT_COMPLETE_EVENT, handleComplete)
+      if (resetTimer !== undefined) window.clearTimeout(resetTimer)
+    }
+  }, [])
 
   const capture = () => {
     setCaptureState('capturing')
@@ -58,12 +54,19 @@ export default function ScreenshotModeOverlay() {
       <div className="pointer-events-auto absolute bottom-4 left-1/2 w-[min(28rem,calc(100vw-1rem))] -translate-x-1/2 rounded-3xl border border-white/12 bg-black/82 p-2 shadow-2xl backdrop-blur-2xl">
         <div className="flex items-center gap-2">
           <div className="hidden min-w-0 flex-1 px-2 sm:block">
-            <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-amber-200/55">Clean capture mode</p>
-            <p className="mt-0.5 truncate text-[8px] text-white/28">Only the WebGL scene is saved; interface panels stay out of the image.</p>
+            <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-amber-200/55">
+              Clean capture mode
+            </p>
+            <p className="mt-0.5 truncate text-[8px] text-white/28">
+              Only the WebGL scene is saved; interface panels stay out of the image.
+            </p>
           </div>
 
           <div className="flex flex-1 items-center gap-1.5 sm:flex-none">
-            <div className="flex items-center gap-1 rounded-xl bg-white/[0.04] px-2 py-2 text-[8px] text-white/35" title="Saved captures">
+            <div
+              className="flex items-center gap-1 rounded-xl bg-white/[0.04] px-2 py-2 text-[8px] text-white/35"
+              title="Saved captures"
+            >
               <Images className="h-3.5 w-3.5" /> {screenshotCount}
             </div>
             <button
@@ -72,8 +75,16 @@ export default function ScreenshotModeOverlay() {
               disabled={captureState === 'capturing'}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-amber-300 px-4 py-2 text-[9px] font-semibold text-black transition hover:bg-amber-200 disabled:cursor-wait disabled:opacity-60 sm:flex-none"
             >
-              {captureState === 'success' ? <Check className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
-              {captureState === 'capturing' ? 'Capturing…' : captureState === 'success' ? 'Saved' : 'Capture'}
+              {captureState === 'success' ? (
+                <Check className="h-3.5 w-3.5" />
+              ) : (
+                <Camera className="h-3.5 w-3.5" />
+              )}
+              {captureState === 'capturing'
+                ? 'Capturing…'
+                : captureState === 'success'
+                  ? 'Saved'
+                  : 'Capture'}
             </button>
             <button
               type="button"
