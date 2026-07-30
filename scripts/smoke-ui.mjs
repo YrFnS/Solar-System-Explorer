@@ -82,6 +82,12 @@ async function main() {
 
     const page = await browser.newPage()
     await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 })
+    await page.evaluateOnNewDocument(() => {
+      window.localStorage.setItem('solar-explorer-interface-guide-v4', 'complete')
+      window.localStorage.setItem('solar-explorer-experience-mode-v1', 'explore')
+      window.localStorage.setItem('solar-explorer-quality-preset-v1', 'eco')
+      window.sessionStorage.setItem('solar-explorer-scene-warmup-v1', 'complete')
+    })
 
     const pageErrors = []
     page.on('pageerror', (error) => pageErrors.push(error.message))
