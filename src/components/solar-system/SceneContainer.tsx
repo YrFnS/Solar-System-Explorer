@@ -15,10 +15,12 @@ import ProgressiveSceneWarmup, {
   prepareSceneWarmup,
 } from './ProgressiveSceneWarmup'
 import { installAssetUrlPolicy } from './asset-policy'
+import { installModelAvailabilityPolicy } from './model-policy'
 import { useSolarSystemStore } from './store'
 import { getQualityProfile, usePerformanceStore } from './performance-store'
 
 installAssetUrlPolicy()
+installModelAvailabilityPolicy()
 const INITIAL_SCENE_WARMUP = prepareSceneWarmup()
 
 const UIOverlay = dynamic(() => import('./UIOverlayV4'), {
