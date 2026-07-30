@@ -121,13 +121,13 @@ export default function UIOverlayV4() {
 
       {bookmarksOpen ? (
         <OptionalInterface>
-          <BookmarksPanel onClose={() => setBookmarksOpen(false)} />
+          <BookmarksPanel open onClose={() => setBookmarksOpen(false)} />
         </OptionalInterface>
       ) : null}
 
       {settingsOpen ? (
         <OptionalInterface>
-          <DisplaySettingsPanel onClose={() => setSettingsOpen(false)} />
+          <DisplaySettingsPanel open onClose={() => setSettingsOpen(false)} />
         </OptionalInterface>
       ) : null}
 
