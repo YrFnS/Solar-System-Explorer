@@ -20,7 +20,7 @@ export default function TourOverlayV4() {
   const progress = ((tourStep + 1) / TOUR_STEPS.length) * 100
 
   return (
-    <div className="pointer-events-auto absolute bottom-16 left-1/2 z-45 w-[min(34rem,calc(100vw-1rem))] -translate-x-1/2 sm:bottom-20">
+    <div className="pointer-events-auto absolute bottom-28 left-1/2 z-[45] w-[min(34rem,calc(100vw-1rem))] -translate-x-1/2 sm:bottom-20">
       <section className="overflow-hidden rounded-3xl border border-white/12 bg-[#07090f]/94 text-white shadow-2xl backdrop-blur-2xl">
         <div className="h-0.5 bg-white/5">
           <div className="h-full transition-all duration-500" style={{ width: `${progress}%`, background: `linear-gradient(90deg,#fbbf24,${body?.color ?? '#fb923c'})` }} />
