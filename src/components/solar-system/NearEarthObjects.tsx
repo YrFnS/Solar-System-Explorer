@@ -1,9 +1,11 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { useSolarSystemStore } from './store'
+import { getQualityProfile, usePerformanceStore } from './performance-store'
 
 function seededRandom(seed: number) {
   return () => {
@@ -13,17 +15,27 @@ function seededRandom(seed: number) {
 }
 
 export default function NearEarthObjects() {
-  const count = 1000
   const meshRef = useRef<THREE.InstancedMesh>(null)
-  const texture = useTexture('https://raw.githubusercontent.com/jeromeetienne/threex.planets/master/images/moonmap1k.jpg')
-  const bumpMap = useTexture('https://raw.githubusercontent.com/jeromeetienne/threex.planets/master/images/moonbump1k.jpg')
-  const showPhenomena = useSolarSystemStore((s) => s.showPhenomena)
+  const texture = useTexture('/textures/moon.jpg')
+  const showPhenomena = useSolarSystemStore((state) => state.showPhenomena)
+  const isPaused = useSolarSystemStore((state) => state.isPaused)
+  const timeSpeed = useSolarSystemStore((state) => state.timeSpeed)
+  const preset = usePerformanceStore((state) => state.preset)
+  const autoQuality = usePerformanceStore((state) => state.autoQuality)
+  const profile = getQualityProfile({ preset, autoQuality })
+  const count = Math.max(120, Math.round(1000 * profile.instanceDensity))
+
+  useMemo(() => {
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.anisotropy = 2
+    texture.needsUpdate = true
+  }, [texture])
 
   useEffect(() => {
     if (!meshRef.current) return
+
     const dummy = new THREE.Object3D()
     const random = seededRandom(67890)
-
     const innerRadius = 5
     const outerRadius = 8
 
@@ -43,26 +55,26 @@ export default function NearEarthObjects() {
       dummy.updateMatrix()
       meshRef.current.setMatrixAt(i, dummy.matrix)
     }
-    meshRef.current.instanceMatrix.needsUpdate = true
-  }, [])
 
-  useEffect(() => {
-    if (meshRef.current) {
-      meshRef.current.rotation.y -= 0.002
-    }
+    meshRef.current.instanceMatrix.setUsage(THREE.StaticDrawUsage)
+    meshRef.current.instanceMatrix.needsUpdate = true
+    meshRef.current.computeBoundingSphere()
+  }, [count])
+
+  useFrame((_, delta) => {
+    if (!meshRef.current || isPaused) return
+    meshRef.current.rotation.y -= delta * 0.018 * Math.max(0.1, timeSpeed)
   })
 
   if (!showPhenomena) return null
 
   return (
     <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
-      <dodecahedronGeometry args={[1, 1]} />
+      <dodecahedronGeometry args={[1, 0]} />
       <meshStandardMaterial
         map={texture}
-        bumpMap={bumpMap}
-        bumpScale={0.05}
-        roughness={0.9}
-        metalness={0.1}
+        roughness={0.92}
+        metalness={0.05}
         color="#aaaaaa"
       />
     </instancedMesh>
