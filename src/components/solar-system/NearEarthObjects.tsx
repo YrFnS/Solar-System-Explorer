@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
@@ -25,7 +25,7 @@ export default function NearEarthObjects() {
   const profile = getQualityProfile({ preset, autoQuality })
   const count = Math.max(120, Math.round(1000 * profile.instanceDensity))
 
-  useMemo(() => {
+  useEffect(() => {
     texture.colorSpace = THREE.SRGBColorSpace
     texture.anisotropy = 2
     texture.needsUpdate = true
