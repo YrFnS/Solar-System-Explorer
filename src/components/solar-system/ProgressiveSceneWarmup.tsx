@@ -28,6 +28,8 @@ export interface SceneWarmupPlan {
   desired: WarmupPreferences
 }
 
+let preparedPlan: SceneWarmupPlan | null | undefined
+
 function applyFirstRunDefaults() {
   if (typeof window === 'undefined' || window.localStorage.getItem(DEFAULTS_KEY)) return
 
@@ -79,10 +81,14 @@ function readPreferences(): WarmupPreferences {
  * first render and restored over several browser frames by ProgressiveSceneWarmup.
  */
 export function prepareSceneWarmup(): SceneWarmupPlan | null {
+  if (preparedPlan !== undefined) return preparedPlan
   if (typeof window === 'undefined') return null
 
   try {
-    if (window.sessionStorage.getItem(SESSION_WARMUP_KEY)) return null
+    if (window.sessionStorage.getItem(SESSION_WARMUP_KEY)) {
+      preparedPlan = null
+      return preparedPlan
+    }
   } catch {
     // Storage can be unavailable in privacy modes; the warmup is still safe.
   }
@@ -106,7 +112,8 @@ export function prepareSceneWarmup(): SceneWarmupPlan | null {
   scene.setShowSolarWind(false)
   scene.setShowZodiacalLight(false)
 
-  return { desired }
+  preparedPlan = { desired }
+  return preparedPlan
 }
 
 function restoreNearScene(plan: SceneWarmupPlan) {
