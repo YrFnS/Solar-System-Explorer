@@ -17,7 +17,7 @@ export default function NavigatorBar({ onOpenSearch }: NavigatorBarProps) {
   if (screenshotMode) return null
 
   return (
-    <nav className="pointer-events-auto absolute bottom-3 left-1/2 z-30 w-[min(44rem,calc(100vw-8.5rem))] -translate-x-1/2 sm:bottom-5 sm:w-auto" aria-label="Primary celestial navigation">
+    <nav className="pointer-events-auto absolute bottom-14 left-1/2 z-30 w-[calc(100vw-1rem)] -translate-x-1/2 sm:bottom-5 sm:w-auto" aria-label="Primary celestial navigation">
       <div className="flex items-center gap-1 overflow-x-auto rounded-2xl border border-white/10 bg-black/68 p-1.5 shadow-2xl backdrop-blur-xl [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {PRIMARY_NAVIGATION_BODIES.map((body) => {
           const selected = selectedBody === body.id
