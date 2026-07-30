@@ -1,14 +1,16 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Bookmark,
   Camera,
   Clock3,
   History,
+  Menu,
   Search,
   SlidersHorizontal,
   Sparkles,
+  X,
 } from 'lucide-react'
 import { EXPERIENCE_MODES, useExperienceStore } from '../experience-store'
 import { formatTimeWarp } from '../simulation-clock'
@@ -55,6 +57,7 @@ export default function ExplorerHeader({
   onOpenBookmarks,
   onOpenSettings,
 }: ExplorerHeaderProps) {
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false)
   const mode = useExperienceStore((state) => state.mode)
   const simulationDateMs = useExperienceStore((state) => state.simulationDateMs)
   const selectedBody = useSolarSystemStore((state) => state.selectedBody)
@@ -75,6 +78,11 @@ export default function ExplorerHeader({
   }).format(new Date(simulationDateMs)), [simulationDateMs])
 
   if (screenshotMode) return null
+
+  const openMobileTool = (action: () => void) => {
+    setMobileToolsOpen(false)
+    action()
+  }
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-5 sm:pt-4">
@@ -120,6 +128,11 @@ export default function ExplorerHeader({
               <SlidersHorizontal className="h-3.5 w-3.5" />
             </HeaderAction>
           </div>
+          <div className="sm:hidden">
+            <HeaderAction label="More explorer tools" onClick={() => setMobileToolsOpen((value) => !value)}>
+              {mobileToolsOpen ? <X className="h-3.5 w-3.5" /> : <Menu className="h-3.5 w-3.5" />}
+            </HeaderAction>
+          </div>
           <HeaderAction
             label="Enter screenshot mode"
             onClick={() => setScreenshotMode(true)}
@@ -129,6 +142,20 @@ export default function ExplorerHeader({
           </HeaderAction>
         </div>
       </div>
+
+      {mobileToolsOpen ? (
+        <div className="pointer-events-auto absolute right-12 top-14 w-44 overflow-hidden rounded-2xl border border-white/10 bg-[#080a10]/96 p-1.5 text-white shadow-2xl backdrop-blur-2xl sm:hidden">
+          <button type="button" onClick={() => openMobileTool(onOpenBookmarks)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-[9px] text-white/55 hover:bg-white/[0.07] hover:text-white">
+            <Bookmark className="h-3.5 w-3.5 text-violet-300/60" /> Bookmarks
+          </button>
+          <button type="button" onClick={() => openMobileTool(() => setShowTimeline(true))} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-[9px] text-white/55 hover:bg-white/[0.07] hover:text-white">
+            <History className="h-3.5 w-3.5 text-amber-300/60" /> Space history
+          </button>
+          <button type="button" onClick={() => openMobileTool(onOpenSettings)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-[9px] text-white/55 hover:bg-white/[0.07] hover:text-white">
+            <SlidersHorizontal className="h-3.5 w-3.5 text-sky-300/60" /> Display settings
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
