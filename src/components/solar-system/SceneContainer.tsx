@@ -10,8 +10,11 @@ import AdaptiveLodManager from './AdaptiveLodManager'
 import ProgressiveSceneWarmup, {
   prepareSceneWarmup,
 } from './ProgressiveSceneWarmup'
+import { installAssetUrlPolicy } from './asset-policy'
 import { useSolarSystemStore } from './store'
 import { getQualityProfile, usePerformanceStore } from './performance-store'
+
+installAssetUrlPolicy()
 
 const UIOverlay = dynamic(() => import('./UIOverlay'), {
   ssr: false,
