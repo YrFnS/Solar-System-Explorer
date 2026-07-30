@@ -1,6 +1,7 @@
 name: P5 Maintenance Bundle
 
 on:
+  pull_request:
   push:
     branches:
       - agent/adaptive-performance
