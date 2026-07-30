@@ -189,7 +189,6 @@ export default function ExperienceDock() {
   useEffect(() => {
     if (mode !== 'explore') activateExperienceMode(mode)
     // Apply a persisted non-default mode once without repeatedly resetting user toggles.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
