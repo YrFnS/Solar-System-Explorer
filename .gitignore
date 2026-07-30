@@ -20,6 +20,9 @@ node_modules
 # production
 /build
 
+# generated texture tiers
+/public/textures/optimized/
+
 # misc
 .DS_Store
 *.pem
