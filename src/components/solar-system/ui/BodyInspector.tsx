@@ -2,10 +2,14 @@
 
 import { useMemo } from 'react'
 import {
+  Activity,
+  Atom,
   Bookmark,
   BookmarkCheck,
   Focus,
+  Gauge,
   GitCompareArrows,
+  Info,
   Milestone,
   Orbit,
   Ruler,
@@ -25,6 +29,11 @@ function formatDistance(au: number | null, km: number | null) {
     return `${new Intl.NumberFormat('en', { maximumFractionDigits: 0 }).format(km)} km`
   }
   return null
+}
+
+function formatMetric(value: number | null, digits = 3) {
+  if (value === null || !Number.isFinite(value)) return '—'
+  return new Intl.NumberFormat('en', { maximumFractionDigits: digits }).format(value)
 }
 
 function InspectorAction({
@@ -128,6 +137,13 @@ export default function BodyInspector() {
     setRulerTarget(selectedBody)
   }
 
+  const scienceRows = telemetry ? [
+    { label: 'Semi-major axis', value: telemetry.semiMajorAxisAu === null ? '—' : `${formatMetric(telemetry.semiMajorAxisAu, 4)} AU`, icon: Orbit },
+    { label: 'Eccentricity', value: formatMetric(telemetry.eccentricity, 5), icon: Activity },
+    { label: 'Inclination', value: telemetry.inclinationDeg === null ? '—' : `${formatMetric(telemetry.inclinationDeg, 3)}°`, icon: Atom },
+    { label: 'Period', value: telemetry.orbitalPeriodDays === null ? '—' : telemetry.orbitalPeriodDays > 730 ? `${formatMetric(telemetry.orbitalPeriodDays / 365.25, 2)} yr` : `${formatMetric(telemetry.orbitalPeriodDays, 1)} days`, icon: Gauge },
+  ] : []
+
   return (
     <aside className="pointer-events-auto fixed inset-x-2 bottom-2 z-40 max-h-[68vh] overflow-hidden rounded-3xl border border-white/10 bg-[#07090f]/96 text-white shadow-2xl backdrop-blur-2xl sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-24 sm:max-h-[calc(100vh-7rem)] sm:w-[21rem]">
       <div className="h-0.5" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
@@ -187,6 +203,26 @@ export default function BodyInspector() {
             </div>
           ))}
         </div>
+
+        {mode === 'scientific' && telemetry ? (
+          <div className="mt-3 overflow-hidden rounded-2xl border border-emerald-300/10 bg-emerald-300/[0.035]">
+            <div className="flex items-center gap-1.5 border-b border-emerald-300/8 px-3 py-2 text-[7px] font-semibold uppercase tracking-[0.18em] text-emerald-200/48">
+              <Atom className="h-3 w-3" /> Ephemeris telemetry
+            </div>
+            <div className="grid grid-cols-2 gap-px bg-emerald-300/8">
+              {scienceRows.map(({ label, value, icon: Icon }) => (
+                <div key={label} className="bg-[#080d10] px-3 py-2.5">
+                  <span className="flex items-center gap-1 text-[7px] uppercase tracking-wider text-white/25"><Icon className="h-2.5 w-2.5 text-emerald-300/50" /> {label}</span>
+                  <span className="mt-1 block font-mono text-[9px] text-white/62">{value}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-start gap-2 px-3 py-2.5">
+              <Info className="mt-0.5 h-3 w-3 flex-none text-sky-300/55" />
+              <p className="text-[8px] leading-relaxed text-white/30">{telemetry.note}</p>
+            </div>
+          </div>
+        ) : null}
 
         {info?.funFacts?.[0] ? (
           <div className="mt-3 rounded-2xl border border-white/6 bg-white/[0.025] px-3 py-2.5">
