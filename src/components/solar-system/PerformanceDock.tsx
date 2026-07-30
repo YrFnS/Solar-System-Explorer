@@ -19,6 +19,11 @@ const OPTIONS: Array<{ id: QualityPreset; label: string; note: string }> = [
 export default function PerformanceDock() {
   const [open, setOpen] = useState(false)
   const screenshotMode = useSolarSystemStore((state) => state.screenshotMode)
+  const isPaused = useSolarSystemStore((state) => state.isPaused)
+  const autoRotate = useSolarSystemStore((state) => state.autoRotate)
+  const followMode = useSolarSystemStore((state) => state.followMode)
+  const isTourMode = useSolarSystemStore((state) => state.isTourMode)
+  const cameraMode = useSolarSystemStore((state) => state.cameraMode)
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const fps = usePerformanceStore((state) => state.fps)
@@ -28,7 +33,15 @@ export default function PerformanceDock() {
 
   const effectiveQuality = getEffectiveQuality({ preset, autoQuality })
   const profile = QUALITY_PROFILES[effectiveQuality]
-  const statusColor = fps >= 52 ? 'bg-emerald-400' : fps >= 36 ? 'bg-amber-400' : 'bg-rose-400'
+  const idle = isPaused && !autoRotate && !followMode && !isTourMode && cameraMode !== 'fly'
+  const statusColor = idle
+    ? 'bg-sky-400'
+    : fps >= 52
+      ? 'bg-emerald-400'
+      : fps >= 36
+        ? 'bg-amber-400'
+        : 'bg-rose-400'
+  const liveLabel = idle ? 'IDLE' : `${fps} FPS`
 
   useEffect(() => {
     if (!open) return
@@ -53,14 +66,16 @@ export default function PerformanceDock() {
         aria-label="Open rendering quality controls"
       >
         <span className="relative flex h-2 w-2">
-          <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-40 ${statusColor}`} />
+          {!idle && (
+            <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-40 ${statusColor}`} />
+          )}
           <span className={`relative inline-flex h-2 w-2 rounded-full ${statusColor}`} />
         </span>
         <span className="text-[9px] font-semibold tracking-[0.18em] text-white/70">
           {preset === 'auto' ? `AUTO · ${profile.label.toUpperCase()}` : profile.label.toUpperCase()}
         </span>
         <span className="rounded-full bg-white/5 px-1.5 py-0.5 font-mono text-[9px] text-white/45">
-          {fps} FPS
+          {liveLabel}
         </span>
       </button>
 
@@ -84,7 +99,7 @@ export default function PerformanceDock() {
               </button>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-white/45">
-              Resolution and object density scale independently, so navigation stays responsive without flattening the scene.
+              Resolution, texture size, and object density scale independently, while a paused scene sleeps until it needs another frame.
             </p>
           </div>
 
@@ -139,12 +154,14 @@ export default function PerformanceDock() {
               </span>
             </div>
             <div className="bg-[#07090f] px-3 py-2 text-center">
-              <span className="block text-[8px] uppercase tracking-wider text-white/30">DPR cap</span>
-              <span className="mt-0.5 block font-mono text-[10px] text-white/65">{profile.dpr[1]}×</span>
+              <span className="block text-[8px] uppercase tracking-wider text-white/30">Texture</span>
+              <span className="mt-0.5 block font-mono text-[10px] text-white/65">
+                {effectiveQuality === 'eco' ? '512' : effectiveQuality === 'balanced' ? '1K' : '2K'}
+              </span>
             </div>
             <div className="bg-[#07090f] px-3 py-2 text-center">
               <span className="block text-[8px] uppercase tracking-wider text-white/30">Live</span>
-              <span className="mt-0.5 block font-mono text-[10px] text-white/65">{fps} FPS</span>
+              <span className="mt-0.5 block font-mono text-[10px] text-white/65">{liveLabel}</span>
             </div>
           </div>
         </div>
