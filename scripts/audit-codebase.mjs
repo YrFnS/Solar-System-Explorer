@@ -2,7 +2,7 @@ import { readdir, readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 
 const ROOT = process.cwd()
-const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs']
+const SOURCE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.css']
 const SCANNED_ROOTS = ['src', 'scripts']
 const ROOT_FILES = [
   'next.config.ts',
@@ -33,7 +33,8 @@ const IMPLICIT_PACKAGES = new Set([
   'puppeteer',
 ])
 
-const importPattern = /(?:import|export)\s+(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)|require\(\s*['"]([^'"]+)['"]\s*\)/g
+const moduleImportPattern = /(?:import|export)\s+(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]|import\(\s*['"]([^'"]+)['"]\s*\)|require\(\s*['"]([^'"]+)['"]\s*\)/g
+const stylesheetImportPattern = /@import\s+(?:url\(\s*)?['"]?([^'"\)\s;]+)['"]?\s*\)?\s*;/g
 
 function toPosix(filePath) {
   return filePath.split(path.sep).join('/')
@@ -73,11 +74,15 @@ async function collectFiles(directory) {
 
 function parseImports(source) {
   const imports = []
-  importPattern.lastIndex = 0
+  moduleImportPattern.lastIndex = 0
+  stylesheetImportPattern.lastIndex = 0
 
   let match
-  while ((match = importPattern.exec(source)) !== null) {
+  while ((match = moduleImportPattern.exec(source)) !== null) {
     imports.push(match[1] ?? match[2] ?? match[3])
+  }
+  while ((match = stylesheetImportPattern.exec(source)) !== null) {
+    imports.push(match[1])
   }
 
   return imports.filter(Boolean)
