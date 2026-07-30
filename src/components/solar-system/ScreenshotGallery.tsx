@@ -4,6 +4,10 @@ import { useState } from 'react'
 import { Camera, Download, Image as ImageIcon, Trash2, X } from 'lucide-react'
 import { useSolarSystemStore } from './store'
 
+function captureExtension(url: string) {
+  return url.startsWith('data:image/png') ? 'png' : 'webp'
+}
+
 export default function ScreenshotGallery() {
   const screenshotGallery = useSolarSystemStore((state) => state.screenshotGallery)
   const clearScreenshots = useSolarSystemStore((state) => state.clearScreenshots)
@@ -25,7 +29,7 @@ export default function ScreenshotGallery() {
           <span className="relative block">
             <Camera className="h-4 w-4" />
             <span className="absolute -right-2 -top-2 grid h-4 min-w-4 place-items-center rounded-full bg-amber-300 px-1 text-[7px] font-bold text-black">
-              {screenshotGallery.length > 99 ? '99+' : screenshotGallery.length}
+              {screenshotGallery.length}
             </span>
           </span>
         </button>
@@ -40,7 +44,12 @@ export default function ScreenshotGallery() {
             aria-label="Close screenshot gallery"
           />
 
-          <section className="relative flex max-h-[84vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/12 bg-[#080a10]/98 text-white shadow-[0_35px_120px_rgba(0,0,0,0.8)]">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="screenshot-gallery-title"
+            className="relative flex max-h-[84vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/12 bg-[#080a10]/98 text-white shadow-[0_35px_120px_rgba(0,0,0,0.8)]"
+          >
             <header className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-3.5 sm:px-5">
               <div className="flex items-center gap-3">
                 <div className="grid h-9 w-9 place-items-center rounded-2xl border border-amber-300/15 bg-amber-300/[0.07]">
@@ -48,8 +57,10 @@ export default function ScreenshotGallery() {
                 </div>
                 <div>
                   <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-amber-200/50">Local captures</p>
-                  <h2 className="mt-1 text-sm font-semibold text-white/90">Screenshot gallery</h2>
-                  <p className="mt-0.5 text-[8px] text-white/28">{screenshotGallery.length} image{screenshotGallery.length === 1 ? '' : 's'} stored in this session</p>
+                  <h2 id="screenshot-gallery-title" className="mt-1 text-sm font-semibold text-white/90">Screenshot gallery</h2>
+                  <p className="mt-0.5 text-[8px] text-white/28">
+                    {screenshotGallery.length} of 12 session captures retained as compressed images
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -81,23 +92,23 @@ export default function ScreenshotGallery() {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                  {screenshotGallery.map((dataUrl, index) => (
+                  {screenshotGallery.map((imageUrl, index) => (
                     <figure
-                      key={`${index}-${dataUrl.slice(-12)}`}
+                      key={`${index}-${imageUrl.slice(-12)}`}
                       className="group relative overflow-hidden rounded-2xl border border-white/8 bg-white/[0.025] transition hover:border-white/16"
                     >
-                      {/* Data URLs are created locally from the WebGL canvas. */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={dataUrl}
+                        src={imageUrl}
                         alt={`Solar System capture ${index + 1}`}
+                        loading="lazy"
+                        decoding="async"
                         className="aspect-video w-full object-cover"
                       />
                       <figcaption className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/80 via-black/15 to-transparent p-2 pt-7 opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100">
                         <span className="font-mono text-[8px] text-white/48">#{index + 1}</span>
                         <a
-                          href={dataUrl}
-                          download={`solar-system-${index + 1}.png`}
+                          href={imageUrl}
+                          download={`solar-system-${index + 1}.${captureExtension(imageUrl)}`}
                           className="grid h-7 w-7 place-items-center rounded-lg bg-black/55 text-white/65 transition hover:bg-black/80 hover:text-white"
                           aria-label={`Download capture ${index + 1}`}
                         >
