@@ -11,6 +11,21 @@ An interactive, 3D web-based visualization of our Solar System built with **Next
 - **Minimap Navigation:** Quickly locate and jump to distant planets and dwarf planets using the interactive 2D minimap.
 - **Bookmarks:** Save your favorite camera angles and focused bodies to easily return to them later (saved locally in your browser).
 - **Space Events:** A dynamic timeline highlighting major historical space exploration events as they align with your current simulated time.
+- **Adaptive Rendering:** Auto, Eco, Balanced, and Ultra quality profiles scale pixel density and particle populations for the current device.
+- **Live Performance Guardrails:** The renderer monitors frame rate, gracefully changes quality when needed, and suspends WebGL while the tab is hidden.
+- **Reduced Motion:** A persistent accessibility setting slows decorative fields and disables automatic camera motion.
+
+## Performance Architecture ⚡
+
+The explorer is designed to preserve visual richness without making every device render the same workload:
+
+- Large asteroid, Kuiper, Centaur, Trojan, scattered-disc, and Oort populations use **static GPU instancing**. Their transforms are generated once, then entire fields rotate as groups instead of rewriting tens of thousands of matrices every frame.
+- Solar wind movement runs in a shader, avoiding continuous JavaScript buffer mutation.
+- Meteor pools update only active trails and completely stop when phenomena are disabled or the simulation is paused.
+- The large interface bundle is loaded after the core scene becomes interactive.
+- Quality and reduced-motion preferences are saved locally and restored on the next visit.
+
+Use the render-engine pill near the top-right of the explorer to select a fixed profile or leave it on **Auto**.
 
 ## Tech Stack 🛠️
 
@@ -67,8 +82,9 @@ npm run start
 
 ## Architecture Notes 📝
 
-- The application is a purely client-side simulation (`'use client'`). No persistent database is required. All user-specific data (like bookmarks) is securely stored in local browser storage.
-- 3D elements are deeply integrated with the React lifecycle via `@react-three/fiber`, allowing DOM-based UI overlays to react seamlessly to 3D state changes through the global `Zustand` store.
+- The application is a purely client-side simulation (`'use client'`). No persistent database is required. All user-specific data (like bookmarks, quality, and motion preferences) is stored in local browser storage.
+- 3D elements are integrated with the React lifecycle via `@react-three/fiber`, while frequently animated high-volume fields keep their work on the GPU or at group level.
+- The Zustand stores separate simulation state from rendering-quality state so performance can adapt without changing the scientific/navigation controls.
 
 ## License 📄
 MIT
