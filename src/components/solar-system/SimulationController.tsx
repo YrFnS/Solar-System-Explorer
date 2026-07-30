@@ -2,7 +2,10 @@
 
 import { useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useExperienceStore } from './experience-store'
+import {
+  activateExperienceMode,
+  useExperienceStore,
+} from './experience-store'
 import {
   advanceSimulationClock,
   getSimulationDateMs,
@@ -22,11 +25,20 @@ export default function SimulationController() {
   const isPaused = useSolarSystemStore((state) => state.isPaused)
   const customDate = useSolarSystemStore((state) => state.customDate)
   const setElapsedTime = useSolarSystemStore((state) => state.setElapsedTime)
+  const mode = useExperienceStore((state) => state.mode)
   const publishDate = useExperienceStore((state) => state.setSimulationDateMs)
   const invalidate = useThree((state) => state.invalidate)
   const publishElapsedRef = useRef(Number.POSITIVE_INFINITY)
+  const initializedModeRef = useRef(false)
 
   const customDateMs = customDate?.getTime() ?? null
+
+  useEffect(() => {
+    if (initializedModeRef.current) return
+    initializedModeRef.current = true
+    activateExperienceMode(mode)
+    invalidate()
+  }, [invalidate, mode])
 
   useEffect(() => {
     const nextDateMs = customDateMs ?? Date.now()
