@@ -18,7 +18,7 @@ jobs:
   build:
     name: Build application
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -50,5 +50,8 @@ jobs:
       - name: Build optimized application
         run: bun run build:next
 
-      - name: Smoke test modular interface
+      - name: Enforce production artifact budgets
+        run: bun run performance:budget
+
+      - name: Smoke test desktop, mobile, accessibility, and WebGL
         run: bun run ui:smoke
