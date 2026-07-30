@@ -1,14 +1,23 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
-import { useFrame, ThreeEvent } from '@react-three/fiber'
+import { useMemo, useRef } from 'react'
+import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
-import { ScatteredDiscObjectData } from './data'
+import type { ScatteredDiscObjectData } from './data'
 import { useSolarSystemStore } from './store'
 import PlanetLabel from './PlanetLabel'
 
 interface ScatteredDiscObjectProps {
   data: ScatteredDiscObjectData
+}
+
+function deterministicAngle(id: string) {
+  let hash = 2166136261
+  for (let index = 0; index < id.length; index++) {
+    hash ^= id.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+  return ((hash >>> 0) / 4294967296) * Math.PI * 2
 }
 
 function SDRings({ color, radius }: { color: string; radius: number }) {
@@ -33,14 +42,14 @@ function SDSelectionRings({ color, radius }: { color: string; radius: number }) 
   const outerMatRef = useRef<THREE.MeshBasicMaterial>(null!)
 
   useFrame(({ clock }) => {
-    const t = clock.getElapsedTime()
-    const innerOpacity = 0.55 + 0.25 * Math.sin(t * 3)
+    const time = clock.getElapsedTime()
+    const innerOpacity = 0.55 + 0.25 * Math.sin(time * 3)
     if (innerMatRef.current) innerMatRef.current.opacity = innerOpacity
-    const outerOpacity = 0.55 - 0.25 * Math.sin(t * 3)
+    const outerOpacity = 0.55 - 0.25 * Math.sin(time * 3)
     if (outerMatRef.current) outerMatRef.current.opacity = outerOpacity
     if (innerRef.current) {
-      const s = 1 + 0.03 * Math.sin(t * 3)
-      innerRef.current.scale.set(s, s, s)
+      const scale = 1 + 0.03 * Math.sin(time * 3)
+      innerRef.current.scale.set(scale, scale, scale)
     }
   })
 
@@ -119,24 +128,20 @@ function SDOSurface({ data }: { data: ScatteredDiscObjectData }) {
 
           vec2 uv = vUv;
           float n = fbm(uv * 12.0 + time * 0.005);
-          float n2 = fbm(uv * 20.0 - time * 0.003);
 
           vec3 color = baseColor;
           vec3 light = baseColor * 1.15;
           vec3 dark = baseColor * 0.55;
           color = mix(light, dark, n);
 
-          // Subtle craters
           float craters = fbm(uv * 25.0);
           color = mix(color, color * 0.65, smoothstep(0.55, 0.62, craters) * 0.4);
 
-          // Ice patches for distant objects
           float ice = fbm(uv * 8.0 + vec2(0.3, 0.7));
           vec3 iceColor = mix(baseColor, vec3(0.9, 0.88, 0.85), 0.5);
           color = mix(color, iceColor, smoothstep(0.55, 0.65, ice) * 0.25);
 
           vec3 lit = color * (ambient + diff * 0.85);
-
           float rim = pow(1.0 - max(dot(normal, vec3(0.0, 0.0, 1.0)), 0.0), 3.0);
           lit += baseColor * rim * 0.15;
 
@@ -148,8 +153,8 @@ function SDOSurface({ data }: { data: ScatteredDiscObjectData }) {
 
   useFrame((_, delta) => {
     if (meshRef.current) {
-      const mat = meshRef.current.material as THREE.ShaderMaterial
-      mat.uniforms.time.value += delta
+      const material = meshRef.current.material as THREE.ShaderMaterial
+      material.uniforms.time.value += delta
     }
   })
 
@@ -163,12 +168,12 @@ function SDOSurface({ data }: { data: ScatteredDiscObjectData }) {
 export default function ScatteredDiscObject({ data }: ScatteredDiscObjectProps) {
   const groupRef = useRef<THREE.Group>(null!)
   const spinRef = useRef<THREE.Group>(null!)
-  const orbitAngleRef = useRef(data.initialAngle)
-  const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
-  const selectedBody = useSolarSystemStore((s) => s.selectedBody)
-  const timeSpeed = useSolarSystemStore((s) => s.timeSpeed)
-  const showLabels = useSolarSystemStore((s) => s.showLabels)
-  const customDateAngleBase = useSolarSystemStore((s) => s.customDateAngleBase)
+  const orbitAngleRef = useRef(deterministicAngle(data.id))
+  const setSelectedBody = useSolarSystemStore((state) => state.setSelectedBody)
+  const selectedBody = useSolarSystemStore((state) => state.selectedBody)
+  const timeSpeed = useSolarSystemStore((state) => state.timeSpeed)
+  const showLabels = useSolarSystemStore((state) => state.showLabels)
+  const customDateAngleBase = useSolarSystemStore((state) => state.customDateAngleBase)
 
   const inclinationRad = (data.orbitInclination * Math.PI) / 180
 
@@ -176,23 +181,21 @@ export default function ScatteredDiscObject({ data }: ScatteredDiscObjectProps) 
     if (groupRef.current) {
       orbitAngleRef.current += delta * data.orbitSpeed * 0.05 * timeSpeed
       const angle = orbitAngleRef.current + customDateAngleBase * data.orbitSpeed
+      const eccentricity = data.orbitEccentricity
+      const semiMajorAxis = data.orbitRadius
+      const radius = semiMajorAxis * (1 - eccentricity * eccentricity) / (1 + eccentricity * Math.cos(angle))
 
-      // Eccentric orbit (like comets and centaurs)
-      const e = data.orbitEccentricity
-      const a = data.orbitRadius
-      const r = a * (1 - e * e) / (1 + e * Math.cos(angle))
-
-      groupRef.current.position.x = Math.cos(angle) * r
-      groupRef.current.position.z = Math.sin(angle) * r
-      groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * r * 0.3
+      groupRef.current.position.x = Math.cos(angle) * radius
+      groupRef.current.position.z = Math.sin(angle) * radius
+      groupRef.current.position.y = Math.sin(angle) * Math.sin(inclinationRad) * radius * 0.3
     }
     if (spinRef.current) {
       spinRef.current.rotation.y += delta * 0.3 * timeSpeed
     }
   })
 
-  const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation()
+  const handleClick = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation()
     setSelectedBody(data.id)
   }
 
@@ -202,29 +205,16 @@ export default function ScatteredDiscObject({ data }: ScatteredDiscObjectProps) 
     <group ref={groupRef}>
       <group ref={spinRef} onClick={handleClick}>
         <SDOSurface data={data} />
-        {/* Clickable hit area - larger invisible sphere for easier selection */}
         <mesh>
           <sphereGeometry args={[Math.max(data.radius * 2.5, 0.5), 16, 16]} />
           <meshBasicMaterial transparent opacity={0} depthWrite={false} />
         </mesh>
       </group>
 
-      {/* Rings for Quaoar */}
       {data.hasRings && <SDRings color={data.color} radius={data.radius} />}
-
-      {/* Selection indicator - animated pulsing rings */}
       {isSelected && <SDSelectionRings color={data.color} radius={data.radius} />}
-      {/* Point light on selected scattered disc object */}
-      {isSelected && (
-        <pointLight color={data.color} intensity={0.5} distance={6} />
-      )}
-
-      {/* Subtle glow for visibility */}
-      <pointLight
-        color={data.color}
-        intensity={0.08}
-        distance={2}
-      />
+      {isSelected && <pointLight color={data.color} intensity={0.5} distance={6} />}
+      <pointLight color={data.color} intensity={0.08} distance={2} />
 
       {showLabels && (
         <PlanetLabel name={data.name} offset={data.radius + 0.3} bodyId={data.id} />
