@@ -120,8 +120,10 @@ export function activateExperienceMode(mode: ExperienceMode) {
   if (mode === 'scientific') {
     scene.setShowOrbitLines(true)
     scene.setShowLabels(true)
-    scene.setShowTrails(true)
-    scene.setRealisticDistances(true)
+    scene.setShowTrails(false)
+    // Physical values live in telemetry while visual distances stay compressed
+    // enough to keep the complete system navigable.
+    scene.setRealisticDistances(false)
     scene.setRealisticSizes(false)
     scene.setShowGravityWells(false)
     scene.setShowBlackHole(false)
@@ -139,6 +141,7 @@ export function activateExperienceMode(mode: ExperienceMode) {
     scene.setRealisticSizes(false)
     scene.setShowOrbitLines(true)
     scene.setShowLabels(true)
+    scene.setShowTrails(false)
     scene.setShowPhenomena(true)
     scene.setShowSolarWind(true)
     scene.setShowZodiacalLight(true)
@@ -154,6 +157,7 @@ export function activateExperienceMode(mode: ExperienceMode) {
   scene.setRealisticSizes(false)
   scene.setShowOrbitLines(true)
   scene.setShowLabels(true)
+  scene.setShowTrails(false)
   scene.setShowGravityWells(false)
   scene.setShowBlackHole(false)
   scene.setShowWormhole(false)
