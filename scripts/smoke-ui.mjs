@@ -9,6 +9,17 @@ const baseUrl = `http://${host}:${port}`
 const standaloneRoot = path.resolve('.next', 'standalone')
 const standaloneNextRoot = path.join(standaloneRoot, '.next')
 
+const RENDER_BUDGETS = {
+  drawCalls: 700,
+  triangles: 10_000_000,
+  geometries: 1_000,
+  textures: 250,
+  programs: 180,
+  sceneObjects: 6_000,
+}
+
+const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
+
 async function prepareStandaloneAssets() {
   await rm(path.join(standaloneRoot, 'public'), { recursive: true, force: true })
   await rm(path.join(standaloneNextRoot, 'static'), { recursive: true, force: true })
@@ -34,12 +45,281 @@ async function waitForServer(server, timeoutMs = 45_000) {
       lastError = error
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 350))
+    await delay(350)
   }
 
   throw lastError instanceof Error
     ? new Error(`Timed out waiting for ${baseUrl}: ${lastError.message}`)
     : new Error(`Timed out waiting for ${baseUrl}`)
+}
+
+async function configurePage(page, viewport) {
+  await page.setViewport(viewport)
+  await page.evaluateOnNewDocument(() => {
+    window.localStorage.setItem('solar-explorer-interface-guide-v4', 'complete')
+    window.localStorage.setItem('solar-explorer-experience-mode-v1', 'explore')
+    window.localStorage.setItem('solar-explorer-quality-preset-v1', 'eco')
+    window.sessionStorage.setItem('solar-explorer-scene-warmup-v1', 'complete')
+  })
+}
+
+function collectPageErrors(page) {
+  const errors = []
+  page.on('pageerror', (error) => errors.push(error.message))
+  return errors
+}
+
+async function waitForCore(page) {
+  await page.goto(`${baseUrl}/?diagnostics=1`, {
+    waitUntil: 'networkidle2',
+    timeout: 75_000,
+  })
+  await page.waitForSelector('canvas', { timeout: 45_000 })
+  await page.waitForFunction(() => {
+    const canvas = document.querySelector('canvas')
+    return Boolean(canvas?.getContext('webgl2'))
+  }, { timeout: 30_000 })
+  await page.waitForSelector('[aria-label="Search celestial bodies"]', { timeout: 45_000 })
+  await page.waitForSelector('[aria-label="Navigate to Earth"]', { timeout: 45_000 })
+}
+
+async function clickButtonByText(page, text) {
+  const clicked = await page.evaluate((buttonText) => {
+    const button = [...document.querySelectorAll('button')].find((candidate) => {
+      const label = candidate.textContent?.replace(/\s+/g, ' ').trim() ?? ''
+      return !candidate.disabled && label.includes(buttonText)
+    })
+    if (!(button instanceof HTMLButtonElement)) return false
+    button.click()
+    return true
+  }, text)
+
+  if (!clicked) throw new Error(`Could not find enabled button containing “${text}”`)
+}
+
+async function assertAccessibleSurface(page, label) {
+  const issues = await page.evaluate(() => {
+    const isVisible = (element) => {
+      if (!(element instanceof HTMLElement)) return false
+      const style = getComputedStyle(element)
+      const rect = element.getBoundingClientRect()
+      return style.visibility !== 'hidden'
+        && style.display !== 'none'
+        && rect.width > 0
+        && rect.height > 0
+    }
+
+    const unnamedButtons = [...document.querySelectorAll('button')]
+      .filter(isVisible)
+      .filter((button) => {
+        const text = button.textContent?.trim()
+        return !text
+          && !button.getAttribute('aria-label')
+          && !button.getAttribute('title')
+      })
+      .map((button) => button.outerHTML.slice(0, 180))
+
+    const unnamedDialogs = [...document.querySelectorAll('[role="dialog"]')]
+      .filter(isVisible)
+      .filter((dialog) => (
+        !dialog.getAttribute('aria-label')
+        && !dialog.getAttribute('aria-labelledby')
+      ))
+      .map((dialog) => dialog.outerHTML.slice(0, 180))
+
+    return { unnamedButtons, unnamedDialogs }
+  })
+
+  if (issues.unnamedButtons.length || issues.unnamedDialogs.length) {
+    throw new Error(
+      `${label} accessibility names failed:\n${JSON.stringify(issues, null, 2)}`
+    )
+  }
+}
+
+async function assertRendererBudget(page) {
+  await delay(1_700)
+  await page.waitForFunction(() => (
+    Boolean(window.__SOLAR_EXPLORER_DIAGNOSTICS__?.timestamp)
+  ), { timeout: 20_000 })
+
+  const metrics = await page.evaluate(() => window.__SOLAR_EXPLORER_DIAGNOSTICS__)
+  if (!metrics) throw new Error('Renderer diagnostics were not published')
+
+  const failures = Object.entries(RENDER_BUDGETS)
+    .filter(([metric, limit]) => metrics[metric] > limit)
+    .map(([metric, limit]) => `${metric}=${metrics[metric]} exceeds ${limit}`)
+
+  console.log(`[ui-smoke] renderer diagnostics ${JSON.stringify(metrics)}`)
+  if (failures.length) {
+    throw new Error(`Renderer budget failed:\n${failures.join('\n')}`)
+  }
+}
+
+async function runDesktop(browser) {
+  const page = await browser.newPage()
+  await configurePage(page, {
+    width: 1280,
+    height: 720,
+    deviceScaleFactor: 1,
+  })
+  const pageErrors = collectPageErrors(page)
+
+  await waitForCore(page)
+  await assertRendererBudget(page)
+  await assertAccessibleSurface(page, 'desktop overview')
+
+  await page.click('[aria-label="Search celestial bodies"]')
+  const searchInput = await page.waitForSelector(
+    'input[placeholder*="Search planets"]',
+    { timeout: 15_000 }
+  )
+  await searchInput.type('Earth')
+  await page.waitForFunction(() => document.body.textContent?.includes('Terrestrial Planet'))
+  await assertAccessibleSurface(page, 'search dialog')
+  await page.keyboard.press('Escape')
+
+  await page.click('[aria-label="Navigate to Earth"]')
+  await page.waitForFunction(() => {
+    const text = document.body.textContent || ''
+    return text.includes('Selected object')
+      && text.includes('Earth')
+      && text.includes('Sun distance')
+  }, { timeout: 20_000 })
+
+  await page.keyboard.press('2')
+  await page.waitForFunction(() => document.body.textContent?.includes('Scientific'))
+  await page.keyboard.press('3')
+  await page.waitForFunction(() => document.body.textContent?.includes('Sandbox'))
+  await page.keyboard.press('1')
+  await page.waitForFunction(() => document.body.textContent?.includes('Explore'))
+
+  await page.click('[aria-label="Enter screenshot mode"]')
+  await page.waitForFunction(() => document.body.textContent?.includes('Clean capture mode'))
+  await clickButtonByText(page, 'Capture')
+  await page.waitForFunction(() => document.body.textContent?.includes('Saved'), {
+    timeout: 20_000,
+  })
+  await page.click('[aria-label="Exit screenshot mode"]')
+  await page.waitForSelector('[aria-label^="Open screenshot gallery"]', {
+    timeout: 20_000,
+  })
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('solar-explorer:webgl-context-lost'))
+  })
+  await page.waitForFunction(() => document.body.textContent?.includes('The WebGL context was lost'))
+  await clickButtonByText(page, 'Rebuild in Eco')
+  await page.waitForFunction(() => {
+    const canvas = document.querySelector('canvas')
+    return !document.body.textContent?.includes('The WebGL context was lost')
+      && Boolean(canvas?.getContext('webgl2'))
+  }, { timeout: 30_000 })
+
+  await assertAccessibleSurface(page, 'desktop final state')
+
+  if (pageErrors.length > 0) {
+    throw new Error(`Desktop page errors:\n${pageErrors.join('\n')}`)
+  }
+
+  await page.close()
+  console.log('[ui-smoke] desktop search, navigation, modes, screenshots, recovery, and accessibility passed')
+}
+
+async function runMobile(browser) {
+  const page = await browser.newPage()
+  await configurePage(page, {
+    width: 390,
+    height: 844,
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
+  })
+  const pageErrors = collectPageErrors(page)
+
+  await waitForCore(page)
+  await page.click('[aria-label="Search celestial bodies"]')
+  const searchInput = await page.waitForSelector(
+    'input[placeholder*="Search planets"]',
+    { timeout: 15_000 }
+  )
+  await searchInput.type('Mars')
+  await page.keyboard.press('Enter')
+  await page.waitForFunction(() => {
+    const text = document.body.textContent || ''
+    return text.includes('Selected object') && text.includes('Mars')
+  }, { timeout: 20_000 })
+
+  const mobileLayout = await page.evaluate(() => {
+    const inspector = [...document.querySelectorAll('aside')]
+      .find((element) => element.textContent?.includes('Selected object'))
+    const navigator = document.querySelector('[aria-label="Primary celestial navigation"]')
+    const inspectorRect = inspector?.getBoundingClientRect()
+    const navigatorRect = navigator?.getBoundingClientRect()
+
+    return {
+      horizontalOverflow: document.documentElement.scrollWidth - window.innerWidth,
+      inspectorVisible: Boolean(
+        inspectorRect
+        && inspectorRect.left >= -1
+        && inspectorRect.right <= window.innerWidth + 1
+        && inspectorRect.bottom <= window.innerHeight + 1
+      ),
+      navigatorVisible: Boolean(
+        navigatorRect
+        && navigatorRect.left >= -1
+        && navigatorRect.right <= window.innerWidth + 1
+        && navigatorRect.bottom <= window.innerHeight + 1
+      ),
+    }
+  })
+
+  if (
+    mobileLayout.horizontalOverflow > 2
+    || !mobileLayout.inspectorVisible
+    || !mobileLayout.navigatorVisible
+  ) {
+    throw new Error(`Mobile layout failed: ${JSON.stringify(mobileLayout)}`)
+  }
+
+  const openedMissionControl = await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')].find((candidate) => (
+      candidate.hasAttribute('aria-expanded')
+      && /Explore|Scientific|Sandbox/.test(candidate.textContent ?? '')
+    ))
+    if (!(button instanceof HTMLButtonElement)) return false
+    button.click()
+    return true
+  })
+  if (!openedMissionControl) throw new Error('Mission control trigger was not found on mobile')
+  await page.waitForFunction(() => document.body.textContent?.includes('Mission control'))
+  await assertAccessibleSurface(page, 'mobile mission control')
+
+  await page.setViewport({
+    width: 844,
+    height: 390,
+    deviceScaleFactor: 1,
+    isMobile: true,
+    hasTouch: true,
+  })
+  await delay(350)
+  const landscapeHealthy = await page.evaluate(() => {
+    const canvas = document.querySelector('canvas')
+    return Boolean(
+      canvas
+      && canvas.clientWidth > 0
+      && canvas.clientHeight > 0
+      && document.documentElement.scrollWidth <= window.innerWidth + 2
+    )
+  })
+  if (!landscapeHealthy) throw new Error('Mobile landscape resize produced an invalid layout')
+
+  if (pageErrors.length > 0) {
+    throw new Error(`Mobile page errors:\n${pageErrors.join('\n')}`)
+  }
+
+  await page.close()
+  console.log('[ui-smoke] mobile touch, inspector, mission control, rotation, and accessibility passed')
 }
 
 async function main() {
@@ -83,44 +363,8 @@ async function main() {
       ],
     })
 
-    const page = await browser.newPage()
-    await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 })
-    await page.evaluateOnNewDocument(() => {
-      window.localStorage.setItem('solar-explorer-interface-guide-v4', 'complete')
-      window.localStorage.setItem('solar-explorer-experience-mode-v1', 'explore')
-      window.localStorage.setItem('solar-explorer-quality-preset-v1', 'eco')
-      window.sessionStorage.setItem('solar-explorer-scene-warmup-v1', 'complete')
-    })
-
-    const pageErrors = []
-    page.on('pageerror', (error) => pageErrors.push(error.message))
-
-    await page.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 75_000 })
-    await page.waitForSelector('canvas', { timeout: 45_000 })
-    await page.waitForFunction(() => {
-      const canvas = document.querySelector('canvas')
-      return Boolean(canvas?.getContext('webgl2'))
-    }, { timeout: 30_000 })
-    await page.waitForSelector('[aria-label="Search celestial bodies"]', { timeout: 45_000 })
-    await page.waitForSelector('[aria-label="Navigate to Earth"]', { timeout: 45_000 })
-
-    await page.click('[aria-label="Search celestial bodies"]')
-    const searchInput = await page.waitForSelector('input[placeholder*="Search planets"]', { timeout: 15_000 })
-    await searchInput.type('Earth')
-    await page.waitForFunction(() => document.body.textContent?.includes('Terrestrial Planet'))
-    await page.keyboard.press('Escape')
-
-    await page.click('[aria-label="Navigate to Earth"]')
-    await page.waitForFunction(() => {
-      const text = document.body.textContent || ''
-      return text.includes('Selected object') && text.includes('Earth') && text.includes('Sun distance')
-    }, { timeout: 20_000 })
-
-    if (pageErrors.length > 0) {
-      throw new Error(`Browser page errors:\n${pageErrors.join('\n')}`)
-    }
-
-    console.log('[ui-smoke] WebGL2 canvas, command palette, and Earth inspector passed')
+    await runDesktop(browser)
+    await runMobile(browser)
   } catch (error) {
     console.error('[ui-smoke] failed')
     if (serverOutput.trim()) console.error(serverOutput.trim())
