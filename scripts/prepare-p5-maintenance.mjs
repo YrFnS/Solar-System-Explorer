@@ -38,15 +38,19 @@ async function patchEphemeris() {
   target = new THREE.Vector3()
 ): THREE.Vector3 {`
 
-  if (!source.includes(signatureBefore)) {
+  if (source.includes(signatureBefore)) {
+    source = source.replace(signatureBefore, signatureAfter)
+  } else if (!source.includes(signatureAfter)) {
     throw new Error('Could not locate getBodyVisualPosition signature')
   }
 
-  source = source.replace(signatureBefore, signatureAfter)
-  source = source.replace(
-    '    const parent = getBodyVisualPosition(moonMatch.parent.id, dateMs, mode, target)',
-    '    const parent: THREE.Vector3 = getBodyVisualPosition(moonMatch.parent.id, dateMs, mode, target)'
-  )
+  const parentBefore = '    const parent = getBodyVisualPosition(moonMatch.parent.id, dateMs, mode, target)'
+  const parentAfter = '    const parent: THREE.Vector3 = getBodyVisualPosition(moonMatch.parent.id, dateMs, mode, target)'
+  if (source.includes(parentBefore)) {
+    source = source.replace(parentBefore, parentAfter)
+  } else if (!source.includes(parentAfter)) {
+    throw new Error('Could not locate recursive parent position')
+  }
 
   await writeFile(filePath, source)
 }
@@ -70,11 +74,43 @@ async function patchStoreContract() {
   removeSpawnedObject: (id: string) => void
 }`
 
-  if (!source.includes(before)) {
+  if (source.includes(before)) {
+    source = source.replace(before, after)
+  } else if (!source.includes("  setCameraMode: (mode: 'orbit' | 'fly') => void")) {
     throw new Error('Could not locate SolarSystemState action boundary')
   }
 
-  source = source.replace(before, after)
+  const screenshotBefore = `  addScreenshot: (dataUrl) => set((s) => ({ screenshotGallery: [...s.screenshotGallery, dataUrl] })),
+  clearScreenshots: () => set({ screenshotGallery: [] }),`
+  const screenshotAfter = `  addScreenshot: (url) => set((state) => {
+    const nextGallery = [...state.screenshotGallery, url]
+    const overflow = Math.max(0, nextGallery.length - 12)
+    const discarded = overflow > 0 ? nextGallery.slice(0, overflow) : []
+
+    if (typeof URL !== 'undefined') {
+      for (const discardedUrl of discarded) {
+        if (discardedUrl.startsWith('blob:')) URL.revokeObjectURL(discardedUrl)
+      }
+    }
+
+    return { screenshotGallery: nextGallery.slice(-12) }
+  }),
+  clearScreenshots: () => set((state) => {
+    if (typeof URL !== 'undefined') {
+      for (const url of state.screenshotGallery) {
+        if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+      }
+    }
+
+    return { screenshotGallery: [] }
+  }),`
+
+  if (source.includes(screenshotBefore)) {
+    source = source.replace(screenshotBefore, screenshotAfter)
+  } else if (!source.includes('const overflow = Math.max(0, nextGallery.length - 12)')) {
+    throw new Error('Could not locate screenshot gallery actions')
+  }
+
   await writeFile(filePath, source)
 }
 
@@ -93,4 +129,4 @@ async function trimDependencies() {
 await patchEphemeris()
 await patchStoreContract()
 await trimDependencies()
-console.log('[p5-maintenance] prepared ephemeris, store contract, and dependency changes')
+console.log('[p5-maintenance] prepared ephemeris, store contract, screenshot retention, and dependency changes')
