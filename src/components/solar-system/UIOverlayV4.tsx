@@ -6,6 +6,7 @@ import BodyInspector from './ui/BodyInspector'
 import ComparisonPanel from './ui/ComparisonPanel'
 import DisplaySettingsPanel from './ui/DisplaySettingsPanel'
 import ExplorerHeader from './ui/ExplorerHeader'
+import FirstRunGuide from './ui/FirstRunGuide'
 import NavigatorBar from './ui/NavigatorBar'
 import ScreenshotModeOverlay from './ui/ScreenshotModeOverlay'
 import SearchPalette from './ui/SearchPalette'
@@ -71,6 +72,7 @@ export default function UIOverlayV4() {
       <NavigatorBar onOpenSearch={() => setSearchOpen(true)} />
       <BodyInspector />
       <TourOverlayV4 />
+      <FirstRunGuide onOpenSearch={() => setSearchOpen(true)} />
 
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
       <BookmarksPanel open={bookmarksOpen} onClose={() => setBookmarksOpen(false)} />
