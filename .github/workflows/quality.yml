@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Validate TypeScript
+        run: bun run typecheck
+
       - name: Validate orbital engine
         run: bun run ephemeris:validate
 
