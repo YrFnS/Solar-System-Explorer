@@ -9,6 +9,7 @@ import ExperienceDock from './ExperienceDock'
 import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
 import AdaptiveLodManager from './AdaptiveLodManager'
+import RendererBoundary from './RendererBoundary'
 import ScreenshotCaptureBridge from './ScreenshotCaptureBridge'
 import ProgressiveSceneWarmup, {
   prepareSceneWarmup,
@@ -76,32 +77,34 @@ export default function SceneContainer() {
   return (
     <>
       <div className="absolute inset-0 z-0">
-        <Canvas
-          camera={{
-            position: [80, 60, 80],
-            fov: 45,
-            near: 0.1,
-            far: 10000,
-          }}
-          dpr={profile.dpr}
-          frameloop="always"
-          performance={{ min: 0.45, max: 1, debounce: 250 }}
-          gl={{
-            antialias: false,
-            alpha: false,
-            depth: true,
-            stencil: false,
-            powerPreference: 'high-performance',
-          }}
-          onPointerMissed={() => setSelectedBody(null)}
-        >
-          <SimulationController />
-          <ScenePerformanceManager />
-          <ProgressiveSceneWarmup plan={INITIAL_SCENE_WARMUP} />
-          <AdaptiveLodManager />
-          <ScreenshotCaptureBridge />
-          <SolarSystemV3 />
-        </Canvas>
+        <RendererBoundary>
+          <Canvas
+            camera={{
+              position: [80, 60, 80],
+              fov: 45,
+              near: 0.1,
+              far: 10000,
+            }}
+            dpr={profile.dpr}
+            frameloop="always"
+            performance={{ min: 0.45, max: 1, debounce: 250 }}
+            gl={{
+              antialias: false,
+              alpha: false,
+              depth: true,
+              stencil: false,
+              powerPreference: 'high-performance',
+            }}
+            onPointerMissed={() => setSelectedBody(null)}
+          >
+            <SimulationController />
+            <ScenePerformanceManager />
+            <ProgressiveSceneWarmup plan={INITIAL_SCENE_WARMUP} />
+            <AdaptiveLodManager />
+            <ScreenshotCaptureBridge />
+            <SolarSystemV3 />
+          </Canvas>
+        </RendererBoundary>
       </div>
       <DeferredInterface />
       <PerformanceDock />
