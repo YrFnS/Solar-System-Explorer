@@ -73,9 +73,12 @@ async function main() {
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
+        '--disable-gpu-sandbox',
         '--enable-webgl',
         '--ignore-gpu-blocklist',
-        '--use-gl=swiftshader',
+        '--use-gl=angle',
+        '--use-angle=swiftshader',
+        '--enable-unsafe-swiftshader',
         '--window-size=1280,720',
       ],
     })
@@ -94,6 +97,10 @@ async function main() {
 
     await page.goto(baseUrl, { waitUntil: 'networkidle2', timeout: 75_000 })
     await page.waitForSelector('canvas', { timeout: 45_000 })
+    await page.waitForFunction(() => {
+      const canvas = document.querySelector('canvas')
+      return Boolean(canvas?.getContext('webgl2'))
+    }, { timeout: 30_000 })
     await page.waitForSelector('[aria-label="Search celestial bodies"]', { timeout: 45_000 })
     await page.waitForSelector('[aria-label="Navigate to Earth"]', { timeout: 45_000 })
 
@@ -113,7 +120,7 @@ async function main() {
       throw new Error(`Browser page errors:\n${pageErrors.join('\n')}`)
     }
 
-    console.log('[ui-smoke] canvas, command palette, and Earth inspector passed')
+    console.log('[ui-smoke] WebGL2 canvas, command palette, and Earth inspector passed')
   } catch (error) {
     console.error('[ui-smoke] failed')
     if (serverOutput.trim()) console.error(serverOutput.trim())
