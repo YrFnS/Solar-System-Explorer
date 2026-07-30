@@ -11,6 +11,7 @@ import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
 import AdaptiveLodManager from './AdaptiveLodManager'
 import RendererBoundary from './RendererBoundary'
+import RenderDiagnostics from './RenderDiagnostics'
 import ScreenshotCaptureBridge from './ScreenshotCaptureBridge'
 import WebGLContextMonitor, {
   WEBGL_CONTEXT_LOST_EVENT,
@@ -177,6 +178,7 @@ export default function SceneContainer() {
           <AdaptiveLodManager />
           <ScreenshotCaptureBridge />
           <WebGLContextMonitor />
+          <RenderDiagnostics />
           <SolarSystemV3 />
         </Canvas>
       </div>
