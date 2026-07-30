@@ -4,7 +4,7 @@ An interactive 3D Solar System experience built with **Next.js**, **React Three 
 
 ## Features 🚀
 
-- **Ephemeris-Driven Solar System:** One authoritative date drives planets, moons, dwarf planets, comets, orbit paths, camera tracking, measurements, and sandbox collisions.
+- **Ephemeris-Driven Solar System:** One authoritative date drives planets, moons, dwarf planets, comets, orbit paths, camera tracking, measurements, and Sandbox collisions.
 - **Three Experience Modes:** Explore a cinematic learning view, inspect orbital telemetry in Scientific mode, or experiment with spawned objects in Sandbox mode.
 - **Mission Control:** Choose an exact date, step day-by-day, jump to time-warp presets, switch modes, and launch guided learning tracks from a responsive control surface.
 - **Scientific Layers:** Inspect velocity vectors, inclined orbital planes, perihelion/aphelion markers, Julian dates, orbital elements, and selected-body telemetry.
@@ -14,7 +14,7 @@ An interactive 3D Solar System experience built with **Next.js**, **React Three 
 - **Information and Comparison Tools:** Review physical facts, compare worlds, measure separation, use the responsive navigator, save bookmarks, and capture screenshots.
 - **Command Palette:** Search the complete body and mission catalogue with keyboard navigation using `Ctrl/⌘ K` or `/`.
 - **Adaptive Rendering:** Auto, Eco, Balanced, and Ultra profiles scale pixel density, geometry, textures, and particle populations for the current device.
-- **Live Performance Guardrails:** The renderer monitors frame rate, changes detail gracefully, sleeps while paused and idle, and suspends WebGL while the tab is hidden.
+- **Production Recovery:** WebGL startup and live context-loss failures provide a clear recovery path instead of leaving a black or frozen canvas.
 - **Reduced Motion:** A persistent accessibility preference slows decorative fields and disables automatic camera motion.
 
 ## Simulation Architecture 🛰️
@@ -29,7 +29,7 @@ The ephemeris API is shared by:
 - camera focus and follow mode
 - orbit curves, velocity vectors, and telemetry
 - the distance ruler
-- spawned sandbox objects and collision detection
+- spawned Sandbox objects and collision detection
 - mission-control date and time-warp controls
 
 ### Scientific model and accuracy
@@ -50,20 +50,22 @@ The explorer preserves visual richness without making every device render the sa
 
 - Large asteroid, Kuiper, Centaur, Trojan, scattered-disc, and Oort populations use **static GPU instancing**. Their transforms are generated once, then whole fields rotate instead of rewriting tens of thousands of matrices every frame.
 - Planet, moon, atmosphere, helper, and Sun sphere geometry uses **screen-space LOD**. Distant bodies switch to lighter geometry while close-up views retain the original detail.
-- Optional belts, effects, and exotic objects are restored over several startup frames instead of initializing the entire universe in one blocking burst.
+- The core Sun, planets, stars, and camera load first. Backgrounds, phenomena, small bodies, outer fields, artifacts, and Sandbox systems are separate lazy chunks staged during browser idle time.
+- Optional search, comparison, bookmarks, settings, history, and screenshot surfaces also load only when opened; catalogue search is prefetched during idle time.
 - Solar-wind motion runs in a shader, avoiding continuous JavaScript buffer mutation.
 - Meteor pools update active trails only and stop when phenomena are disabled or the simulation is paused.
 - When the simulation is paused and the camera is idle, React Three Fiber switches to **demand rendering**, allowing the GPU to sleep until interaction resumes.
 - Local textures are generated into 512 px, 1K, and 2K WebP tiers. Eco, Balanced, and Ultra choose the matching tier automatically.
 - Common legacy third-party texture URLs are routed to self-hosted assets, including a local Earth cloud layer.
-- The modular HTML interface loads after the core scene becomes interactive.
 - Quality, motion, and experience-mode preferences persist locally.
 
 Use the render-engine pill near the top-right to select a quality profile or leave it on **Auto**. Mission control is available near the lower-left edge.
 
 ## Interface Architecture 🧭
 
-The active interface is composed by `UIOverlayV4` rather than loading the previous multi-thousand-line overlay component. Its responsibilities are separated into focused modules:
+The active interface is composed by `UIOverlayV4`; the previous multi-thousand-line interface and pre-ephemeris scene were removed after an import-graph audit.
+
+The interface is separated into focused modules:
 
 - **Explorer header:** current mode, selected destination, ephemeris time, search, history, bookmarks, display controls, and screenshot entry.
 - **Body catalogue and command palette:** one deduplicated index for planets, moons, missions, small bodies, exotic Sandbox objects, and spawned objects.
@@ -72,10 +74,20 @@ The active interface is composed by `UIOverlayV4` rather than loading the previo
 - **Display settings:** camera presets, orbit/label aids, belts, outer-system layers, motion, and phenomena controls.
 - **Responsive navigator:** fast Sun/planet/Pluto navigation on desktop and touch devices.
 - **Bookmark library and history timeline:** browser-local destinations and mission-history navigation.
-- **Renderer screenshot bridge:** performs an explicit WebGL render and captures immediately, avoiding an already-cleared drawing buffer.
+- **Renderer screenshot bridge:** performs an explicit WebGL render and captures a compressed WebP immediately.
 - **First-run guide and tour surface:** lightweight onboarding without blocking the 3D scene bundle.
 
 The interface remains semantic HTML above the canvas. Three.js renders the Solar System, while forms, search, scrolling, keyboard focus, and accessibility remain native browser UI.
+
+## Screenshot and Renderer Resilience 📸
+
+- Screenshot mode explicitly renders the Three.js scene before capture.
+- Captures use compressed WebP blobs rather than base64 PNG strings.
+- The session gallery retains the newest 12 captures and revokes discarded object URLs.
+- Captures remain local to the browser and are never uploaded by the application.
+- A renderer boundary handles WebGL startup failures.
+- `webglcontextlost` and `webglcontextrestored` are monitored after startup.
+- Rebuilding in Eco mode remounts the canvas while preserving simulation and interface state.
 
 ## Keyboard Controls ⌨️
 
@@ -104,7 +116,7 @@ The interface remains semantic HTML above the canvas. Three.js renders the Solar
 - **3D Rendering:** [React Three Fiber](https://r3f.docs.pmnd.rs/) and [Three.js](https://threejs.org/)
 - **Stable GPU Backend:** WebGL 2
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/)
-- **Components:** [shadcn/ui](https://ui.shadcn.com/) / Radix UI
+- **Components:** shadcn/ui / Radix UI
 - **State Management:** Zustand
 - **Icons:** Lucide React
 
@@ -132,25 +144,37 @@ The pre-development hook regenerates optimized texture tiers when a source textu
 
 ## Validation and Production Build ✅
 
-Validate the orbital engine independently:
+The production build is strict: Next.js no longer ignores TypeScript failures, React Strict Mode is enabled, and `noImplicitAny` is enforced.
+
+Run individual checks:
 
 ```bash
+bun run audit
+bun run lint
+bun run typecheck
 bun run ephemeris:validate
-```
-
-The validation suite checks major and small-body positions across multiple epochs and all three experience modes, verifies plausible J2000 distance ranges, confirms finite orbit paths, and guards against runaway coordinates.
-
-Create the optimized production build:
-
-```bash
 bun run build
+bun run performance:budget
+bun run ui:smoke
 ```
 
-The pre-build hook generates quality-tiered WebP assets automatically. It can also be run directly:
+Or run the complete local release gate:
 
 ```bash
-bun run textures:optimize
+bun run quality:local
 ```
+
+The checks cover:
+
+- import reachability and dependency reporting
+- ESLint and React 19 purity rules
+- strict TypeScript compilation
+- orbital positions and paths across multiple epochs and all three experience modes
+- automatic texture generation and optimized Next.js compilation
+- JavaScript chunk and texture-tier budgets
+- live Three.js draw-call, triangle, program, texture, geometry, and scene-object budgets
+- desktop WebGL 2, search, navigation, modes, screenshot capture, and renderer recovery
+- mobile touch navigation, inspector layout, mission-control scrolling, orientation changes, and accessible names
 
 Run the standalone output:
 
@@ -158,12 +182,19 @@ Run the standalone output:
 bun run start
 ```
 
-The GitHub Actions `Quality` workflow installs frozen dependencies, validates the ephemeris, and compiles the optimized Next.js application on every PR and agent-branch update.
+## Release and Asset Documentation 📚
+
+- [Changelog](CHANGELOG.md)
+- [Asset sources and redistribution notes](ASSET_SOURCES.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
+
+The project MIT license applies to project-authored code. It does not automatically relicense third-party source textures; verify every source asset before commercial redistribution.
 
 ## Architecture Notes 📝
 
 - The application is client-side and requires no persistent database. Bookmarks, quality, motion, onboarding, and experience preferences are stored in the browser.
 - Simulation state, experience state, and rendering-quality state are separate Zustand stores, while the high-frequency orbital clock remains outside React state.
+- Broken Git LFS pointer files previously stored under model paths were removed; lightweight project-authored procedural renderers remain active.
 - The stable production renderer remains WebGL 2. A future WebGPU/TSL migration should remain isolated and benchmarked rather than replacing the renderer without evidence.
 - Fictional or speculative features such as traversable wormholes are confined to Sandbox-oriented presentation and are not part of the scientific ephemeris model.
 
