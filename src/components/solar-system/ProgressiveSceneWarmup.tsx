@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { useThree } from '@react-three/fiber'
+import { useExperienceStore } from './experience-store'
 import { getEffectiveQuality, usePerformanceStore } from './performance-store'
 import { useSolarSystemStore } from './store'
 
@@ -124,25 +125,53 @@ function restoreNearScene(plan: SceneWarmupPlan) {
 
 function restoreEffects(plan: SceneWarmupPlan) {
   const scene = useSolarSystemStore.getState()
-  scene.setShowPhenomena(plan.desired.showPhenomena)
-  scene.setShowSolarWind(plan.desired.showSolarWind)
-  scene.setShowZodiacalLight(plan.desired.showZodiacalLight)
-  scene.setShowGravityWells(plan.desired.showGravityWells)
+  const mode = useExperienceStore.getState().mode
+
+  if (mode === 'scientific') {
+    scene.setShowPhenomena(false)
+    scene.setShowSolarWind(false)
+    scene.setShowZodiacalLight(false)
+    scene.setShowGravityWells(false)
+    return
+  }
+
+  if (mode === 'sandbox') {
+    scene.setShowPhenomena(true)
+    scene.setShowSolarWind(true)
+    scene.setShowZodiacalLight(true)
+    scene.setShowGravityWells(true)
+    return
+  }
+
+  scene.setShowPhenomena(true)
+  scene.setShowSolarWind(true)
+  scene.setShowZodiacalLight(true)
+  scene.setShowGravityWells(false)
 }
 
 function restoreOuterScene(plan: SceneWarmupPlan) {
   const scene = useSolarSystemStore.getState()
+  const mode = useExperienceStore.getState().mode
+
   scene.setShowKuiperBelt(plan.desired.showKuiperBelt)
   scene.setShowTrojans(plan.desired.showTrojans)
+  scene.setShowHeliosphere(plan.desired.showHeliosphere)
+
+  if (mode === 'scientific' || mode === 'sandbox') {
+    scene.setShowCentaurs(true)
+    scene.setShowScatteredDisc(true)
+    return
+  }
+
   scene.setShowCentaurs(plan.desired.showCentaurs)
   scene.setShowScatteredDisc(plan.desired.showScatteredDisc)
-  scene.setShowHeliosphere(plan.desired.showHeliosphere)
 }
 
-function restoreExoticScene(plan: SceneWarmupPlan) {
+function restoreExoticScene() {
   const scene = useSolarSystemStore.getState()
-  scene.setShowBlackHole(plan.desired.showBlackHole)
-  scene.setShowWormhole(plan.desired.showWormhole)
+  const sandbox = useExperienceStore.getState().mode === 'sandbox'
+  scene.setShowBlackHole(sandbox)
+  scene.setShowWormhole(sandbox)
 }
 
 export default function ProgressiveSceneWarmup({ plan }: { plan: SceneWarmupPlan | null }) {
@@ -165,7 +194,7 @@ export default function ProgressiveSceneWarmup({ plan }: { plan: SceneWarmupPlan
         invalidate()
       }, 360),
       window.setTimeout(() => {
-        restoreExoticScene(plan)
+        restoreExoticScene()
         try {
           window.sessionStorage.setItem(SESSION_WARMUP_KEY, 'complete')
         } catch {
