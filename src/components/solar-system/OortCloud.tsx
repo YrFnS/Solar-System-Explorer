@@ -1,75 +1,86 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSolarSystemStore } from './store'
+import {
+  getEffectiveQuality,
+  QUALITY_PROFILES,
+  usePerformanceStore,
+} from './performance-store'
 
 const OORT_CLOUD_COUNT = 800
 const OORT_CLOUD_INNER_RADIUS = 65
 const OORT_CLOUD_OUTER_RADIUS = 80
 
-interface OortParticleInfo {
-  theta: number
-  phi: number
-  radius: number
-  rotSpeed: number
+function seededRandom(seed: number) {
+  return () => {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff
+    return seed / 0x80000000
+  }
 }
 
 export default function OortCloud() {
-  const showKuiperBelt = useSolarSystemStore((s) => s.showKuiperBelt)
-
+  const showKuiperBelt = useSolarSystemStore((state) => state.showKuiperBelt)
   const meshRef = useRef<THREE.InstancedMesh>(null!)
   const dummy = useMemo(() => new THREE.Object3D(), [])
+  const quality = usePerformanceStore((state) => getEffectiveQuality(state))
+  const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
+  const effectiveCount = Math.max(
+    120,
+    Math.round(OORT_CLOUD_COUNT * QUALITY_PROFILES[quality].instanceDensity)
+  )
 
-  // Generate spherical particle data
-  const particleDataRef = useRef<OortParticleInfo[]>([])
-  if (particleDataRef.current.length === 0) {
-    for (let i = 0; i < OORT_CLOUD_COUNT; i++) {
-      particleDataRef.current.push({
-        theta: Math.random() * Math.PI * 2,
-        phi: Math.acos(2 * Math.random() - 1), // uniform sphere distribution
-        radius: OORT_CLOUD_INNER_RADIUS + Math.random() * (OORT_CLOUD_OUTER_RADIUS - OORT_CLOUD_INNER_RADIUS),
-        rotSpeed: (Math.random() - 0.5) * 0.003, // very slow random rotation
-      })
+  useLayoutEffect(() => {
+    const mesh = meshRef.current
+    if (!mesh) return
+
+    const random = seededRandom(42017)
+    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage)
+
+    for (let index = 0; index < effectiveCount; index++) {
+      const theta = random() * Math.PI * 2
+      const phi = Math.acos(2 * random() - 1)
+      const radius = OORT_CLOUD_INNER_RADIUS
+        + random() * (OORT_CLOUD_OUTER_RADIUS - OORT_CLOUD_INNER_RADIUS)
+      const sinPhi = Math.sin(phi)
+
+      dummy.position.set(
+        Math.cos(theta) * sinPhi * radius,
+        Math.cos(phi) * radius,
+        Math.sin(theta) * sinPhi * radius
+      )
+      dummy.scale.setScalar(0.65 + random() * 0.7)
+      dummy.updateMatrix()
+      mesh.setMatrixAt(index, dummy.matrix)
     }
-  }
+
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.computeBoundingSphere()
+  }, [dummy, effectiveCount])
 
   useFrame((_, delta) => {
     if (!meshRef.current) return
+
     const timeSpeed = useSolarSystemStore.getState().timeSpeed
-    const data = particleDataRef.current
-
-    for (let i = 0; i < OORT_CLOUD_COUNT; i++) {
-      const p = data[i]
-      p.theta += delta * p.rotSpeed * timeSpeed
-
-      const sinPhi = Math.sin(p.phi)
-      const cosPhi = Math.cos(p.phi)
-      const sinTheta = Math.sin(p.theta)
-      const cosTheta = Math.cos(p.theta)
-
-      dummy.position.set(
-        cosTheta * sinPhi * p.radius,
-        cosPhi * p.radius,
-        sinTheta * sinPhi * p.radius
-      )
-      dummy.scale.setScalar(1)
-      dummy.updateMatrix()
-      meshRef.current.setMatrixAt(i, dummy.matrix)
-    }
-    meshRef.current.instanceMatrix.needsUpdate = true
+    const motionFactor = reducedMotion ? 0.12 : 1
+    meshRef.current.rotation.y += delta * 0.00035 * timeSpeed * motionFactor
   })
 
   if (!showKuiperBelt) return null
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, OORT_CLOUD_COUNT]}>
+    <instancedMesh
+      key={effectiveCount}
+      ref={meshRef}
+      args={[undefined, undefined, effectiveCount]}
+    >
       <icosahedronGeometry args={[0.08, 0]} />
       <meshBasicMaterial
         color="#C8D8E8"
         transparent
-        opacity={0.3}
+        opacity={0.28}
         depthWrite={false}
       />
     </instancedMesh>
