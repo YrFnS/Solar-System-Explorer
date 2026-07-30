@@ -10,6 +10,7 @@ import {
 } from './performance-store'
 
 const DEFAULTS_KEY = 'solar-explorer-performance-defaults-v1'
+const CAMERA_ACTIVITY_WINDOW_MS = 1800
 
 function lowerQuality(quality: EffectiveQuality): EffectiveQuality {
   if (quality === 'ultra') return 'balanced'
@@ -55,6 +56,14 @@ export default function ScenePerformanceManager() {
   const setAutoQuality = usePerformanceStore((state) => state.setAutoQuality)
   const setFps = usePerformanceStore((state) => state.setFps)
 
+  const isPaused = useSolarSystemStore((state) => state.isPaused)
+  const autoRotate = useSolarSystemStore((state) => state.autoRotate)
+  const followMode = useSolarSystemStore((state) => state.followMode)
+  const isTourMode = useSolarSystemStore((state) => state.isTourMode)
+  const cameraMode = useSolarSystemStore((state) => state.cameraMode)
+  const focusTarget = useSolarSystemStore((state) => state.focusTarget)
+  const cameraPosition = useSolarSystemStore((state) => state.cameraPosition)
+
   const setFrameloop = useThree((state) => state.setFrameloop)
   const invalidate = useThree((state) => state.invalidate)
 
@@ -63,6 +72,11 @@ export default function ScenePerformanceManager() {
   const slowSamplesRef = useRef(0)
   const fastSamplesRef = useRef(0)
   const cooldownRef = useRef(0)
+  const activityUntilRef = useRef(0)
+  const hiddenRef = useRef(false)
+
+  const needsContinuousFrames =
+    !isPaused || autoRotate || followMode || isTourMode || cameraMode === 'fly'
 
   useEffect(() => {
     applyFirstRunDefaults()
@@ -77,22 +91,47 @@ export default function ScenePerformanceManager() {
   }, [reducedMotion])
 
   useEffect(() => {
+    activityUntilRef.current = performance.now() + CAMERA_ACTIVITY_WINDOW_MS
+    invalidate()
+  }, [cameraPosition, focusTarget, invalidate])
+
+  useEffect(() => {
+    if (hiddenRef.current) return
+    setFrameloop(needsContinuousFrames ? 'always' : 'demand')
+    invalidate()
+  }, [invalidate, needsContinuousFrames, setFrameloop])
+
+  useEffect(() => {
     const handleVisibility = () => {
+      hiddenRef.current = document.hidden
+
       if (document.hidden) {
         setFrameloop('never')
         return
       }
 
-      setFrameloop('always')
+      setFrameloop(needsContinuousFrames ? 'always' : 'demand')
       invalidate()
     }
 
     document.addEventListener('visibilitychange', handleVisibility)
     handleVisibility()
     return () => document.removeEventListener('visibilitychange', handleVisibility)
-  }, [invalidate, setFrameloop])
+  }, [invalidate, needsContinuousFrames, setFrameloop])
 
   useFrame((_, delta) => {
+    if (!needsContinuousFrames) {
+      elapsedRef.current = 0
+      framesRef.current = 0
+      slowSamplesRef.current = 0
+      fastSamplesRef.current = 0
+
+      if (performance.now() < activityUntilRef.current) {
+        invalidate()
+      }
+      return
+    }
+
     if (!Number.isFinite(delta) || delta <= 0 || delta > 1) return
 
     elapsedRef.current += delta
