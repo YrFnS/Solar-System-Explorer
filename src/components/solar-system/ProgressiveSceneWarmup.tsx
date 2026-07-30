@@ -143,9 +143,11 @@ function restoreEffects(plan: SceneWarmupPlan) {
     return
   }
 
-  scene.setShowPhenomena(true)
-  scene.setShowSolarWind(true)
-  scene.setShowZodiacalLight(true)
+  // Explore retains the device-aware choices captured after the Eco/Balanced
+  // first-run defaults were applied.
+  scene.setShowPhenomena(plan.desired.showPhenomena)
+  scene.setShowSolarWind(plan.desired.showSolarWind)
+  scene.setShowZodiacalLight(plan.desired.showZodiacalLight)
   scene.setShowGravityWells(false)
 }
 
