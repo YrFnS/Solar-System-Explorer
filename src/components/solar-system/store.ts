@@ -150,6 +150,15 @@ export interface SolarSystemState {
   setShowWormhole: (show: boolean) => void
   setShowCentaurs: (show: boolean) => void
   setShowScatteredDisc: (show: boolean) => void
+  setCameraMode: (mode: 'orbit' | 'fly') => void
+  setRealisticDistances: (show: boolean) => void
+  setRealisticSizes: (show: boolean) => void
+  setShowPhenomena: (show: boolean) => void
+  setShowSolarWind: (show: boolean) => void
+  setShowZodiacalLight: (show: boolean) => void
+  addExplosion: (position: [number, number, number], color: string) => void
+  spawnObject: (type: 'comet' | 'asteroid' | 'interstellar') => void
+  removeSpawnedObject: (id: string) => void
 }
 
 const NAVIGABLE_BODIES = [
@@ -334,8 +343,28 @@ export const useSolarSystemStore = create<SolarSystemState>((set, get) => ({
   setShowGalacticNeighborhood: (show) => set({ showGalacticNeighborhood: show }),
   setRulerTarget: (target) => set({ rulerTarget: target }),
   setShowTimeline: (show) => set({ showTimeline: show }),
-  addScreenshot: (dataUrl) => set((s) => ({ screenshotGallery: [...s.screenshotGallery, dataUrl] })),
-  clearScreenshots: () => set({ screenshotGallery: [] }),
+  addScreenshot: (url) => set((state) => {
+    const nextGallery = [...state.screenshotGallery, url]
+    const overflow = Math.max(0, nextGallery.length - 12)
+    const discarded = overflow > 0 ? nextGallery.slice(0, overflow) : []
+
+    if (typeof URL !== 'undefined') {
+      for (const discardedUrl of discarded) {
+        if (discardedUrl.startsWith('blob:')) URL.revokeObjectURL(discardedUrl)
+      }
+    }
+
+    return { screenshotGallery: nextGallery.slice(-12) }
+  }),
+  clearScreenshots: () => set((state) => {
+    if (typeof URL !== 'undefined') {
+      for (const url of state.screenshotGallery) {
+        if (url.startsWith('blob:')) URL.revokeObjectURL(url)
+      }
+    }
+
+    return { screenshotGallery: [] }
+  }),
   setRotationSpeedMultiplier: (speed) => set({ rotationSpeedMultiplier: speed }),
   setShowGravityWells: (show) => set({ showGravityWells: show }),
   setShowHeliosphere: (show) => set({ showHeliosphere: show }),

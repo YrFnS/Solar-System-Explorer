@@ -582,12 +582,12 @@ export function getBodyVisualPosition(
   dateMs: number,
   mode: ExperienceMode,
   target = new THREE.Vector3()
-) {
+): THREE.Vector3 {
   if (bodyId === 'sun') return target.set(0, 0, 0)
 
   const moonMatch = findMoon(bodyId)
   if (moonMatch) {
-    const parent = getBodyVisualPosition(moonMatch.parent.id, dateMs, mode, target)
+    const parent: THREE.Vector3 = getBodyVisualPosition(moonMatch.parent.id, dateMs, mode, target)
     return parent.add(
       getMoonLocalPosition(
         moonMatch.moon,
