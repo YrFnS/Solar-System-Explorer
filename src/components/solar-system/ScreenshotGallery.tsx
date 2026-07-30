@@ -1,118 +1,117 @@
 'use client'
 
 import { useState } from 'react'
+import { Camera, Download, Image as ImageIcon, Trash2, X } from 'lucide-react'
 import { useSolarSystemStore } from './store'
-import { X, Camera, Trash2, Download, Image as ImageIcon } from 'lucide-react'
 
 export default function ScreenshotGallery() {
-  const screenshotGallery = useSolarSystemStore((s) => s.screenshotGallery)
-  const clearScreenshots = useSolarSystemStore((s) => s.clearScreenshots)
+  const screenshotGallery = useSolarSystemStore((state) => state.screenshotGallery)
+  const clearScreenshots = useSolarSystemStore((state) => state.clearScreenshots)
+  const screenshotMode = useSolarSystemStore((state) => state.screenshotMode)
   const [isOpen, setIsOpen] = useState(false)
 
-  if (screenshotGallery.length === 0 && !isOpen) return null
+  if ((screenshotGallery.length === 0 && !isOpen) || screenshotMode) return null
 
   return (
     <>
-      {/* Gallery toggle button — only shows when there are screenshots */}
-      {screenshotGallery.length > 0 && !isOpen && (
+      {screenshotGallery.length > 0 && !isOpen ? (
         <button
+          type="button"
           onClick={() => setIsOpen(true)}
-          className="absolute right-2 sm:right-4 bottom-16 sm:bottom-20 z-20 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl p-2 text-white/50 hover:text-white hover:bg-black/70 hover:border-white/20 transition-all shadow-xl pointer-events-auto group"
+          className="pointer-events-auto absolute bottom-28 right-2 z-[50] rounded-xl border border-white/10 bg-black/68 p-2 text-white/45 shadow-xl backdrop-blur-xl transition hover:border-white/20 hover:bg-black/80 hover:text-white sm:bottom-20 sm:right-4"
           title={`View ${screenshotGallery.length} screenshot${screenshotGallery.length > 1 ? 's' : ''}`}
+          aria-label={`Open screenshot gallery with ${screenshotGallery.length} image${screenshotGallery.length === 1 ? '' : 's'}`}
         >
-          <div className="relative">
-            <Camera className="w-4 h-4" />
-            <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-amber-500 text-white text-[7px] font-bold rounded-full flex items-center justify-center">
-              {screenshotGallery.length}
+          <span className="relative block">
+            <Camera className="h-4 w-4" />
+            <span className="absolute -right-2 -top-2 grid h-4 min-w-4 place-items-center rounded-full bg-amber-300 px-1 text-[7px] font-bold text-black">
+              {screenshotGallery.length > 99 ? '99+' : screenshotGallery.length}
             </span>
-          </div>
+          </span>
         </button>
-      )}
+      ) : null}
 
-      {/* Gallery modal */}
-      {isOpen && (
-        <div className="absolute inset-0 z-40 flex items-center justify-center pointer-events-auto">
-          {/* Backdrop */}
-          <div
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+      {isOpen ? (
+        <div className="pointer-events-auto fixed inset-0 z-[80] flex items-center justify-center p-3 sm:p-6">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/68 backdrop-blur-md"
             onClick={() => setIsOpen(false)}
+            aria-label="Close screenshot gallery"
           />
 
-          {/* Gallery panel */}
-          <div className="relative w-[90vw] max-w-2xl max-h-[80vh] bg-black/85 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-slide-up-bottom">
-            {/* Header */}
-            <div className="px-4 sm:px-6 py-4 border-b border-white/10 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center">
-                    <ImageIcon className="w-3.5 h-3.5 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-white tracking-wide">Screenshot Gallery</h2>
-                    <p className="text-[8px] text-white/30 uppercase tracking-wider">
-                      {screenshotGallery.length} screenshot{screenshotGallery.length !== 1 ? 's' : ''} captured
-                    </p>
-                  </div>
+          <section className="relative flex max-h-[84vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/12 bg-[#080a10]/98 text-white shadow-[0_35px_120px_rgba(0,0,0,0.8)]">
+            <header className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-3.5 sm:px-5">
+              <div className="flex items-center gap-3">
+                <div className="grid h-9 w-9 place-items-center rounded-2xl border border-amber-300/15 bg-amber-300/[0.07]">
+                  <ImageIcon className="h-4 w-4 text-amber-200/70" />
                 </div>
-                <div className="flex items-center gap-2">
-                  {screenshotGallery.length > 0 && (
-                    <button
-                      onClick={clearScreenshots}
-                      className="text-[9px] text-red-400/60 hover:text-red-400 flex items-center gap-1 px-2 py-1 hover:bg-red-400/10 rounded-lg transition-colors"
-                    >
-                      <Trash2 className="w-2.5 h-2.5" />
-                      Clear All
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setIsOpen(false)}
-                    className="text-white/40 hover:text-white p-1.5 hover:bg-white/10 rounded-lg transition-colors"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
+                <div>
+                  <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-amber-200/50">Local captures</p>
+                  <h2 className="mt-1 text-sm font-semibold text-white/90">Screenshot gallery</h2>
+                  <p className="mt-0.5 text-[8px] text-white/28">{screenshotGallery.length} image{screenshotGallery.length === 1 ? '' : 's'} stored in this session</p>
                 </div>
               </div>
-            </div>
+              <div className="flex items-center gap-1.5">
+                {screenshotGallery.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={clearScreenshots}
+                    className="flex items-center gap-1 rounded-xl px-2 py-1.5 text-[8px] text-rose-300/55 transition hover:bg-rose-300/10 hover:text-rose-200"
+                  >
+                    <Trash2 className="h-3 w-3" /> Clear
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="rounded-xl p-1.5 text-white/35 transition hover:bg-white/10 hover:text-white"
+                  aria-label="Close screenshot gallery"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </header>
 
-            {/* Gallery grid */}
-            <div className="p-4 sm:p-6 overflow-y-auto max-h-[60vh]">
+            <div className="overflow-y-auto overscroll-contain p-3 sm:p-5">
               {screenshotGallery.length === 0 ? (
-                <div className="text-center py-12">
-                  <Camera className="w-8 h-8 text-white/15 mx-auto mb-3" />
-                  <p className="text-[11px] text-white/30">No screenshots yet</p>
-                  <p className="text-[9px] text-white/15 mt-1">Press S to capture a screenshot in screenshot mode</p>
+                <div className="px-4 py-14 text-center">
+                  <Camera className="mx-auto h-8 w-8 text-white/12" />
+                  <p className="mt-3 text-[10px] text-white/35">No captures remain</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {screenshotGallery.map((dataUrl, i) => (
-                    <div
-                      key={i}
-                      className="relative group rounded-xl overflow-hidden border border-white/10 hover:border-white/20 transition-all hover:shadow-lg hover:shadow-amber-400/5"
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {screenshotGallery.map((dataUrl, index) => (
+                    <figure
+                      key={`${index}-${dataUrl.slice(-12)}`}
+                      className="group relative overflow-hidden rounded-2xl border border-white/8 bg-white/[0.025] transition hover:border-white/16"
                     >
+                      {/* Data URLs are created locally from the WebGL canvas. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={dataUrl}
-                        alt={`Screenshot ${i + 1}`}
-                        className="w-full aspect-video object-cover"
+                        alt={`Solar System capture ${index + 1}`}
+                        className="aspect-video w-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-2">
-                        <span className="text-[8px] text-white/60 font-mono">#{i + 1}</span>
+                      <figcaption className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/80 via-black/15 to-transparent p-2 pt-7 opacity-100 sm:opacity-0 sm:transition sm:group-hover:opacity-100">
+                        <span className="font-mono text-[8px] text-white/48">#{index + 1}</span>
                         <a
                           href={dataUrl}
-                          download={`solar-system-${i + 1}.png`}
-                          className="text-white/70 hover:text-white p-1 bg-black/40 rounded-md hover:bg-black/60 transition-colors"
-                          onClick={(e) => e.stopPropagation()}
+                          download={`solar-system-${index + 1}.png`}
+                          className="grid h-7 w-7 place-items-center rounded-lg bg-black/55 text-white/65 transition hover:bg-black/80 hover:text-white"
+                          aria-label={`Download capture ${index + 1}`}
                         >
-                          <Download className="w-3 h-3" />
+                          <Download className="h-3.5 w-3.5" />
                         </a>
-                      </div>
-                    </div>
+                      </figcaption>
+                    </figure>
                   ))}
                 </div>
               )}
             </div>
-          </div>
+          </section>
         </div>
-      )}
+      ) : null}
     </>
   )
 }
