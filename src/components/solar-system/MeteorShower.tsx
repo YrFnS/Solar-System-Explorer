@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSolarSystemStore } from './store'
@@ -90,14 +90,14 @@ export default function MeteorShower() {
   )
   const totalPoints = meteorCount * METEOR_TAIL_LENGTH
 
-  const { geometry, material } = useMemo(() => {
+  const { geometry, material, pool } = useMemo(() => {
     const positions = new Float32Array(totalPoints * 3)
     const alphas = new Float32Array(totalPoints)
     const sizes = new Float32Array(totalPoints)
-    const pool: MeteorData[] = []
+    const nextPool: MeteorData[] = []
 
     for (let meteorIndex = 0; meteorIndex < meteorCount; meteorIndex++) {
-      pool.push({
+      nextPool.push({
         active: false,
         lifetime: 0,
         maxLifetime: 0,
@@ -114,10 +114,6 @@ export default function MeteorShower() {
         positions[pointIndex * 3 + 1] = HIDDEN_Y
       }
     }
-
-    meteorsRef.current = pool
-    spawnTimerRef.current = 0
-    nextSpawnRef.current = randomSpawnInterval(reducedMotion)
 
     const nextGeometry = new THREE.BufferGeometry()
     nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
@@ -160,8 +156,23 @@ export default function MeteorShower() {
       blending: THREE.AdditiveBlending,
     })
 
-    return { geometry: nextGeometry, material: nextMaterial }
-  }, [meteorCount, reducedMotion, totalPoints])
+    return {
+      geometry: nextGeometry,
+      material: nextMaterial,
+      pool: nextPool,
+    }
+  }, [meteorCount, totalPoints])
+
+  useEffect(() => {
+    meteorsRef.current = pool
+    spawnTimerRef.current = 0
+    nextSpawnRef.current = randomSpawnInterval(reducedMotion)
+
+    return () => {
+      geometry.dispose()
+      material.dispose()
+    }
+  }, [geometry, material, pool, reducedMotion])
 
   useFrame((_, delta) => {
     if (!pointsRef.current || !showPhenomena) return
