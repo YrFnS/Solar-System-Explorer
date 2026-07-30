@@ -10,6 +10,7 @@ import ScienceHUD from './ScienceHUD'
 import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
 import AdaptiveLodManager from './AdaptiveLodManager'
+import ScreenshotCaptureBridge from './ScreenshotCaptureBridge'
 import ProgressiveSceneWarmup, {
   prepareSceneWarmup,
 } from './ProgressiveSceneWarmup'
@@ -20,7 +21,7 @@ import { getQualityProfile, usePerformanceStore } from './performance-store'
 installAssetUrlPolicy()
 const INITIAL_SCENE_WARMUP = prepareSceneWarmup()
 
-const UIOverlay = dynamic(() => import('./UIOverlay'), {
+const UIOverlay = dynamic(() => import('./UIOverlayV4'), {
   ssr: false,
   loading: () => null,
 })
@@ -99,6 +100,7 @@ export default function SceneContainer() {
           <ScenePerformanceManager />
           <ProgressiveSceneWarmup plan={INITIAL_SCENE_WARMUP} />
           <AdaptiveLodManager />
+          <ScreenshotCaptureBridge />
           <SolarSystemV3 />
         </Canvas>
       </div>
