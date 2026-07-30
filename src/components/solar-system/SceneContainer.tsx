@@ -6,6 +6,10 @@ import { Canvas } from '@react-three/fiber'
 import SolarSystem from './SolarSystem'
 import PerformanceDock from './PerformanceDock'
 import ScenePerformanceManager from './ScenePerformanceManager'
+import AdaptiveLodManager from './AdaptiveLodManager'
+import ProgressiveSceneWarmup, {
+  prepareSceneWarmup,
+} from './ProgressiveSceneWarmup'
 import { useSolarSystemStore } from './store'
 import { getQualityProfile, usePerformanceStore } from './performance-store'
 
@@ -61,6 +65,7 @@ export default function SceneContainer() {
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const profile = getQualityProfile({ preset, autoQuality })
+  const [warmupPlan] = useState(() => prepareSceneWarmup())
 
   return (
     <>
@@ -80,10 +85,13 @@ export default function SceneContainer() {
             alpha: false,
             depth: true,
             stencil: false,
+            powerPreference: 'high-performance',
           }}
           onPointerMissed={() => setSelectedBody(null)}
         >
           <ScenePerformanceManager />
+          <ProgressiveSceneWarmup plan={warmupPlan} />
+          <AdaptiveLodManager />
           <SolarSystem />
         </Canvas>
       </div>
