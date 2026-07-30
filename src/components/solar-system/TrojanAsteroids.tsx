@@ -1,94 +1,100 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSolarSystemStore } from './store'
+import {
+  getEffectiveQuality,
+  QUALITY_PROFILES,
+  usePerformanceStore,
+} from './performance-store'
 
-// Jupiter's orbit data (matching planet data)
-const JUPITER_ORBIT_RADIUS = 20
-const JUPITER_ORBIT_SPEED = 0.084
+const JUPITER_ORBIT_RADIUS = 15.9
+const JUPITER_ORBIT_SPEED = 0.44
+const JUPITER_INITIAL_ANGLE = 0.6
 const TROJANS_PER_SWARM = 250
 const TOTAL_TROJANS = TROJANS_PER_SWARM * 2
 
-interface TrojanParticle {
-  angleOffset: number // offset from L4/L5 point (±8°)
-  radiusOffset: number // slight variation in orbit radius
-  y: number // slight vertical spread
-  scale: number
+function seededRandom(seed: number) {
+  return () => {
+    seed = (seed * 48271) % 2147483647
+    return (seed - 1) / 2147483646
+  }
 }
 
 function TrojanSwarm() {
   const meshRef = useRef<THREE.InstancedMesh>(null!)
   const dummy = useMemo(() => new THREE.Object3D(), [])
+  const quality = usePerformanceStore((state) => getEffectiveQuality(state))
+  const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
+  const density = QUALITY_PROFILES[quality].instanceDensity
+  const effectiveCount = Math.max(80, Math.round((TOTAL_TROJANS * density) / 2) * 2)
 
-  // Generate particle data for both L4 and L5 swarms
-  const particleDataRef = useRef<TrojanParticle[]>([])
-  const isL4Ref = useRef<boolean[]>([]) // which swarm each particle belongs to
+  useLayoutEffect(() => {
+    const mesh = meshRef.current
+    if (!mesh) return
 
-  if (particleDataRef.current.length === 0) {
-    for (let i = 0; i < TOTAL_TROJANS; i++) {
-      const isL4 = i < TROJANS_PER_SWARM
-      isL4Ref.current.push(isL4)
-      particleDataRef.current.push({
-        angleOffset: (Math.random() - 0.5) * (16 * Math.PI / 180), // ±8° spread
-        radiusOffset: (Math.random() - 0.5) * 2, // slight radial spread
-        y: (Math.random() - 0.5) * 0.6, // slight vertical spread
-        scale: 0.02 + Math.random() * 0.03, // varied sizes
-      })
-    }
-  }
+    const random = seededRandom(12011)
+    const perSwarm = effectiveCount / 2
+    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage)
+    mesh.rotation.y = JUPITER_INITIAL_ANGLE
 
-  // Track Jupiter's angle
-  const jupiterAngleRef = useRef(Math.random() * Math.PI * 2)
-
-  useFrame((_, delta) => {
-    if (!meshRef.current) return
-    const timeSpeed = useSolarSystemStore.getState().timeSpeed
-    const data = particleDataRef.current
-
-    // Update Jupiter's angle
-    jupiterAngleRef.current += delta * JUPITER_ORBIT_SPEED * 0.05 * timeSpeed
-    const jupiterAngle = jupiterAngleRef.current
-
-    for (let i = 0; i < TOTAL_TROJANS; i++) {
-      const p = data[i]
-      const isL4 = isL4Ref.current[i]
-
-      // L4 is 60° ahead of Jupiter, L5 is 60° behind
-      const lagrangeOffset = isL4 ? Math.PI / 3 : -Math.PI / 3
-      const angle = jupiterAngle + lagrangeOffset + p.angleOffset
-      const radius = JUPITER_ORBIT_RADIUS + p.radiusOffset
+    for (let index = 0; index < effectiveCount; index++) {
+      const isLeadingSwarm = index < perSwarm
+      const lagrangeOffset = isLeadingSwarm ? Math.PI / 3 : -Math.PI / 3
+      const angleOffset = (random() - 0.5) * ((16 * Math.PI) / 180)
+      const radius = JUPITER_ORBIT_RADIUS + (random() - 0.5) * 2
+      const angle = lagrangeOffset + angleOffset
 
       dummy.position.set(
         Math.cos(angle) * radius,
-        p.y,
+        (random() - 0.5) * 0.6,
         Math.sin(angle) * radius
       )
-      dummy.scale.setScalar(p.scale)
+      dummy.rotation.set(
+        random() * Math.PI * 2,
+        random() * Math.PI * 2,
+        random() * Math.PI * 2
+      )
+      dummy.scale.setScalar(0.02 + random() * 0.03)
       dummy.updateMatrix()
-      meshRef.current.setMatrixAt(i, dummy.matrix)
+      mesh.setMatrixAt(index, dummy.matrix)
     }
-    meshRef.current.instanceMatrix.needsUpdate = true
+
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.computeBoundingSphere()
+  }, [dummy, effectiveCount])
+
+  useFrame((_, delta) => {
+    if (!meshRef.current) return
+
+    const timeSpeed = useSolarSystemStore.getState().timeSpeed
+    const motionFactor = reducedMotion ? 0.18 : 1
+    meshRef.current.rotation.y += delta * JUPITER_ORBIT_SPEED * 0.05 * timeSpeed * motionFactor
   })
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, TOTAL_TROJANS]}>
+    <instancedMesh
+      key={effectiveCount}
+      ref={meshRef}
+      args={[undefined, undefined, effectiveCount]}
+    >
       <dodecahedronGeometry args={[1, 0]} />
       <meshStandardMaterial
         color="#888888"
-        roughness={0.9}
-        metalness={0.1}
+        roughness={0.92}
+        metalness={0.04}
         transparent
-        opacity={0.6}
+        opacity={0.58}
       />
     </instancedMesh>
   )
 }
 
 export default function TrojanAsteroids() {
-  const showTrojans = useSolarSystemStore((s) => s.showTrojans)
-  const showAsteroidBelt = useSolarSystemStore((s) => s.showAsteroidBelt)
+  const showTrojans = useSolarSystemStore((state) => state.showTrojans)
+  const showAsteroidBelt = useSolarSystemStore((state) => state.showAsteroidBelt)
 
   if (!showTrojans || !showAsteroidBelt) return null
 
