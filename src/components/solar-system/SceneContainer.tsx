@@ -6,7 +6,6 @@ import { Canvas } from '@react-three/fiber'
 import SolarSystemV3 from './SolarSystemV3'
 import PerformanceDock from './PerformanceDock'
 import ExperienceDock from './ExperienceDock'
-import ScienceHUD from './ScienceHUD'
 import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
 import AdaptiveLodManager from './AdaptiveLodManager'
@@ -107,7 +106,6 @@ export default function SceneContainer() {
       <DeferredInterface />
       <PerformanceDock />
       <ExperienceDock />
-      <ScienceHUD />
     </>
   )
 }
