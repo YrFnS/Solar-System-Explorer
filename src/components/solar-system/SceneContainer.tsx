@@ -3,8 +3,11 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { Canvas } from '@react-three/fiber'
-import SolarSystem from './SolarSystem'
+import SolarSystemV3 from './SolarSystemV3'
 import PerformanceDock from './PerformanceDock'
+import ExperienceDock from './ExperienceDock'
+import ScienceHUD from './ScienceHUD'
+import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
 import AdaptiveLodManager from './AdaptiveLodManager'
 import ProgressiveSceneWarmup, {
@@ -50,7 +53,7 @@ function DeferredInterface() {
   if (ready) return <UIOverlay />
 
   return (
-    <div className="absolute left-4 top-4 z-20 pointer-events-none sm:left-6 sm:top-5">
+    <div className="pointer-events-none absolute left-4 top-4 z-20 sm:left-6 sm:top-5">
       <div className="rounded-2xl border border-white/10 bg-black/55 px-4 py-3 shadow-2xl backdrop-blur-xl">
         <p className="text-[10px] font-semibold uppercase tracking-[0.24em] text-amber-300/80">
           Solar System Explorer
@@ -92,14 +95,17 @@ export default function SceneContainer() {
           }}
           onPointerMissed={() => setSelectedBody(null)}
         >
+          <SimulationController />
           <ScenePerformanceManager />
           <ProgressiveSceneWarmup plan={INITIAL_SCENE_WARMUP} />
           <AdaptiveLodManager />
-          <SolarSystem />
+          <SolarSystemV3 />
         </Canvas>
       </div>
       <DeferredInterface />
       <PerformanceDock />
+      <ExperienceDock />
+      <ScienceHUD />
     </>
   )
 }
