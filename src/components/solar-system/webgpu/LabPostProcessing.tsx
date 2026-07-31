@@ -5,14 +5,16 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import { pass } from 'three/tsl'
 import { bloom } from 'three/examples/jsm/tsl/display/BloomNode.js'
+import { useLabPostStore } from './lab-post-store'
 
 export const LAB_POST_SYSTEM_IDS = [
   'tsl-scene-pass',
   'tsl-threshold-bloom',
   'tsl-render-pipeline',
 ] as const
-export const LAB_POST_SCENE_PASS_COUNT = 1
-export const LAB_POST_BLOOM_PASS_COUNT = 1
+export const LAB_POST_CONFIGURED_PIPELINES = 1
+export const LAB_POST_CONFIGURED_SCENE_PASSES = 1
+export const LAB_POST_CONFIGURED_BLOOM_PASSES = 1
 export const LAB_POST_STRENGTH = 0.18
 export const LAB_POST_RADIUS = 0.16
 export const LAB_POST_THRESHOLD = 0.78
@@ -20,6 +22,7 @@ export const LAB_POST_SMOOTH_WIDTH = 0.08
 
 export interface LabPostProcessingDiagnostics {
   visualSystems: string[]
+  available: true
   enabled: boolean
   pipelineCount: number
   scenePassCount: number
@@ -33,28 +36,21 @@ export interface LabPostProcessingDiagnostics {
   screenSpaceDistortion: false
 }
 
-interface PostWindow extends Window {
-  __SOLAR_WEBGPU_LAB_POST__?: LabPostProcessingDiagnostics
-}
-
 declare global {
   interface Window {
     __SOLAR_WEBGPU_LAB_POST__?: LabPostProcessingDiagnostics
   }
 }
 
-interface LabTslPostProcessingProps {
-  enabled: boolean
-}
-
-export default function LabTslPostProcessing({
-  enabled,
-}: LabTslPostProcessingProps) {
+export default function LabTslPostProcessing() {
+  const enabled = useLabPostStore((state) => state.enabled)
   const renderer = useThree((state) => state.gl) as unknown as THREE.WebGPURenderer
   const scene = useThree((state) => state.scene)
   const camera = useThree((state) => state.camera)
 
   const pipelineState = useMemo(() => {
+    if (!enabled) return null
+
     const scenePass = pass(scene, camera)
     const sceneColor = scenePass.getTextureNode('output')
     const bloomPass = bloom(
@@ -73,14 +69,15 @@ export default function LabTslPostProcessing({
       renderPipeline,
       scenePass,
     }
-  }, [camera, renderer, scene])
+  }, [camera, enabled, renderer, scene])
 
   const diagnostics = useMemo<LabPostProcessingDiagnostics>(() => ({
     visualSystems: [...LAB_POST_SYSTEM_IDS],
+    available: true,
     enabled,
-    pipelineCount: 1,
-    scenePassCount: LAB_POST_SCENE_PASS_COUNT,
-    bloomPassCount: LAB_POST_BLOOM_PASS_COUNT,
+    pipelineCount: enabled ? LAB_POST_CONFIGURED_PIPELINES : 0,
+    scenePassCount: enabled ? LAB_POST_CONFIGURED_SCENE_PASSES : 0,
+    bloomPassCount: enabled ? LAB_POST_CONFIGURED_BLOOM_PASSES : 0,
     strength: LAB_POST_STRENGTH,
     radius: LAB_POST_RADIUS,
     threshold: LAB_POST_THRESHOLD,
@@ -91,24 +88,23 @@ export default function LabTslPostProcessing({
   }), [enabled])
 
   useEffect(() => {
-    const target = window as PostWindow
-    target.__SOLAR_WEBGPU_LAB_POST__ = diagnostics
+    window.__SOLAR_WEBGPU_LAB_POST__ = diagnostics
 
     return () => {
-      if (target.__SOLAR_WEBGPU_LAB_POST__ === diagnostics) {
-        delete target.__SOLAR_WEBGPU_LAB_POST__
+      if (window.__SOLAR_WEBGPU_LAB_POST__ === diagnostics) {
+        delete window.__SOLAR_WEBGPU_LAB_POST__
       }
     }
   }, [diagnostics])
 
   useEffect(() => () => {
-    pipelineState.bloomPass.dispose()
-    pipelineState.scenePass.dispose()
-    pipelineState.renderPipeline.dispose()
+    pipelineState?.bloomPass.dispose()
+    pipelineState?.scenePass.dispose()
+    pipelineState?.renderPipeline.dispose()
   }, [pipelineState])
 
   useFrame(() => {
-    if (enabled) {
+    if (enabled && pipelineState) {
       pipelineState.renderPipeline.render()
       return
     }
