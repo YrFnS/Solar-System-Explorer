@@ -213,7 +213,7 @@ function createSolarWindField() {
 }
 
 export function LabTslStarField() {
-  const sprite = useMemo(createStarField, [])
+  const sprite = useMemo(() => createStarField(), [])
 
   useEffect(() => () => {
     sprite.material.dispose()
@@ -223,7 +223,7 @@ export function LabTslStarField() {
 }
 
 export function LabTslSolarWind() {
-  const sprite = useMemo(createSolarWindField, [])
+  const sprite = useMemo(() => createSolarWindField(), [])
 
   useEffect(() => () => {
     sprite.material.dispose()
