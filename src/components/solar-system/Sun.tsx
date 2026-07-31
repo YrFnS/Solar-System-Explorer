@@ -2,7 +2,6 @@
 
 import { useRef, useMemo } from 'react'
 import { useFrame, ThreeEvent, useThree } from '@react-three/fiber'
-import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { sunData } from './data'
 import { useSolarSystemStore } from './store'
