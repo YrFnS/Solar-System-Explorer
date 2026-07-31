@@ -43,74 +43,10 @@ jobs:
           status.write_text(text)
           PY
 
-          cat > .github/workflows/quality.yml <<'YAML'
-          name: Quality
-
-          on:
-            pull_request:
-            push:
-              branches:
-                - main
-                - 'agent/**'
-
-          concurrency:
-            group: quality-${{ github.ref }}
-            cancel-in-progress: true
-
-          permissions:
-            contents: read
-
-          jobs:
-            build:
-              name: Build application
-              runs-on: ubuntu-latest
-              timeout-minutes: 35
-
-              steps:
-                - name: Check out repository
-                  uses: actions/checkout@v4
-
-                - name: Set up Bun
-                  uses: oven-sh/setup-bun@v2
-                  with:
-                    bun-version: latest
-
-                - name: Install dependencies
-                  run: bun install --frozen-lockfile
-
-                - name: Audit modules and dependencies
-                  run: bun run audit
-
-                - name: Validate lint rules
-                  run: bun run lint
-
-                - name: Validate TypeScript
-                  run: bun run typecheck
-
-                - name: Validate orbital engine
-                  run: bun run ephemeris:validate
-
-                - name: Generate optimized WebP fallbacks
-                  run: bun run textures:optimize
-
-                - name: Prepare Basis transcoder runtime
-                  run: bun run textures:basis:sync
-
-                - name: Verify committed KTX2 textures
-                  run: bun run textures:ktx2:verify
-
-                - name: Build optimized application
-                  run: bun run build:next
-
-                - name: Enforce production artifact budgets
-                  run: bun run performance:budget
-
-                - name: Smoke test desktop, mobile, accessibility, WebGL, and KTX2
-                  run: bun run ui:smoke
-
-                - name: Smoke test WebGPU laboratory backend selection
-                  run: bun run webgpu:smoke
-          YAML
+          # Workflow files are cleaned up separately through the GitHub connector,
+          # because the Actions token may write code but may not update workflows.
+          git restore .github/workflows/quality.yml
+          git restore .github/workflows/apply-w5a-nebula.yml
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
