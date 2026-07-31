@@ -28,14 +28,14 @@ function rewriteToOptimizedTexture(url: string) {
   if (
     !pathname.startsWith('/textures/') ||
     pathname.startsWith('/textures/optimized/') ||
-    !/\.(?:jpe?g|png)$/i.test(pathname)
+    !/\.(?:jpe?g|png|svg)$/i.test(pathname)
   ) {
     return url
   }
 
   const relativePath = pathname
     .slice('/textures/'.length)
-    .replace(/\.(?:jpe?g|png)$/i, '')
+    .replace(/\.(?:jpe?g|png|svg)$/i, '')
   const quality = getEffectiveQuality(usePerformanceStore.getState())
   const width = TEXTURE_WIDTHS[quality]
 
