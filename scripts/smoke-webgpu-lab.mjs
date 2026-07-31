@@ -251,7 +251,7 @@ function assertTextureDiagnostics(diagnostics) {
 
   if (missingRequested.length || missingLoaded.length) {
     throw new Error(
-      `Incomplete W2 texture set: ${JSON.stringify({ missingRequested, missingLoaded })}`
+      `Incomplete W3 texture set: ${JSON.stringify({ missingRequested, missingLoaded })}`
     )
   }
   if (diagnostics.textureFormats.length === 0) {
@@ -341,8 +341,12 @@ async function runForcedWebGL(browser) {
   await assertCanvasHealthy(page, 'forced WebGL 2')
 
   const text = await page.evaluate(() => document.body.textContent ?? '')
-  if (!text.includes('W2 parity scope') || !text.includes('KTX2 ready')) {
-    throw new Error('Forced WebGL 2 lab UI did not render the W2 texture controls')
+  if (
+    !text.includes('W3 parity scope')
+    || !text.includes('KTX2 ready')
+    || !text.includes('Vertex TSL')
+  ) {
+    throw new Error('Forced WebGL 2 lab UI did not render the W3 controls')
   }
 
   if (failures.length > 0) {
