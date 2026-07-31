@@ -21,6 +21,18 @@ This experiment adds GPU-compressed textures to the existing WebGL 2 explorer wi
 
 The ring texture is shared by Saturn and Uranus in the current catalogue.
 
+## Validated asset measurements
+
+The pinned Khronos KTX Software 4.4.2 workflow generated all 12 files, generated mipmaps, and validated each file with `ktx validate --gltf-basisu`.
+
+| Tier | Earth | Moon | Clouds | Ring | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 512 | 28.4 KiB | 36.3 KiB | 18.3 KiB | 7.6 KiB | 92.8 kB |
+| 1024 | 73.0 KiB | 113.8 KiB | 45.3 KiB | 17.4 KiB | 255.5 kB |
+| 2048 | 206.9 KiB | 404.2 KiB | 45.3 KiB | 36.8 KiB | 709.8 kB |
+
+The project-authored cloud source is 1024 × 512, so its 2048 quality-tier entry intentionally preserves the source resolution instead of enlarging it. The narrow radial ring strips are edge-padded to portable 4 × 4 block boundaries without adding transparent seams.
+
 ## Runtime flow
 
 ```text
