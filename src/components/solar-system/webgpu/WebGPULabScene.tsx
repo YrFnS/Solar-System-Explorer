@@ -19,6 +19,7 @@ import {
 } from 'three/tsl'
 import { planets, sunData, type PlanetData } from '../data'
 import { getMajorPlanetVisualPosition, getOrbitPoints } from '../ephemeris'
+import { useLabTextureStore } from './lab-texture-store'
 import { useLabKtx2Texture } from './useLabKtx2Texture'
 
 export interface LabFrameMetrics {
@@ -379,8 +380,24 @@ function readRendererCounters(state: RootState) {
 function LabMetricsProbe({ onMetrics }: WebGPULabSceneProps) {
   const samplesRef = useRef<number[]>([])
   const lastPublishRef = useRef(0)
+  const readyRef = useRef(false)
+  const textureBackend = useLabTextureStore((state) => state.backend)
 
   useFrame((state, delta) => {
+    if (textureBackend !== 'ktx2') {
+      samplesRef.current = []
+      lastPublishRef.current = 0
+      readyRef.current = false
+      return
+    }
+
+    if (!readyRef.current) {
+      readyRef.current = true
+      samplesRef.current = []
+      lastPublishRef.current = performance.now()
+      return
+    }
+
     const samples = samplesRef.current
     samples.push(delta * 1_000)
     if (samples.length > 180) samples.shift()
