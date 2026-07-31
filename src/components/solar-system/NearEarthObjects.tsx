@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { useSolarSystemStore } from './store'
 import { getQualityProfile, usePerformanceStore } from './performance-store'
+import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 
 function seededRandom(seed: number) {
   return () => {
@@ -16,7 +16,7 @@ function seededRandom(seed: number) {
 
 export default function NearEarthObjects() {
   const meshRef = useRef<THREE.InstancedMesh>(null)
-  const sourceTexture = useTexture('/textures/moon.jpg')
+  const sourceTexture = useAdaptiveTexture('/textures/moon.jpg', { anisotropy: 2 })
   const texture = useMemo(() => {
     const ownedTexture = sourceTexture.clone()
     ownedTexture.colorSpace = THREE.SRGBColorSpace
