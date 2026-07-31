@@ -21,7 +21,7 @@ export default function LabW5bStatus() {
           </h2>
         </div>
         <span className="rounded-full border border-violet-200/10 bg-violet-200/[0.06] px-2 py-1 font-mono text-[8px] font-semibold text-violet-100/65">
-          Material TSL · Gravity TSL
+          Material TSL · Nebula TSL · Gravity TSL
         </span>
       </div>
 
