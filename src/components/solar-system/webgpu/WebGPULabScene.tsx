@@ -23,6 +23,7 @@ import {
   LabTslSolarWind,
   LabTslStarField,
 } from './LabParticleFields'
+import LabTslSunEffects from './LabSunEffects'
 import { useLabTextureStore } from './lab-texture-store'
 import { useLabKtx2Texture } from './useLabKtx2Texture'
 
@@ -42,6 +43,7 @@ interface WebGPULabSceneProps {
 
 const LAB_START_DATE_MS = Date.UTC(2026, 0, 1, 0, 0, 0)
 const LAB_DAYS_PER_SECOND = 12
+const LAB_SUN_RADIUS = 2.5
 
 function createPlanetMaterial(body: PlanetData, map: THREE.Texture | null) {
   const base = new THREE.Color(body.color)
@@ -71,7 +73,7 @@ function createPlanetMaterial(body: PlanetData, map: THREE.Texture | null) {
 
 function createSunMaterial(map: THREE.Texture | null) {
   const material = new THREE.MeshBasicNodeMaterial()
-  const latitude = positionLocal.y.div(2.5).mul(0.5).add(0.5)
+  const latitude = positionLocal.y.div(LAB_SUN_RADIUS).mul(0.5).add(0.5)
   const pulse = time.mul(1.15).sin().mul(0.06).add(0.94)
   const procedural = mix(
     color(new THREE.Color('#ff5a18')),
@@ -140,8 +142,9 @@ function LabSun() {
   return (
     <group>
       <mesh ref={meshRef} material={material}>
-        <sphereGeometry args={[2.5, 64, 40]} />
+        <sphereGeometry args={[LAB_SUN_RADIUS, 64, 40]} />
       </mesh>
+      <LabTslSunEffects radius={LAB_SUN_RADIUS} />
       <pointLight
         color="#fff2c7"
         intensity={105}
