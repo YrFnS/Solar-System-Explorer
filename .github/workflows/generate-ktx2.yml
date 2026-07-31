@@ -2,18 +2,6 @@ name: Generate KTX2 Catalogue Assets
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - '.github/workflows/generate-ktx2.yml'
-      - 'scripts/encode-ktx2.mjs'
-      - 'scripts/verify-ktx2.mjs'
-      - 'src/components/solar-system/textures/ktx2-manifest.json'
-      - 'public/textures/**/*.jpg'
-      - 'public/textures/**/*.jpeg'
-      - 'public/textures/**/*.png'
-      - 'public/textures/**/*.svg'
   push:
     branches:
       - agent/ktx2-textures
@@ -28,7 +16,7 @@ on:
       - 'public/textures/**/*.svg'
 
 concurrency:
-  group: generate-ktx2-${{ github.event.pull_request.number || github.ref }}
+  group: generate-ktx2-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -37,7 +25,6 @@ permissions:
 jobs:
   generate:
     name: Encode and commit KTX2 catalogue
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 30
 
@@ -64,9 +51,11 @@ jobs:
           def migrate(path: str, old: str, new: str) -> None:
               target = Path(path)
               text = target.read_text()
-              if new in text:
+              if new and new in text:
                   return
               if old not in text:
+                  if not new:
+                      return
                   raise SystemExit(
                       f"Could not migrate {path}; neither old nor new source block was found: {old[:100]!r}"
                   )
@@ -189,10 +178,6 @@ jobs:
           verify = Path('scripts/verify-ktx2.mjs')
           verify_text = verify.read_text().replace('pilot tier', 'catalogue tier')
           verify.write_text(verify_text)
-
-          helper = Path('.github/workflows/apply-full-ktx2-catalogue.yml')
-          if helper.exists():
-              helper.unlink()
           PY
 
       - name: Install pinned Khronos KTX Software
@@ -229,4 +214,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -m "complete active KTX2 texture catalogue"
+          git pull --rebase origin agent/ktx2-textures
           git push origin HEAD:agent/ktx2-textures
