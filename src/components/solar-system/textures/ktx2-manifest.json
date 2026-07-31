@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "tiers": [512, 1024, 2048],
+  "textures": [
+    {
+      "id": "earth",
+      "input": "/textures/earth.jpg",
+      "sources": ["/textures/earth.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 180,
+      "clevel": 3
+    },
+    {
+      "id": "moon",
+      "input": "/textures/moon.jpg",
+      "sources": [
+        "/textures/moon.jpg",
+        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg",
+        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moonmap1k.jpg"
+      ],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 176,
+      "clevel": 3
+    },
+    {
+      "id": "earth-clouds",
+      "input": "/textures/earth-clouds.svg",
+      "sources": [
+        "/textures/earth-clouds.svg",
+        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png"
+      ],
+      "role": "alpha",
+      "colorSpace": "srgb",
+      "alpha": true,
+      "codec": "uastc-ldr-4x4",
+      "uastcQuality": 2,
+      "uastcRdoLambda": 0.65,
+      "zstd": 18
+    },
+    {
+      "id": "saturn-ring",
+      "input": "/textures/saturn_ring.png",
+      "sources": ["/textures/saturn_ring.png"],
+      "role": "alpha",
+      "colorSpace": "srgb",
+      "alpha": true,
+      "codec": "uastc-ldr-4x4",
+      "uastcQuality": 2,
+      "uastcRdoLambda": 0.55,
+      "zstd": 18
+    }
+  ]
+}
