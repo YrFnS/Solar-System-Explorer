@@ -98,7 +98,10 @@ function createStarField() {
   const colorAttribute = new THREE.InstancedBufferAttribute(colors, 3)
   const sizeAttribute = new THREE.InstancedBufferAttribute(sizes, 1)
   const phaseAttribute = new THREE.InstancedBufferAttribute(phases, 1)
-  const phaseNode = instancedBufferAttribute(phaseAttribute)
+  const positionNode = instancedBufferAttribute(positionAttribute, 'vec3')
+  const colorNode = instancedBufferAttribute(colorAttribute, 'vec3')
+  const sizeNode = instancedBufferAttribute(sizeAttribute, 'float')
+  const phaseNode = instancedBufferAttribute(phaseAttribute, 'float')
   const twinkle = time
     .mul(0.82)
     .add(phaseNode)
@@ -113,13 +116,11 @@ function createStarField() {
     alphaToCoverage: true,
   })
 
-  material.positionNode = instancedBufferAttribute(positionAttribute)
-  material.colorNode = instancedBufferAttribute(colorAttribute)
-    .mul(twinkle.mul(0.34).add(0.76))
+  material.positionNode = positionNode
+  material.colorNode = colorNode.mul(twinkle.mul(0.34).add(0.76))
   material.opacityNode = shapeCircle()
     .mul(twinkle.mul(0.55).add(0.32))
-  material.sizeNode = instancedBufferAttribute(sizeAttribute)
-    .mul(twinkle.mul(0.3).add(0.82))
+  material.sizeNode = sizeNode.mul(twinkle.mul(0.3).add(0.82))
 
   const sprite = createInstancedSprite(material, LAB_STAR_COUNT)
   sprite.renderOrder = -20
@@ -172,11 +173,12 @@ function createSolarWindField() {
   const sizeAttribute = new THREE.InstancedBufferAttribute(sizes, 1)
   const temperatureAttribute = new THREE.InstancedBufferAttribute(temperatures, 1)
 
-  const directionNode = instancedBufferAttribute(directionAttribute)
-  const tangentNode = instancedBufferAttribute(tangentAttribute)
-  const phaseNode = instancedBufferAttribute(phaseAttribute)
-  const speedNode = instancedBufferAttribute(speedAttribute)
-  const temperatureNode = instancedBufferAttribute(temperatureAttribute)
+  const directionNode = instancedBufferAttribute(directionAttribute, 'vec3')
+  const tangentNode = instancedBufferAttribute(tangentAttribute, 'vec3')
+  const phaseNode = instancedBufferAttribute(phaseAttribute, 'float')
+  const speedNode = instancedBufferAttribute(speedAttribute, 'float')
+  const sizeNode = instancedBufferAttribute(sizeAttribute, 'float')
+  const temperatureNode = instancedBufferAttribute(temperatureAttribute, 'float')
   const progress = mod(time.mul(speedNode).add(phaseNode), 1)
   const radius = progress.mul(31).add(2.7)
   const spiral = time
@@ -204,8 +206,7 @@ function createSolarWindField() {
   material.opacityNode = shapeCircle()
     .mul(remaining.pow(1.35))
     .mul(0.76)
-  material.sizeNode = instancedBufferAttribute(sizeAttribute)
-    .mul(remaining.mul(0.48).add(0.52))
+  material.sizeNode = sizeNode.mul(remaining.mul(0.48).add(0.52))
 
   const sprite = createInstancedSprite(material, LAB_SOLAR_WIND_COUNT)
   sprite.renderOrder = 4
