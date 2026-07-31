@@ -24,10 +24,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
+          ref: agent/webgpu-lab
           fetch-depth: 0
 
       - name: Apply one-shot W5a nebula integration
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/webgpu-lab' && hashFiles('scripts/apply-w5a-nebula.py') != ''
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/webgpu-lab' && hashFiles('scripts/apply-w5a-nebula.py') != ''
         run: |
           set -euo pipefail
           python scripts/apply-w5a-nebula.py
