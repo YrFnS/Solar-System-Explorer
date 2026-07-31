@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import {
   LAB_POST_BLOOM_PASS_COUNT,
   LAB_POST_RADIUS,
@@ -46,6 +47,13 @@ export default function LabW5cStatus() {
       <p className="mt-3 text-[8px] leading-relaxed text-white/32">
         One scene pass feeds restrained threshold bloom through Three.js RenderPipeline. The in-panel toggle switches to direct rendering without remounting the renderer.
       </p>
+
+      <Link
+        href="/lab/webgpu/results"
+        className="pointer-events-auto mt-3 block rounded-xl border border-cyan-200/12 bg-cyan-200/[0.05] px-3 py-2 text-center text-[9px] font-semibold text-cyan-100/65 transition hover:bg-cyan-200/[0.1] hover:text-cyan-50"
+      >
+        Analyze device exports →
+      </Link>
     </aside>
   )
 }
