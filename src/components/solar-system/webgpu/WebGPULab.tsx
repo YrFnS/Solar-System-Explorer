@@ -20,6 +20,7 @@ extend(THREE as any)
 type RequestedBackend = 'auto' | 'webgl'
 type ActualBackend = 'webgpu' | 'webgl2' | 'unknown'
 type RendererStatus = 'idle' | 'initializing' | 'ready' | 'error'
+type AdapterStatus = 'not-requested' | 'available' | 'unavailable' | 'error'
 
 interface BackendLike {
   isWebGPUBackend?: boolean
@@ -28,12 +29,21 @@ interface BackendLike {
   constructor?: { name?: string }
 }
 
+interface BackendSelection {
+  forceWebGL: boolean
+  device?: unknown
+  adapterStatus: AdapterStatus
+  fallbackReason: string | null
+}
+
 interface RendererInfo {
   status: RendererStatus
   actual: ActualBackend
   backendClass: string
   compatibilityMode: boolean | null
   initializationMs: number | null
+  adapterStatus: AdapterStatus
+  fallbackReason: string | null
   error: string | null
 }
 
@@ -42,6 +52,8 @@ interface LabDiagnostics {
   actualBackend: ActualBackend
   backendClass: string
   webgpuApiAvailable: boolean
+  adapterStatus: AdapterStatus
+  fallbackReason: string | null
   compatibilityMode: boolean | null
   initializationMs: number | null
   metrics: LabFrameMetrics | null
@@ -59,6 +71,8 @@ const EMPTY_RENDERER_INFO: RendererInfo = {
   backendClass: 'Not initialized',
   compatibilityMode: null,
   initializationMs: null,
+  adapterStatus: 'not-requested',
+  fallbackReason: null,
   error: null,
 }
 
@@ -67,6 +81,89 @@ function readRequestedBackend(): RequestedBackend {
   return new URLSearchParams(window.location.search).get('backend') === 'webgl'
     ? 'webgl'
     : 'auto'
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function selectBackend(requestedBackend: RequestedBackend): Promise<BackendSelection> {
+  if (requestedBackend === 'webgl') {
+    return {
+      forceWebGL: true,
+      adapterStatus: 'not-requested',
+      fallbackReason: null,
+    }
+  }
+
+  if (typeof navigator === 'undefined' || !('gpu' in navigator)) {
+    return {
+      forceWebGL: true,
+      adapterStatus: 'unavailable',
+      fallbackReason: 'navigator.gpu is unavailable in this browser.',
+    }
+  }
+
+  try {
+    const adapter = await navigator.gpu.requestAdapter({
+      powerPreference: 'high-performance',
+    }) ?? await navigator.gpu.requestAdapter()
+
+    if (!adapter) {
+      return {
+        forceWebGL: true,
+        adapterStatus: 'unavailable',
+        fallbackReason: 'The browser exposed WebGPU, but no usable GPU adapter was returned.',
+      }
+    }
+
+    const device = await adapter.requestDevice({
+      requiredFeatures: [...adapter.features],
+    })
+
+    return {
+      forceWebGL: false,
+      device,
+      adapterStatus: 'available',
+      fallbackReason: null,
+    }
+  } catch (error) {
+    return {
+      forceWebGL: true,
+      adapterStatus: 'error',
+      fallbackReason: `WebGPU adapter preflight failed: ${errorMessage(error)}`,
+    }
+  }
+}
+
+async function createRenderer(
+  canvasProps: unknown,
+  selection: BackendSelection
+) {
+  const renderer = new THREE.WebGPURenderer({
+    ...(canvasProps as Record<string, unknown>),
+    antialias: false,
+    samples: 0,
+    alpha: false,
+    depth: true,
+    stencil: false,
+    powerPreference: 'high-performance',
+    outputBufferType: THREE.UnsignedByteType,
+    forceWebGL: selection.forceWebGL,
+    ...(selection.device ? { device: selection.device } : {}),
+  } as ConstructorParameters<typeof THREE.WebGPURenderer>[0])
+
+  renderer.outputColorSpace = THREE.SRGBColorSpace
+  renderer.toneMapping = THREE.ACESFilmicToneMapping
+  renderer.toneMappingExposure = 1
+
+  try {
+    await renderer.init()
+    return renderer
+  } catch (error) {
+    renderer.dispose()
+    throw error
+  }
 }
 
 function inspectBackend(renderer: THREE.WebGPURenderer) {
@@ -153,6 +250,12 @@ export default function WebGPULab() {
   const rendererFactory = useCallback(async (canvasProps: unknown) => {
     const generation = generationRef.current
     const startedAt = performance.now()
+    let selection: BackendSelection = {
+      forceWebGL: requestedBackend === 'webgl',
+      adapterStatus: 'not-requested',
+      fallbackReason: null,
+    }
+
     queueMicrotask(() => {
       if (generation !== generationRef.current) return
       setRendererInfo({
@@ -162,22 +265,22 @@ export default function WebGPULab() {
     })
 
     try {
-      const renderer = new THREE.WebGPURenderer({
-        ...(canvasProps as Record<string, unknown>),
-        antialias: false,
-        samples: 0,
-        alpha: false,
-        depth: true,
-        stencil: false,
-        powerPreference: 'high-performance',
-        outputBufferType: THREE.UnsignedByteType,
-        forceWebGL: requestedBackend === 'webgl',
-      } as ConstructorParameters<typeof THREE.WebGPURenderer>[0])
+      selection = await selectBackend(requestedBackend)
+      let renderer: THREE.WebGPURenderer
 
-      renderer.outputColorSpace = THREE.SRGBColorSpace
-      renderer.toneMapping = THREE.ACESFilmicToneMapping
-      renderer.toneMappingExposure = 1
-      await renderer.init()
+      try {
+        renderer = await createRenderer(canvasProps, selection)
+      } catch (error) {
+        if (requestedBackend !== 'auto' || selection.forceWebGL) throw error
+
+        selection = {
+          ...selection,
+          forceWebGL: true,
+          device: undefined,
+          fallbackReason: `WebGPU renderer initialization failed: ${errorMessage(error)}`,
+        }
+        renderer = await createRenderer(canvasProps, selection)
+      }
 
       const backend = inspectBackend(renderer)
       const initializationMs = performance.now() - startedAt
@@ -191,20 +294,22 @@ export default function WebGPULab() {
           status: 'ready',
           ...backend,
           initializationMs,
+          adapterStatus: selection.adapterStatus,
+          fallbackReason: selection.fallbackReason,
           error: null,
         })
       })
 
       return renderer as unknown as LegacyWebGLRenderer
     } catch (error) {
-      const message = error instanceof Error
-        ? error.message
-        : 'Unknown renderer initialization error.'
+      const message = errorMessage(error)
       queueMicrotask(() => {
         if (generation !== generationRef.current) return
         setRendererInfo({
           ...EMPTY_RENDERER_INFO,
           status: 'error',
+          adapterStatus: selection.adapterStatus,
+          fallbackReason: selection.fallbackReason,
           error: message,
         })
       })
@@ -238,6 +343,8 @@ export default function WebGPULab() {
       actualBackend: rendererInfo.actual,
       backendClass: rendererInfo.backendClass,
       webgpuApiAvailable,
+      adapterStatus: rendererInfo.adapterStatus,
+      fallbackReason: rendererInfo.fallbackReason,
       compatibilityMode: rendererInfo.compatibilityMode,
       initializationMs: rendererInfo.initializationMs,
       metrics,
@@ -256,6 +363,13 @@ export default function WebGPULab() {
     : rendererInfo.actual === 'webgl2'
       ? 'text-sky-200'
       : 'text-white/45'
+  const adapterLabel = rendererInfo.adapterStatus === 'available'
+    ? 'available'
+    : rendererInfo.adapterStatus === 'unavailable'
+      ? 'unavailable'
+      : rendererInfo.adapterStatus === 'error'
+        ? 'probe failed'
+        : 'not requested'
   const fallbackActive = requestedBackend === 'auto'
     && rendererInfo.status === 'ready'
     && rendererInfo.actual === 'webgl2'
@@ -356,6 +470,7 @@ export default function WebGPULab() {
               <div className="mt-2 space-y-1 font-mono text-[8px] text-white/35">
                 <p>class: {rendererInfo.backendClass}</p>
                 <p>navigator.gpu: {webgpuApiAvailable ? 'available' : 'unavailable'}</p>
+                <p>adapter preflight: {adapterLabel}</p>
                 <p>
                   compatibility mode:{' '}
                   {rendererInfo.compatibilityMode === null
@@ -367,7 +482,8 @@ export default function WebGPULab() {
               </div>
               {fallbackActive ? (
                 <p className="mt-3 rounded-xl border border-sky-300/15 bg-sky-300/[0.06] px-3 py-2 text-[9px] leading-relaxed text-sky-100/60">
-                  WebGPU was requested, but Three.js selected its WebGL 2 backend on this browser/device.
+                  Auto mode selected WebGL 2 safely.{' '}
+                  {rendererInfo.fallbackReason ?? 'No usable WebGPU adapter was available.'}
                 </p>
               ) : null}
               {rendererInfo.error ? (
