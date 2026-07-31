@@ -30,6 +30,20 @@ The following runtime libraries are used by the active application and are avail
 
 Consult `package.json`, `bun.lock`, and each package's distributed license file for the exact version and license text.
 
+## KTX2 and Basis Universal
+
+The optional GPU-compressed texture path uses:
+
+- Khronos Group KTX Software 4.4.2 in the asset-generation workflow
+- the KTX 2.0 container format
+- Basis Universal ETC1S/BasisLZ and UASTC encoding modes
+- Three.js `KTX2Loader`
+- the Basis JavaScript and WebAssembly transcoder distributed with the installed Three.js package
+
+Khronos KTX Software and Basis Universal remain governed by their own permissive licenses and notices. The encoding tools run only during asset preparation. The browser receives the Three.js-compatible transcoder runtime and committed KTX2 derivatives.
+
+Khronos, KTX, Vulkan, OpenGL, WebGL, and related names or marks are used descriptively. No affiliation, sponsorship, certification, or endorsement is implied.
+
 ## Development and validation tooling
 
 Development and CI tooling includes:
@@ -39,6 +53,7 @@ Development and CI tooling includes:
 - Puppeteer
 - Bun and Bun type definitions
 - Tailwind PostCSS tooling
+- Khronos KTX command-line tools for the KTX2 experiment
 
 These tools are not bundled as application content unless their licenses or source notices require otherwise.
 
@@ -57,4 +72,4 @@ The repository's MIT license applies to project-authored code and project-genera
 
 ## No endorsement
 
-Names such as NASA, JPL, ISS, Hubble, Voyager, JWST, and mission names are used descriptively. No affiliation, sponsorship, or endorsement is implied.
+Names such as NASA, JPL, ISS, Hubble, Voyager, JWST, Khronos, KTX, and mission names are used descriptively. No affiliation, sponsorship, or endorsement is implied.
