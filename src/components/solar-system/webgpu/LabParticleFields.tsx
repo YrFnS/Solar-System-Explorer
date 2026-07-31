@@ -51,6 +51,12 @@ function seededRandom(initialSeed: number) {
   }
 }
 
+function shapeCircleFloat() {
+  // @types/three currently declares shapeCircle() as a bare Node even though
+  // the runtime helper returns a scalar coverage mask. Keep the bridge local.
+  return shapeCircle() as unknown as ReturnType<typeof float>
+}
+
 function createInstancedSprite(
   material: THREE.PointsNodeMaterial,
   count: number
@@ -118,7 +124,7 @@ function createStarField() {
 
   material.positionNode = positionNode
   material.colorNode = colorNode.mul(twinkle.mul(0.34).add(0.76))
-  material.opacityNode = shapeCircle()
+  material.opacityNode = shapeCircleFloat()
     .mul(twinkle.mul(0.55).add(0.32))
   material.sizeNode = sizeNode.mul(twinkle.mul(0.3).add(0.82))
 
@@ -203,7 +209,7 @@ function createSolarWindField() {
     color('#7dd3fc'),
     progress.mul(0.72).add(temperatureNode.mul(0.28))
   ).mul(remaining.mul(0.42).add(0.72))
-  material.opacityNode = shapeCircle()
+  material.opacityNode = shapeCircleFloat()
     .mul(remaining.pow(1.35))
     .mul(0.76)
   material.sizeNode = sizeNode.mul(remaining.mul(0.48).add(0.52))
