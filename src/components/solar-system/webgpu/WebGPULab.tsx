@@ -67,6 +67,7 @@ interface LabDiagnostics {
   textureFailedIds: string[]
   textureFormats: string[]
   textureLastError: string | null
+  postProcessingEnabled: boolean
   metrics: LabFrameMetrics | null
 }
 
@@ -92,6 +93,11 @@ function readRequestedBackend(): RequestedBackend {
   return new URLSearchParams(window.location.search).get('backend') === 'webgl'
     ? 'webgl'
     : 'auto'
+}
+
+function readPostProcessingEnabled() {
+  if (typeof window === 'undefined') return true
+  return new URLSearchParams(window.location.search).get('post') !== 'off'
 }
 
 function errorMessage(error: unknown) {
@@ -279,6 +285,9 @@ export default function WebGPULab() {
   const [requestedBackend, setRequestedBackend] = useState<RequestedBackend>(readRequestedBackend)
   const [rendererInfo, setRendererInfo] = useState<RendererInfo>(EMPTY_RENDERER_INFO)
   const [metrics, setMetrics] = useState<LabFrameMetrics | null>(null)
+  const [postProcessingEnabled, setPostProcessingEnabled] = useState(
+    readPostProcessingEnabled
+  )
   const generationRef = useRef(0)
   const webgpuApiAvailable = typeof navigator !== 'undefined' && 'gpu' in navigator
   const textureBackend = useLabTextureStore((state) => state.backend)
@@ -376,6 +385,16 @@ export default function WebGPULab() {
     window.history.replaceState(null, '', url)
   }, [requestedBackend, resetTextures])
 
+  const togglePostProcessing = useCallback((enabled: boolean) => {
+    setPostProcessingEnabled(enabled)
+    setMetrics(null)
+
+    const url = new URL(window.location.href)
+    if (enabled) url.searchParams.delete('post')
+    else url.searchParams.set('post', 'off')
+    window.history.replaceState(null, '', url)
+  }, [])
+
   const handleMetrics = useCallback((nextMetrics: LabFrameMetrics) => {
     setMetrics(nextMetrics)
   }, [])
@@ -467,7 +486,10 @@ export default function WebGPULab() {
             </div>
           )}
         >
-          <WebGPULabScene onMetrics={handleMetrics} />
+          <WebGPULabScene
+            onMetrics={handleMetrics}
+            postProcessingEnabled={postProcessingEnabled}
+          />
         </Canvas>
       </LabRendererBoundary>
 
@@ -489,7 +511,7 @@ export default function WebGPULab() {
               </Link>
             </div>
             <p className="mt-3 text-[10px] leading-relaxed text-white/42">
-              A KTX2-textured parity scene with backend-neutral planets, TSL atmospheres, and vertex-animated star and solar-wind fields. Production remains unchanged on WebGL 2.
+              A KTX2-textured parity scene with backend-neutral planets, TSL atmospheres, GPU particle fields, gravitational objects, and an optional TSL bloom pipeline. Production remains unchanged on WebGL 2.
             </p>
           </header>
 
@@ -609,6 +631,35 @@ export default function WebGPULab() {
               </p>
             </div>
 
+
+
+            <div className="rounded-2xl border border-fuchsia-200/10 bg-fuchsia-200/[0.025] p-3.5">
+              <label className="flex cursor-pointer items-center justify-between gap-4">
+                <span>
+                  <span className="block text-[8px] font-semibold uppercase tracking-[0.18em] text-fuchsia-100/45">
+                    Render pipeline
+                  </span>
+                  <span className="mt-1 block text-[10px] font-semibold text-white/76">
+                    Threshold bloom
+                  </span>
+                  <span className="mt-1 block text-[8px] leading-relaxed text-white/32">
+                    One scene pass plus low-strength TSL bloom. Disable it for a direct-render comparison without remounting the backend.
+                  </span>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={postProcessingEnabled}
+                  onChange={(event) => togglePostProcessing(event.target.checked)}
+                  className="h-4 w-4 shrink-0 accent-fuchsia-200"
+                  aria-label="Enable TSL bloom post-processing"
+                />
+              </label>
+              <div className="mt-2 flex items-center justify-between font-mono text-[8px] text-white/35">
+                <span>Post FX TSL</span>
+                <span>{postProcessingEnabled ? 'pipeline active' : 'direct render'}</span>
+              </div>
+            </div>
+
             <div>
               <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/30">
                 Post-load frame sample
@@ -642,12 +693,14 @@ export default function WebGPULab() {
 
             <div className="rounded-2xl border border-cyan-200/10 bg-cyan-200/[0.035] p-3.5">
               <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-cyan-100/45">
-                W3 parity scope
+                W5c parity scope
               </p>
               <ul className="mt-2 space-y-1 text-[9px] leading-relaxed text-white/42">
                 <li>• Ephemeris-driven Sun and eight planets</li>
                 <li>• Eleven active 1K KTX2 maps with procedural fallback</li>
                 <li>• TSL surfaces, clouds, rings, and atmospheres</li>
+                <li>• TSL Sun, nebula, black-hole, and wormhole presentation</li>
+                <li>• Toggleable RenderPipeline threshold bloom with direct-render comparison</li>
                 <li>• Instanced TSL star field and GPU-animated solar wind</li>
                 <li>• Identical geometry, assets, effects, and camera for both backends</li>
               </ul>

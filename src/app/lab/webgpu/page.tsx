@@ -1,7 +1,7 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import LabW5bStatus from '../../../components/solar-system/webgpu/LabW5bStatus'
+import LabW5cStatus from '../../../components/solar-system/webgpu/LabW5cStatus'
 
 const WebGPULab = dynamic(
   () => import('../../../components/solar-system/webgpu/WebGPULab'),
@@ -24,7 +24,7 @@ export default function WebGPULabPage() {
   return (
     <>
       <WebGPULab />
-      <LabW5bStatus />
+      <LabW5cStatus />
     </>
   )
 }

@@ -26,6 +26,7 @@ import {
 import LabTslSunEffects from './LabSunEffects'
 import LabTslNebulaHaze from './LabNebulaHaze'
 import LabTslGravitationalObjects from './LabGravitationalObjects'
+import LabTslPostProcessing from './LabPostProcessing'
 import { useLabTextureStore } from './lab-texture-store'
 import { useLabKtx2Texture } from './useLabKtx2Texture'
 
@@ -41,6 +42,7 @@ export interface LabFrameMetrics {
 
 interface WebGPULabSceneProps {
   onMetrics: (metrics: LabFrameMetrics) => void
+  postProcessingEnabled: boolean
 }
 
 const LAB_START_DATE_MS = Date.UTC(2026, 0, 1, 0, 0, 0)
@@ -391,7 +393,10 @@ function LabMetricsProbe({ onMetrics }: WebGPULabSceneProps) {
   return null
 }
 
-export default function WebGPULabScene({ onMetrics }: WebGPULabSceneProps) {
+export default function WebGPULabScene({
+  onMetrics,
+  postProcessingEnabled,
+}: WebGPULabSceneProps) {
   return (
     <>
       <color attach="background" args={['#02030a']} />
@@ -414,6 +419,7 @@ export default function WebGPULabScene({ onMetrics }: WebGPULabSceneProps) {
         zoomSpeed={0.85}
       />
       <LabMetricsProbe onMetrics={onMetrics} />
+      <LabTslPostProcessing enabled={postProcessingEnabled} />
     </>
   )
 }
