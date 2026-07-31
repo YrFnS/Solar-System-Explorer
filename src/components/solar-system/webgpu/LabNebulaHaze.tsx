@@ -23,19 +23,13 @@ export interface LabNebulaDiagnostics {
   postProcessing: false
 }
 
+interface NebulaWindow extends Window {
+  __SOLAR_WEBGPU_LAB_NEBULA__?: LabNebulaDiagnostics
+}
+
 declare global {
   interface Window {
     __SOLAR_WEBGPU_LAB_NEBULA__?: LabNebulaDiagnostics
-  }
-}
-
-if (typeof window !== 'undefined') {
-  window.__SOLAR_WEBGPU_LAB_NEBULA__ = {
-    visualSystems: [...LAB_NEBULA_SYSTEM_IDS],
-    shellCount: LAB_NEBULA_SHELL_COUNT,
-    animationMode: 'material-tsl',
-    cpuVertexUpdates: false,
-    postProcessing: false,
   }
 }
 
@@ -128,10 +122,28 @@ function createNebulaMaterial(shell: NebulaShellDefinition) {
 }
 
 export default function LabTslNebulaHaze() {
+  const diagnostics = useMemo<LabNebulaDiagnostics>(() => ({
+    visualSystems: [...LAB_NEBULA_SYSTEM_IDS],
+    shellCount: LAB_NEBULA_SHELL_COUNT,
+    animationMode: 'material-tsl',
+    cpuVertexUpdates: false,
+    postProcessing: false,
+  }), [])
   const shells = useMemo(() => SHELLS.map((definition) => ({
     definition,
     material: createNebulaMaterial(definition),
   })), [])
+
+  useEffect(() => {
+    const target = window as NebulaWindow
+    target.__SOLAR_WEBGPU_LAB_NEBULA__ = diagnostics
+
+    return () => {
+      if (target.__SOLAR_WEBGPU_LAB_NEBULA__ === diagnostics) {
+        delete target.__SOLAR_WEBGPU_LAB_NEBULA__
+      }
+    }
+  }, [diagnostics])
 
   useEffect(() => () => {
     shells.forEach(({ material }) => material.dispose())
