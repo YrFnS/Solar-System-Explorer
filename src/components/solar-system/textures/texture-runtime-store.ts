@@ -7,6 +7,7 @@ export type TextureBackend = 'webp' | 'ktx2' | 'mixed'
 export interface TextureRuntimeDiagnostics {
   enabled: boolean
   backend: TextureBackend
+  requestedIds: string[]
   loadedIds: string[]
   failedIds: string[]
   formats: string[]
@@ -15,6 +16,7 @@ export interface TextureRuntimeDiagnostics {
 
 interface TextureRuntimeState extends TextureRuntimeDiagnostics {
   setEnabled: (enabled: boolean) => void
+  recordRequested: (id: string) => void
   recordSuccess: (id: string, format: string) => void
   recordFailure: (id: string, message: string) => void
 }
@@ -35,14 +37,25 @@ function readEnabled() {
   return window.localStorage.getItem(ENABLED_KEY) !== 'false'
 }
 
-function deriveBackend(enabled: boolean, loadedIds: string[], failedIds: string[]): TextureBackend {
-  if (!enabled || loadedIds.length === 0) return 'webp'
-  return failedIds.length > 0 ? 'mixed' : 'ktx2'
+function includeId(ids: string[], id: string) {
+  return ids.includes(id) ? ids : [...ids, id]
+}
+
+function deriveBackend(
+  enabled: boolean,
+  requestedIds: string[],
+  loadedIds: string[],
+  failedIds: string[]
+): TextureBackend {
+  if (!enabled || requestedIds.length === 0 || loadedIds.length === 0) return 'webp'
+  if (failedIds.length > 0 || loadedIds.length < requestedIds.length) return 'mixed'
+  return 'ktx2'
 }
 
 export const useTextureRuntimeStore = create<TextureRuntimeState>((set) => ({
   enabled: readEnabled(),
   backend: 'webp',
+  requestedIds: [],
   loadedIds: [],
   failedIds: [],
   formats: [],
@@ -54,36 +67,66 @@ export const useTextureRuntimeStore = create<TextureRuntimeState>((set) => ({
     }
     set((state) => ({
       enabled,
-      backend: deriveBackend(enabled, state.loadedIds, state.failedIds),
+      backend: deriveBackend(
+        enabled,
+        state.requestedIds,
+        state.loadedIds,
+        state.failedIds
+      ),
     }))
   },
 
+  recordRequested: (id) => set((state) => {
+    const requestedIds = includeId(state.requestedIds, id)
+    if (requestedIds === state.requestedIds) return state
+
+    return {
+      requestedIds,
+      backend: deriveBackend(
+        state.enabled,
+        requestedIds,
+        state.loadedIds,
+        state.failedIds
+      ),
+    }
+  }),
+
   recordSuccess: (id, format) => set((state) => {
-    const loadedIds = state.loadedIds.includes(id)
-      ? state.loadedIds
-      : [...state.loadedIds, id]
+    const requestedIds = includeId(state.requestedIds, id)
+    const loadedIds = includeId(state.loadedIds, id)
     const failedIds = state.failedIds.filter((failedId) => failedId !== id)
     const formats = state.formats.includes(format)
       ? state.formats
       : [...state.formats, format]
 
     return {
+      requestedIds,
       loadedIds,
       failedIds,
       formats,
       lastError: failedIds.length === 0 ? null : state.lastError,
-      backend: deriveBackend(state.enabled, loadedIds, failedIds),
+      backend: deriveBackend(
+        state.enabled,
+        requestedIds,
+        loadedIds,
+        failedIds
+      ),
     }
   }),
 
   recordFailure: (id, message) => set((state) => {
-    const failedIds = state.failedIds.includes(id)
-      ? state.failedIds
-      : [...state.failedIds, id]
+    const requestedIds = includeId(state.requestedIds, id)
+    const failedIds = includeId(state.failedIds, id)
     return {
+      requestedIds,
       failedIds,
       lastError: message,
-      backend: deriveBackend(state.enabled, state.loadedIds, failedIds),
+      backend: deriveBackend(
+        state.enabled,
+        requestedIds,
+        state.loadedIds,
+        failedIds
+      ),
     }
   }),
 }))
@@ -93,6 +136,7 @@ if (typeof window !== 'undefined') {
     window.__SOLAR_TEXTURE_DIAGNOSTICS__ = {
       enabled: state.enabled,
       backend: state.backend,
+      requestedIds: state.requestedIds,
       loadedIds: state.loadedIds,
       failedIds: state.failedIds,
       formats: state.formats,
