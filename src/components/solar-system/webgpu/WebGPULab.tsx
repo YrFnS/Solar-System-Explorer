@@ -87,6 +87,21 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+function getWebGpuApi() {
+  return (navigator as Navigator & {
+    gpu?: {
+      requestAdapter: (options?: {
+        powerPreference?: 'high-performance' | 'low-power'
+      }) => Promise<{
+        features: Iterable<string>
+        requestDevice: (descriptor?: {
+          requiredFeatures?: string[]
+        }) => Promise<unknown>
+      } | null>
+    }
+  }).gpu
+}
+
 async function selectBackend(requestedBackend: RequestedBackend): Promise<BackendSelection> {
   if (requestedBackend === 'webgl') {
     return {
@@ -96,7 +111,16 @@ async function selectBackend(requestedBackend: RequestedBackend): Promise<Backen
     }
   }
 
-  if (typeof navigator === 'undefined' || !('gpu' in navigator)) {
+  if (typeof navigator === 'undefined') {
+    return {
+      forceWebGL: true,
+      adapterStatus: 'unavailable',
+      fallbackReason: 'navigator.gpu is unavailable in this browser.',
+    }
+  }
+
+  const gpu = getWebGpuApi()
+  if (!gpu) {
     return {
       forceWebGL: true,
       adapterStatus: 'unavailable',
@@ -105,9 +129,9 @@ async function selectBackend(requestedBackend: RequestedBackend): Promise<Backen
   }
 
   try {
-    const adapter = await navigator.gpu.requestAdapter({
+    const adapter = await gpu.requestAdapter({
       powerPreference: 'high-performance',
-    }) ?? await navigator.gpu.requestAdapter()
+    }) ?? await gpu.requestAdapter()
 
     if (!adapter) {
       return {
