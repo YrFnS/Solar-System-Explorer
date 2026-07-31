@@ -13,11 +13,12 @@
     "typecheck": "tsc --noEmit",
     "ui:smoke": "node scripts/smoke-ui.mjs",
     "webgpu:smoke": "node scripts/smoke-webgpu-lab.mjs",
+    "webgpu:benchmark:smoke": "node scripts/smoke-webgpu-benchmark.mjs",
     "predev": "node scripts/optimize-textures.mjs && node scripts/sync-basis-transcoder.mjs",
     "dev": "next dev -p 3000",
     "build:next": "next build",
     "build": "bun run typecheck && node scripts/optimize-textures.mjs && node scripts/sync-basis-transcoder.mjs && node scripts/verify-ktx2.mjs && bun run build:next",
-    "quality:local": "bun run audit && bun run lint && bun run ephemeris:validate && bun run build && bun run performance:budget && bun run ui:smoke && bun run webgpu:smoke",
+    "quality:local": "bun run audit && bun run lint && bun run ephemeris:validate && bun run build && bun run performance:budget && bun run ui:smoke && bun run webgpu:smoke && bun run webgpu:benchmark:smoke",
     "start": "NODE_ENV=production bun .next/standalone/server.js",
     "lint": "eslint ."
   },
