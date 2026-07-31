@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTexture } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
@@ -72,6 +72,9 @@ function loadKtx2Texture(
         Math.max(1, anisotropy),
         renderer.capabilities.getMaxAnisotropy()
       )
+      texture.colorSpace = entry.colorSpace === 'srgb'
+        ? THREE.SRGBColorSpace
+        : THREE.NoColorSpace
       texture.userData.solarTexture = {
         backend: 'ktx2',
         codec: entry.codec,
@@ -91,11 +94,37 @@ function loadKtx2Texture(
   return promise
 }
 
+function cloneFallbackTexture(
+  source: THREE.Texture,
+  renderer: THREE.WebGLRenderer,
+  sourceUrl: string,
+  anisotropy: number
+) {
+  // `useTexture` owns the shared decoded source. Materials receive an owned
+  // clone so it can be disposed as soon as the KTX2 replacement is active.
+  // The shared source is never attached to a material and therefore is not
+  // uploaded as a second GPU texture.
+  const clone = source.clone()
+  clone.anisotropy = Math.min(
+    Math.max(1, anisotropy),
+    renderer.capabilities.getMaxAnisotropy()
+  )
+  clone.userData = {
+    ...source.userData,
+    solarTexture: {
+      backend: 'webp',
+      source: sourceUrl,
+    },
+  }
+  clone.needsUpdate = true
+  return clone
+}
+
 /**
- * Renders immediately with the existing quality-tiered WebP texture, then
- * upgrades to a GPU-compressed KTX2 texture when the transcoder succeeds.
- * Any missing file, unsupported browser, or WASM failure remains a safe WebP
- * fallback instead of preventing the scene from rendering.
+ * Renders immediately with an owned clone of the quality-tiered WebP source,
+ * then replaces and disposes that GPU fallback after KTX2 transcoding succeeds.
+ * Disabling KTX2 creates a fresh fallback clone, while any missing file,
+ * unsupported browser, WASM, network, or transcode failure remains on WebP.
  */
 export function useAdaptiveTexture(
   sourceUrl: string,
@@ -104,20 +133,42 @@ export function useAdaptiveTexture(
   const renderer = useThree((state) => state.gl) as THREE.WebGLRenderer
   const quality = usePerformanceStore((state) => getEffectiveQuality(state))
   const enabled = useTextureRuntimeStore((state) => state.enabled)
+  const recordRequested = useTextureRuntimeStore((state) => state.recordRequested)
   const recordSuccess = useTextureRuntimeStore((state) => state.recordSuccess)
   const recordFailure = useTextureRuntimeStore((state) => state.recordFailure)
   const entry = getKtx2TextureEntry(sourceUrl)
   const fallbackUrl = getTextureFallbackUrl(sourceUrl)
-  const fallbackTexture = useTexture(fallbackUrl)
+  const fallbackSourceTexture = useTexture(fallbackUrl)
   const ktx2Url = entry ? getKtx2TextureUrl(entry, quality) : null
   const textureKey = entry && ktx2Url ? `${entry.id}:${quality}` : ''
   const anisotropy = options.anisotropy ?? 4
   const [loaded, setLoaded] = useState<LoadedTextureState | null>(null)
+  const ktx2Active = Boolean(
+    enabled
+    && entry
+    && loaded?.key === textureKey
+  )
+
+  const fallbackTexture = useMemo(() => {
+    if (ktx2Active) return null
+    return cloneFallbackTexture(
+      fallbackSourceTexture,
+      renderer,
+      fallbackUrl,
+      anisotropy
+    )
+  }, [anisotropy, fallbackSourceTexture, fallbackUrl, ktx2Active, renderer])
+
+  useEffect(() => () => {
+    fallbackTexture?.dispose()
+  }, [fallbackTexture])
 
   useEffect(() => {
     if (!enabled || !entry || !ktx2Url) return
 
+    recordRequested(entry.id)
     let cancelled = false
+
     loadKtx2Texture(renderer, ktx2Url, entry, anisotropy)
       .then((texture) => {
         if (cancelled) return
@@ -140,8 +191,18 @@ export function useAdaptiveTexture(
     return () => {
       cancelled = true
     }
-  }, [anisotropy, enabled, entry, ktx2Url, recordFailure, recordSuccess, renderer, textureKey])
+  }, [
+    anisotropy,
+    enabled,
+    entry,
+    ktx2Url,
+    recordFailure,
+    recordRequested,
+    recordSuccess,
+    renderer,
+    textureKey,
+  ])
 
-  if (!enabled || !entry || loaded?.key !== textureKey) return fallbackTexture
-  return loaded.texture
+  if (ktx2Active && loaded) return loaded.texture
+  return fallbackTexture ?? fallbackSourceTexture
 }
