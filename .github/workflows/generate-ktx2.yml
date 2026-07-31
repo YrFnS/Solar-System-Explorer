@@ -1,0 +1,80 @@
+name: Generate KTX2 Pilot Assets
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/ktx2-textures
+    paths:
+      - '.github/workflows/generate-ktx2.yml'
+      - 'scripts/encode-ktx2.mjs'
+      - 'scripts/verify-ktx2.mjs'
+      - 'src/components/solar-system/textures/ktx2-manifest.json'
+      - 'public/textures/**/*.jpg'
+      - 'public/textures/**/*.jpeg'
+      - 'public/textures/**/*.png'
+      - 'public/textures/**/*.svg'
+
+concurrency:
+  group: generate-ktx2-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    name: Encode and commit KTX2 textures
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out experiment branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/ktx2-textures
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JavaScript dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install pinned Khronos KTX Software
+        env:
+          KTX_VERSION: '4.4.2'
+        run: |
+          set -euo pipefail
+          release_json="$(mktemp)"
+          curl -fsSL \
+            "https://api.github.com/repos/KhronosGroup/KTX-Software/releases/tags/v${KTX_VERSION}" \
+            -o "$release_json"
+          ktx_url="$(jq -r '.assets[] | select(.name | test("Linux-x86_64\\.deb$")) | .browser_download_url' "$release_json" | head -n 1)"
+          test -n "$ktx_url" && test "$ktx_url" != "null"
+          curl -fL "$ktx_url" -o /tmp/ktx-software.deb
+          sudo apt-get update
+          sudo apt-get install -y /tmp/ktx-software.deb
+          ktx --version
+
+      - name: Encode pilot texture tiers
+        run: bun run textures:ktx2:encode
+
+      - name: Verify KTX2 payloads
+        run: bun run textures:ktx2:verify
+
+      - name: Commit generated binaries when changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- public/textures/ktx2; then
+            echo "KTX2 assets are already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/textures/ktx2
+          git commit -m "generate KTX2 pilot assets"
+          git push origin HEAD:agent/ktx2-textures
