@@ -305,7 +305,6 @@ export default function LabBenchmarkPanel({
       !ready
       || !metrics
       || initializationMs === null
-      || actualBackend === 'unknown'
     ) {
       setMessage('The current baseline sample is not ready yet.')
       return
