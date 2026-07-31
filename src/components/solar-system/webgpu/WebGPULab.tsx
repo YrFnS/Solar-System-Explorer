@@ -14,6 +14,7 @@ import { Canvas, extend } from '@react-three/fiber'
 import type { WebGLRenderer as LegacyWebGLRenderer } from 'three'
 import * as THREE from 'three/webgpu'
 import WebGPULabScene, { type LabFrameMetrics } from './WebGPULabScene'
+import { useLabTextureStore } from './lab-texture-store'
 
 extend(THREE as any)
 
@@ -56,6 +57,12 @@ interface LabDiagnostics {
   fallbackReason: string | null
   compatibilityMode: boolean | null
   initializationMs: number | null
+  textureBackend: 'procedural' | 'ktx2' | 'mixed'
+  textureRequestedIds: string[]
+  textureLoadedIds: string[]
+  textureFailedIds: string[]
+  textureFormats: string[]
+  textureLastError: string | null
   metrics: LabFrameMetrics | null
 }
 
@@ -270,6 +277,13 @@ export default function WebGPULab() {
   const [metrics, setMetrics] = useState<LabFrameMetrics | null>(null)
   const generationRef = useRef(0)
   const webgpuApiAvailable = typeof navigator !== 'undefined' && 'gpu' in navigator
+  const textureBackend = useLabTextureStore((state) => state.backend)
+  const textureRequestedIds = useLabTextureStore((state) => state.requestedIds)
+  const textureLoadedIds = useLabTextureStore((state) => state.loadedIds)
+  const textureFailedIds = useLabTextureStore((state) => state.failedIds)
+  const textureFormats = useLabTextureStore((state) => state.formats)
+  const textureLastError = useLabTextureStore((state) => state.lastError)
+  const resetTextures = useLabTextureStore((state) => state.reset)
 
   const rendererFactory = useCallback(async (canvasProps: unknown) => {
     const generation = generationRef.current
@@ -344,6 +358,7 @@ export default function WebGPULab() {
   const switchBackend = useCallback((next: RequestedBackend) => {
     if (next === requestedBackend) return
     generationRef.current += 1
+    resetTextures()
     setMetrics(null)
     setRendererInfo({
       ...EMPTY_RENDERER_INFO,
@@ -355,11 +370,13 @@ export default function WebGPULab() {
     if (next === 'webgl') url.searchParams.set('backend', 'webgl')
     else url.searchParams.delete('backend')
     window.history.replaceState(null, '', url)
-  }, [requestedBackend])
+  }, [requestedBackend, resetTextures])
 
   const handleMetrics = useCallback((nextMetrics: LabFrameMetrics) => {
     setMetrics(nextMetrics)
   }, [])
+
+  useEffect(() => () => resetTextures(), [resetTextures])
 
   useEffect(() => {
     window.__SOLAR_WEBGPU_LAB__ = {
@@ -371,9 +388,26 @@ export default function WebGPULab() {
       fallbackReason: rendererInfo.fallbackReason,
       compatibilityMode: rendererInfo.compatibilityMode,
       initializationMs: rendererInfo.initializationMs,
+      textureBackend,
+      textureRequestedIds,
+      textureLoadedIds,
+      textureFailedIds,
+      textureFormats,
+      textureLastError,
       metrics,
     }
-  }, [metrics, rendererInfo, requestedBackend, webgpuApiAvailable])
+  }, [
+    metrics,
+    rendererInfo,
+    requestedBackend,
+    textureBackend,
+    textureFailedIds,
+    textureFormats,
+    textureLastError,
+    textureLoadedIds,
+    textureRequestedIds,
+    webgpuApiAvailable,
+  ])
 
   const actualLabel = rendererInfo.actual === 'webgpu'
     ? 'WebGPU'
@@ -397,6 +431,16 @@ export default function WebGPULab() {
   const fallbackActive = requestedBackend === 'auto'
     && rendererInfo.status === 'ready'
     && rendererInfo.actual === 'webgl2'
+  const textureTone = textureBackend === 'ktx2'
+    ? 'text-emerald-200'
+    : textureBackend === 'mixed'
+      ? 'text-amber-200'
+      : 'text-white/45'
+  const textureLabel = textureBackend === 'ktx2'
+    ? 'KTX2 ready'
+    : textureBackend === 'mixed'
+      ? 'Loading / mixed'
+      : 'Procedural fallback'
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#02030a] text-white">
@@ -441,7 +485,7 @@ export default function WebGPULab() {
               </Link>
             </div>
             <p className="mt-3 text-[10px] leading-relaxed text-white/42">
-              A minimal Sun-and-planets parity scene using backend-neutral node materials. The production explorer remains unchanged on WebGL 2.
+              A KTX2-textured Sun-and-planets parity scene using backend-neutral node materials and TSL atmospheres. Production remains unchanged on WebGL 2.
             </p>
           </header>
 
@@ -517,9 +561,35 @@ export default function WebGPULab() {
               ) : null}
             </div>
 
+            <div className="rounded-2xl border border-white/8 bg-black/25 p-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-white/30">
+                  Surface textures
+                </span>
+                <span className={`font-mono text-[10px] font-semibold ${textureTone}`}>
+                  {textureLabel}
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-3 gap-2 font-mono text-[8px] text-white/35">
+                <p>tier: 1K</p>
+                <p>loaded: {textureLoadedIds.length}/{textureRequestedIds.length || 11}</p>
+                <p>failed: {textureFailedIds.length}</p>
+              </div>
+              <p className="mt-2 text-[8px] leading-relaxed text-white/32">
+                {textureFormats.length > 0
+                  ? `formats: ${textureFormats.join(', ')}`
+                  : 'Procedural TSL surfaces remain active while KTX2 transcodes.'}
+              </p>
+              {textureLastError ? (
+                <p className="mt-2 rounded-xl border border-amber-300/15 bg-amber-300/[0.06] px-3 py-2 text-[8px] text-amber-100/60">
+                  {textureLastError}
+                </p>
+              ) : null}
+            </div>
+
             <div>
               <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/30">
-                Live frame sample
+                Post-load frame sample
               </p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <Metric label="FPS" value={metrics ? metrics.fps.toFixed(1) : '—'} />
@@ -550,13 +620,13 @@ export default function WebGPULab() {
 
             <div className="rounded-2xl border border-cyan-200/10 bg-cyan-200/[0.035] p-3.5">
               <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-cyan-100/45">
-                W1 parity scope
+                W2 parity scope
               </p>
               <ul className="mt-2 space-y-1 text-[9px] leading-relaxed text-white/42">
                 <li>• One ephemeris-driven Sun and eight planets</li>
-                <li>• TSL colour graphs on node materials</li>
-                <li>• Identical geometry and camera for both backends</li>
-                <li>• No production GLSL shaders or post-processing</li>
+                <li>• Eleven active 1K KTX2 maps with procedural fallback</li>
+                <li>• TSL surface, cloud, ring, and atmosphere graphs</li>
+                <li>• Identical geometry, assets, and camera for both backends</li>
               </ul>
             </div>
           </section>
