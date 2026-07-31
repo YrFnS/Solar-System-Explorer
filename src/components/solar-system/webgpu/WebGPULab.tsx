@@ -13,11 +13,16 @@ import Link from 'next/link'
 import { Canvas, extend } from '@react-three/fiber'
 import type { WebGLRenderer as LegacyWebGLRenderer } from 'three'
 import * as THREE from 'three/webgpu'
+import LabBenchmarkPanel from './LabBenchmarkPanel'
 import WebGPULabScene, { type LabFrameMetrics } from './WebGPULabScene'
 import {
   LAB_SOLAR_WIND_COUNT,
   LAB_STAR_COUNT,
 } from './LabParticleFields'
+import {
+  LAB_BENCHMARK_PREPARE_EVENT,
+  LAB_BENCHMARK_RESET_METRICS_EVENT,
+} from './lab-benchmark-protocol'
 import { useLabTextureStore } from './lab-texture-store'
 
 extend(THREE as any)
@@ -288,6 +293,7 @@ export default function WebGPULab() {
   const [postProcessingEnabled, setPostProcessingEnabled] = useState(
     readPostProcessingEnabled
   )
+  const [benchmarkBaselinePrepared, setBenchmarkBaselinePrepared] = useState(false)
   const generationRef = useRef(0)
   const webgpuApiAvailable = typeof navigator !== 'undefined' && 'gpu' in navigator
   const textureBackend = useLabTextureStore((state) => state.backend)
@@ -373,6 +379,7 @@ export default function WebGPULab() {
     generationRef.current += 1
     resetTextures()
     setMetrics(null)
+    setBenchmarkBaselinePrepared(false)
     setRendererInfo({
       ...EMPTY_RENDERER_INFO,
       status: 'initializing',
@@ -388,11 +395,24 @@ export default function WebGPULab() {
   const togglePostProcessing = useCallback((enabled: boolean) => {
     setPostProcessingEnabled(enabled)
     setMetrics(null)
+    window.dispatchEvent(new Event(LAB_BENCHMARK_RESET_METRICS_EVENT))
 
     const url = new URL(window.location.href)
     if (enabled) url.searchParams.delete('post')
     else url.searchParams.set('post', 'off')
     window.history.replaceState(null, '', url)
+  }, [])
+
+  const prepareBenchmarkBaseline = useCallback(() => {
+    setBenchmarkBaselinePrepared(true)
+    setMetrics(null)
+    window.dispatchEvent(new Event(LAB_BENCHMARK_PREPARE_EVENT))
+  }, [])
+
+  const invalidateBenchmarkBaseline = useCallback(() => {
+    setBenchmarkBaselinePrepared(false)
+    setMetrics(null)
+    window.dispatchEvent(new Event(LAB_BENCHMARK_RESET_METRICS_EVENT))
   }, [])
 
   const handleMetrics = useCallback((nextMetrics: LabFrameMetrics) => {
@@ -490,6 +510,7 @@ export default function WebGPULab() {
         >
           <WebGPULabScene
             onMetrics={handleMetrics}
+            onCameraInteraction={invalidateBenchmarkBaseline}
             postProcessingEnabled={postProcessingEnabled}
           />
         </Canvas>
@@ -513,7 +534,7 @@ export default function WebGPULab() {
               </Link>
             </div>
             <p className="mt-3 text-[10px] leading-relaxed text-white/42">
-              A KTX2-textured parity scene with backend-neutral planets, TSL atmospheres, GPU particle fields, gravitational objects, and an optional TSL bloom pipeline. Production remains unchanged on WebGL 2.
+              A KTX2-textured parity scene with backend-neutral planets, TSL effects, optional bloom, and a fixed-camera evidence recorder. Production remains unchanged on WebGL 2.
             </p>
           </header>
 
@@ -633,8 +654,6 @@ export default function WebGPULab() {
               </p>
             </div>
 
-
-
             <div className="rounded-2xl border border-fuchsia-200/10 bg-fuchsia-200/[0.025] p-3.5">
               <label className="flex cursor-pointer items-center justify-between gap-4">
                 <span>
@@ -693,18 +712,32 @@ export default function WebGPULab() {
               </div>
             </div>
 
+            <LabBenchmarkPanel
+              requestedBackend={requestedBackend}
+              actualBackend={rendererInfo.actual}
+              backendClass={rendererInfo.backendClass}
+              adapterStatus={rendererInfo.adapterStatus}
+              fallbackReason={rendererInfo.fallbackReason}
+              postProcessingEnabled={postProcessingEnabled}
+              initializationMs={rendererInfo.initializationMs}
+              textureBackend={textureBackend}
+              textureFormats={textureFormats}
+              metrics={metrics}
+              baselinePrepared={benchmarkBaselinePrepared}
+              onPrepareBaseline={prepareBenchmarkBaseline}
+            />
+
             <div className="rounded-2xl border border-cyan-200/10 bg-cyan-200/[0.035] p-3.5">
               <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-cyan-100/45">
-                W5c parity scope
+                W6 evidence scope
               </p>
               <ul className="mt-2 space-y-1 text-[9px] leading-relaxed text-white/42">
-                <li>• Ephemeris-driven Sun and eight planets</li>
-                <li>• Eleven active 1K KTX2 maps with procedural fallback</li>
-                <li>• TSL surfaces, clouds, rings, and atmospheres</li>
-                <li>• TSL Sun, nebula, black-hole, and wormhole presentation</li>
-                <li>• Toggleable RenderPipeline threshold bloom with direct-render comparison</li>
-                <li>• Instanced TSL star field and GPU-animated solar wind</li>
-                <li>• Identical geometry, assets, effects, and camera for both backends</li>
+                <li>• Complete W1–W5c TSL and KTX2 parity workload</li>
+                <li>• Auto WebGPU and forced WebGL 2 on identical scene graphs</li>
+                <li>• Bloom and direct-render comparison without backend remounts</li>
+                <li>• Fixed camera and fresh 90-frame capture windows</li>
+                <li>• Session-persistent four-configuration coverage</li>
+                <li>• Exportable device, renderer, texture, scene, and frame evidence</li>
               </ul>
             </div>
           </section>
