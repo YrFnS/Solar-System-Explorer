@@ -1,0 +1,218 @@
+name: Generate KTX2 Catalogue Assets
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/ktx2-textures
+    paths:
+      - '.github/workflows/generate-ktx2.yml'
+      - 'scripts/encode-ktx2.mjs'
+      - 'scripts/verify-ktx2.mjs'
+      - 'src/components/solar-system/textures/ktx2-manifest.json'
+      - 'public/textures/**/*.jpg'
+      - 'public/textures/**/*.jpeg'
+      - 'public/textures/**/*.png'
+      - 'public/textures/**/*.svg'
+
+concurrency:
+  group: generate-ktx2-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    name: Encode and commit KTX2 catalogue
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out experiment branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/ktx2-textures
+          fetch-depth: 0
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JavaScript dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Apply full-catalogue source migration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def migrate(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text()
+              if new and new in text:
+                  return
+              if old not in text:
+                  if not new:
+                      return
+                  raise SystemExit(
+                      f"Could not migrate {path}; neither old nor new source block was found: {old[:100]!r}"
+                  )
+              target.write_text(text.replace(old, new, 1))
+
+          migrate(
+              'src/components/solar-system/Sun.tsx',
+              "import { useTexture } from '@react-three/drei'\n",
+              '',
+          )
+          migrate(
+              'src/components/solar-system/Sun.tsx',
+              "import { useSolarSystemStore } from './store'\n",
+              "import { useSolarSystemStore } from './store'\nimport { useAdaptiveTexture } from './textures/useAdaptiveTexture'\n",
+          )
+          migrate(
+              'src/components/solar-system/Sun.tsx',
+              "  const sunTexture = useTexture(sunData.textureUrl!)",
+              "  const sunTexture = useAdaptiveTexture(sunData.textureUrl!, { anisotropy: 4 })",
+          )
+
+          migrate(
+              'src/components/solar-system/PerformanceDock.tsx',
+              "import { useTextureRuntimeStore } from './textures/texture-runtime-store'\n",
+              "import { KTX2_MANIFEST } from './textures/texture-manifest'\nimport { useTextureRuntimeStore } from './textures/texture-runtime-store'\n",
+          )
+          migrate(
+              'src/components/solar-system/PerformanceDock.tsx',
+              "  const loadedTextureIds = useTextureRuntimeStore((state) => state.loadedIds)\n",
+              "  const requestedTextureIds = useTextureRuntimeStore((state) => state.requestedIds)\n  const loadedTextureIds = useTextureRuntimeStore((state) => state.loadedIds)\n",
+          )
+          migrate(
+              'src/components/solar-system/PerformanceDock.tsx',
+              "  const textureStatus = textureBackend === 'ktx2'\n    ? `${loadedTextureIds.length} compressed textures active`\n    : textureBackend === 'mixed'\n      ? `${loadedTextureIds.length} compressed · ${failedTextureIds.length} fallback`\n      : 'Quality-tiered WebP fallback active'\n",
+              "  const requestedTextureCount = requestedTextureIds.length || KTX2_MANIFEST.textures.length\n  const textureStatus = textureBackend === 'ktx2'\n    ? `${loadedTextureIds.length}/${requestedTextureCount} compressed textures active`\n    : textureBackend === 'mixed'\n      ? `${loadedTextureIds.length}/${requestedTextureCount} compressed · ${failedTextureIds.length} fallback`\n      : 'Quality-tiered WebP fallback active'\n",
+          )
+
+          migrate(
+              'scripts/smoke-ui.mjs',
+              "import { cp, mkdir, rm } from 'node:fs/promises'",
+              "import { cp, mkdir, readFile, rm } from 'node:fs/promises'",
+          )
+          migrate(
+              'scripts/smoke-ui.mjs',
+              "const standaloneNextRoot = path.join(standaloneRoot, '.next')\n\nconst RENDER_BUDGETS = {",
+              "const standaloneNextRoot = path.join(standaloneRoot, '.next')\nconst ktx2Manifest = JSON.parse(\n  await readFile(\n    path.resolve('src/components/solar-system/textures/ktx2-manifest.json'),\n    'utf8'\n  )\n)\nconst KTX2_CATALOGUE_IDS = ktx2Manifest.textures.map((entry) => entry.id)\n\nconst RENDER_BUDGETS = {",
+          )
+          migrate(
+              'scripts/smoke-ui.mjs',
+              "  textures: 250,",
+              "  // KTX2 replacement must not leave one WebP GPU texture resident per map.\n  textures: 22,",
+          )
+          migrate(
+              'scripts/smoke-ui.mjs',
+              "const KTX2_PILOT_IDS = ['earth', 'moon', 'earth-clouds', 'saturn-ring']",
+              "const KTX2_CATALOGUE_LABEL = `${KTX2_CATALOGUE_IDS.length}-texture catalogue`",
+          )
+          migrate(
+              'scripts/smoke-ui.mjs',
+              'async function assertKtx2Pilot(page) {',
+              'async function assertKtx2Catalogue(page) {',
+          )
+          migrate(
+              'scripts/smoke-ui.mjs',
+              "      && diagnostics.failedIds.length === 0\n      && expectedIds.every((id) => diagnostics.loadedIds.includes(id))",
+              "      && diagnostics.failedIds.length === 0\n      && expectedIds.every((id) => diagnostics.requestedIds.includes(id))\n      && expectedIds.every((id) => diagnostics.loadedIds.includes(id))",
+          )
+          migrate(
+              'scripts/smoke-ui.mjs',
+              '  }, { timeout: 45_000 }, KTX2_PILOT_IDS)',
+              '  }, { timeout: 75_000 }, KTX2_CATALOGUE_IDS)',
+          )
+          migrate(
+              'scripts/smoke-ui.mjs',
+              "  console.log(`[ui-smoke] KTX2 diagnostics ${JSON.stringify(diagnostics)}`)",
+              "  console.log(`[ui-smoke] KTX2 ${KTX2_CATALOGUE_LABEL} diagnostics ${JSON.stringify(diagnostics)}`)",
+          )
+          migrate(
+              'scripts/smoke-ui.mjs',
+              '  await assertKtx2Pilot(page)',
+              '  await assertKtx2Catalogue(page)',
+          )
+
+          migrate(
+              'scripts/check-performance-budget.mjs',
+              "const KTX2_TEXTURE_ROOT = path.join(ROOT, 'public', 'textures', 'ktx2')\n",
+              "const KTX2_TEXTURE_ROOT = path.join(ROOT, 'public', 'textures', 'ktx2')\nconst KTX2_MANIFEST_PATH = path.join(\n  ROOT,\n  'src',\n  'components',\n  'solar-system',\n  'textures',\n  'ktx2-manifest.json'\n)\n",
+          )
+          migrate(
+              'scripts/check-performance-budget.mjs',
+              '  ktx2PilotTier: {',
+              '  ktx2CatalogueTier: {',
+          )
+          migrate(
+              'scripts/check-performance-budget.mjs',
+              "async function main() {\n  const failures = []",
+              "async function main() {\n  const failures = []\n  const ktx2Manifest = JSON.parse(await readFile(KTX2_MANIFEST_PATH, 'utf8'))\n  const expectedKtx2Textures = ktx2Manifest.textures.length",
+          )
+          migrate(
+              'scripts/check-performance-budget.mjs',
+              '    const budget = BUDGETS.ktx2PilotTier[width]',
+              '    const budget = BUDGETS.ktx2CatalogueTier[width]',
+          )
+          migrate(
+              'scripts/check-performance-budget.mjs',
+              '    console.log(`[budget] ${width}px KTX2 pilot: ${formatBytes(tierSize)} across ${tierFiles.length} files`)',
+              '    console.log(`[budget] ${width}px KTX2 catalogue: ${formatBytes(tierSize)} across ${tierFiles.length} files`)',
+          )
+          migrate(
+              'scripts/check-performance-budget.mjs',
+              "    if (tierFiles.length !== 4) {\n      failures.push(`${width}px KTX2 pilot contains ${tierFiles.length} files; expected 4`)\n    }",
+              "    if (tierFiles.length !== expectedKtx2Textures) {\n      failures.push(\n        `${width}px KTX2 catalogue contains ${tierFiles.length} files; expected ${expectedKtx2Textures}`\n      )\n    }",
+          )
+          migrate(
+              'scripts/check-performance-budget.mjs',
+              '`${width}px KTX2 pilot ${formatBytes(tierSize)} exceeds ${formatBytes(budget)}`',
+              '`${width}px KTX2 catalogue ${formatBytes(tierSize)} exceeds ${formatBytes(budget)}`',
+          )
+
+          verify = Path('scripts/verify-ktx2.mjs')
+          verify_text = verify.read_text().replace('pilot tier', 'catalogue tier')
+          verify.write_text(verify_text)
+          PY
+
+      - name: Install pinned Khronos KTX Software
+        env:
+          KTX_VERSION: '4.4.2'
+        run: |
+          set -euo pipefail
+          release_json="$(mktemp)"
+          curl -fsSL \
+            "https://api.github.com/repos/KhronosGroup/KTX-Software/releases/tags/v${KTX_VERSION}" \
+            -o "$release_json"
+          ktx_url="$(jq -r '.assets[] | select(.name | test("Linux-x86_64\\.deb$")) | .browser_download_url' "$release_json" | head -n 1)"
+          test -n "$ktx_url" && test "$ktx_url" != "null"
+          curl -fL "$ktx_url" -o /tmp/ktx-software.deb
+          sudo apt-get update
+          sudo apt-get install -y /tmp/ktx-software.deb
+          ktx --version
+
+      - name: Encode texture catalogue tiers
+        run: bun run textures:ktx2:encode
+
+      - name: Verify KTX2 payloads
+        run: bun run textures:ktx2:verify
+
+      - name: Commit catalogue migration when changed
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "KTX2 catalogue is already current."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "complete active KTX2 texture catalogue"
+          git pull --rebase origin agent/ktx2-textures
+          git push origin HEAD:agent/ktx2-textures

@@ -1,95 +1,146 @@
 # Solar System Explorer 🪐
 
-An interactive 3D Solar System experience built with **Next.js**, **React Three Fiber (Three.js)**, and **Tailwind CSS**.
+An interactive 3D Solar System experience built with **Next.js**, **React Three Fiber / Three.js**, and **Tailwind CSS**.
 
-## Features 🚀
+## Highlights
 
-- **Ephemeris-Driven Solar System:** One authoritative date drives planets, moons, dwarf planets, comets, orbit paths, camera tracking, measurements, and Sandbox collisions.
-- **Three Experience Modes:** Explore a cinematic learning view, inspect orbital telemetry in Scientific mode, or experiment with spawned objects in Sandbox mode.
-- **Mission Control:** Choose an exact date, step day-by-day, jump to time-warp presets, switch modes, and launch guided learning tracks from a responsive control surface.
-- **Scientific Layers:** Inspect velocity vectors, inclined orbital planes, perihelion/aphelion markers, Julian dates, orbital elements, and selected-body telemetry.
-- **Guided Learning:** Follow focused tours through the inner worlds, giant planets, and small-body frontier with an observation prompt at every stop.
-- **Full 3D System:** Explore the Sun, planets, moons, dwarf planets, asteroid belts, Centaurs, scattered-disc objects, interstellar visitors, and human artifacts.
-- **Interactive Camera:** Zoom, pan, orbit, focus, and continuously follow celestial bodies using the same position engine that renders them.
-- **Information and Comparison Tools:** Review physical facts, compare worlds, measure separation, use the responsive navigator, save bookmarks, and capture screenshots.
-- **Command Palette:** Search the complete body and mission catalogue with keyboard navigation using `Ctrl/⌘ K` or `/`.
-- **Adaptive Rendering:** Auto, Eco, Balanced, and Ultra profiles scale pixel density, geometry, textures, and particle populations for the current device.
-- **Production Recovery:** WebGL startup and live context-loss failures provide a clear recovery path instead of leaving a black or frozen canvas.
-- **Reduced Motion:** A persistent accessibility preference slows decorative fields and disables automatic camera motion.
+- **Ephemeris-driven simulation:** one authoritative date drives planets, moons, dwarf planets, comets, orbit paths, camera tracking, measurements, and Sandbox collisions.
+- **Three experiences:** Explore, Scientific, and Sandbox modes separate cinematic learning, orbital inspection, and fictional experiments.
+- **Mission control:** exact date selection, day stepping, time-warp presets, guided learning tracks, camera controls, and keyboard navigation.
+- **Scientific layers:** inclined orbital planes, velocity vectors, perihelion/aphelion markers, Julian date, and live orbital telemetry.
+- **Modular interface:** catalogue search, responsive inspector, comparison, bookmarks, display settings, history, tours, and screenshot tools.
+- **Adaptive rendering:** Auto, Eco, Balanced, and Ultra profiles scale DPR, geometry, textures, and particle populations for the current device.
+- **Full KTX2/Basis catalogue:** every active authored surface map can use GPU-compressed KTX2 while WebP remains an immediate and permanent fallback.
+- **Production resilience:** strict builds, artifact budgets, WebGL context recovery, mobile/browser smoke tests, and accessibility checks.
 
-## Simulation Architecture 🛰️
+## Simulation architecture
 
 ### One clock and one position API
 
-`SimulationController` advances one mutable simulation clock before orbital components render. The scene mirrors that clock to Zustand at a lower frequency for the HTML interface, avoiding a React state update on every frame.
+`SimulationController` advances a mutable simulation clock before orbital components render. Zustand receives lower-frequency date updates for the HTML interface, avoiding a React rerender on every frame.
 
-The ephemeris API is shared by:
+The shared ephemeris API powers:
 
-- planet, moon, dwarf-planet, comet, Centaur, scattered-disc, and interstellar-object rendering
+- major planets, moons, dwarf planets, comets, Centaurs, scattered-disc objects, and interstellar visitors
 - camera focus and follow mode
 - orbit curves, velocity vectors, and telemetry
 - the distance ruler
 - spawned Sandbox objects and collision detection
 - mission-control date and time-warp controls
 
-### Scientific model and accuracy
+### Scientific accuracy boundary
 
-The eight major planets use the low-precision **JPL Solar System Dynamics J2000 Keplerian element set**, including the long-range correction terms for the outer planets:
+The eight major planets use the low-precision **NASA/JPL Solar System Dynamics J2000 Keplerian element set**, including long-range correction terms for the outer planets:
 
-- [JPL Approximate Positions of the Planets](https://ssd.jpl.nasa.gov/planets/approx_pos.html)
-- Approximate validity: **3000 BC through 3000 AD**
-- Intended for education and visualization, not spacecraft navigation or occultation prediction
+- [JPL approximate positions of the planets](https://ssd.jpl.nasa.gov/planets/approx_pos.html)
+- Approximate range used here: **3000 BC through 3000 AD**
+- Intended for education and visualization—not spacecraft navigation or occultation prediction
 
-Dwarf planets, comets, Centaurs, and scattered-disc objects use deterministic two-body educational orbits based on the local catalogue. Interstellar objects use illustrative hyperbolic paths anchored near their documented perihelion epoch. Visual distances remain compressed so the complete system is explorable on one screen; the scientific inspector reports physical units separately.
+Dwarf planets, comets, Centaurs, scattered-disc objects, and interstellar visitors use deterministic educational approximations. Visual distances are compressed so the complete system remains explorable; the inspector reports physical units separately.
 
-For high-precision or observer-specific results, use [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/).
+Use [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/) for high-precision or observer-specific ephemerides.
 
-## Performance Architecture ⚡
+## Performance architecture
 
-The explorer preserves visual richness without making every device render the same workload:
+The scene avoids assigning the same workload to every device:
 
-- Large asteroid, Kuiper, Centaur, Trojan, scattered-disc, and Oort populations use **static GPU instancing**. Their transforms are generated once, then whole fields rotate instead of rewriting tens of thousands of matrices every frame.
-- Planet, moon, atmosphere, helper, and Sun sphere geometry uses **screen-space LOD**. Distant bodies switch to lighter geometry while close-up views retain the original detail.
-- The core Sun, planets, stars, and camera load first. Backgrounds, phenomena, small bodies, outer fields, artifacts, and Sandbox systems are separate lazy chunks staged during browser idle time.
-- Optional search, comparison, bookmarks, settings, history, and screenshot surfaces also load only when opened; catalogue search is prefetched during idle time.
-- Solar-wind motion runs in a shader, avoiding continuous JavaScript buffer mutation.
-- Meteor pools update active trails only and stop when phenomena are disabled or the simulation is paused.
-- When the simulation is paused and the camera is idle, React Three Fiber switches to **demand rendering**, allowing the GPU to sleep until interaction resumes.
-- Local textures are generated into 512 px, 1K, and 2K WebP tiers. Eco, Balanced, and Ultra choose the matching tier automatically.
-- Common legacy third-party texture URLs are routed to self-hosted assets, including a local Earth cloud layer.
-- Quality, motion, and experience-mode preferences persist locally.
+- Large asteroid, Kuiper, Centaur, Trojan, scattered-disc, and Oort populations use **static GPU instancing** rather than per-frame matrix rewrites.
+- Planet, moon, atmosphere, helper, and Sun spheres use **screen-space LOD**.
+- Core Sun, planets, stars, and camera load first; backgrounds, phenomena, small bodies, outer fields, artifacts, and Sandbox systems are separate lazy chunks.
+- Search, comparison, bookmarks, settings, history, and screenshot surfaces also load only when opened.
+- Solar-wind motion runs in a shader.
+- Meteor pools update active trails only and stop when disabled or paused.
+- Paused, camera-idle scenes use demand rendering so the GPU can sleep.
+- Quality, texture backend, reduced motion, and experience mode persist locally.
 
-Use the render-engine pill near the top-right to select a quality profile or leave it on **Auto**. Mission control is available near the lower-left edge.
+## KTX2/Basis texture catalogue
 
-## Interface Architecture 🧭
+### Coverage
 
-The active interface is composed by `UIOverlayV4`; the previous multi-thousand-line interface and pre-ephemeris scene were removed after an import-graph audit.
+The active manifest contains 13 unique authored maps at 512, 1024, and 2048 pixel tiers—39 committed KTX2 files:
 
-The interface is separated into focused modules:
+```text
+Sun
+Mercury · Venus · Earth · Mars
+Jupiter · Saturn · Uranus · Neptune
+Moon · Pluto
+Earth clouds
+Shared Saturn/Uranus ring map
+```
 
-- **Explorer header:** current mode, selected destination, ephemeris time, search, history, bookmarks, display controls, and screenshot entry.
-- **Body catalogue and command palette:** one deduplicated index for planets, moons, missions, small bodies, exotic Sandbox objects, and spawned objects.
-- **Live body inspector:** physical facts, current ephemeris distance and speed, Scientific-mode orbital telemetry, focus, bookmarks, measurement, and comparison actions.
-- **Comparison workspace:** side-by-side facts, shared metrics, relative diameter, body swapping, and camera focus.
-- **Display settings:** camera presets, orbit/label aids, belts, outer-system layers, motion, and phenomena controls.
-- **Responsive navigator:** fast Sun/planet/Pluto navigation on desktop and touch devices.
-- **Bookmark library and history timeline:** browser-local destinations and mission-history navigation.
-- **Renderer screenshot bridge:** performs an explicit WebGL render and captures a compressed WebP immediately.
-- **First-run guide and tour surface:** lightweight onboarding without blocking the 3D scene bundle.
+Colour maps use BasisLZ/ETC1S. Earth clouds and the radial ring strip use UASTC with Zstandard supercompression.
 
-The interface remains semantic HTML above the canvas. Three.js renders the Solar System, while forms, search, scrolling, keyboard focus, and accessibility remain native browser UI.
+### Safe runtime replacement
 
-## Screenshot and Renderer Resilience 📸
+Each material receives its quality-tiered WebP immediately. A shared Three.js `KTX2Loader` then:
+
+1. detects the active WebGL renderer's supported transcode targets
+2. loads the matching KTX2 tier
+3. replaces the material only after successful transcoding
+4. releases the WebP GPU allocation after every consumer of that shared source has switched
+
+The decoded WebP image remains cached, allowing immediate restoration if KTX2 is disabled. Missing assets, unsupported formats, WebAssembly failures, network errors, and transcode failures all remain on WebP.
+
+Shared sources are coordinated correctly: the Moon and near-Earth rocks share one map, and Saturn and Uranus share one ring map.
+
+### Measured results
+
+| Tier | KTX2 files | KTX2 total | WebP fallback total |
+| --- | ---: | ---: | ---: |
+| 512 | 13 | 349.2 kB | 234.3 kB across 17 files |
+| 1024 | 13 | 1.03 MB | 1.07 MB across 17 files |
+| 2048 | 13 | 3.32 MB | 4.74 MB across 17 files |
+
+KTX2 is not always the smallest download—particularly at 512 px. Its main value is keeping supported maps compressed on the GPU and reducing upload/memory pressure.
+
+A real WebGL 2 browser test loaded all 13 IDs with zero failures using `RGB_ETC2` and `RGBA_ASTC_4x4`. Renderer texture residency remained **15**, equal to the pre-KTX2 baseline. An earlier double-residency implementation reached 28 and is now guarded against in CI.
+
+### Comparison controls
+
+The render-engine panel reports `KTX2`, `MIXED`, or `WEBP`, along with loaded/requested coverage. It also provides a **GPU-compressed textures** switch.
+
+Direct comparison routes:
+
+```text
+?textures=ktx2
+?textures=webp
+```
+
+Runtime diagnostics:
+
+```js
+window.__SOLAR_TEXTURE_DIAGNOSTICS__
+```
+
+See [the KTX2/Basis guide](docs/KTX2_TEXTURES.md) for generation, validation, fallback, and residency details.
+
+## Interface architecture
+
+`UIOverlayV4` composes focused modules instead of one monolithic overlay:
+
+- explorer header
+- command palette and body catalogue
+- responsive body inspector
+- comparison workspace
+- bookmark library
+- camera/display/layer controls
+- touch-friendly celestial navigator
+- tour and first-run surfaces
+- space-history timeline
+- renderer-side screenshot bridge and gallery
+
+The interface remains semantic HTML above the WebGL canvas. Three.js renders the Solar System; forms, search, scrolling, keyboard focus, and accessibility remain native browser UI.
+
+## Renderer and screenshot resilience
 
 - Screenshot mode explicitly renders the Three.js scene before capture.
-- Captures use compressed WebP blobs rather than base64 PNG strings.
-- The session gallery retains the newest 12 captures and revokes discarded object URLs.
-- Captures remain local to the browser and are never uploaded by the application.
+- Captures use compressed WebP blobs and remain local to the session.
+- The gallery keeps the newest 12 captures and revokes discarded object URLs.
 - A renderer boundary handles WebGL startup failures.
 - `webglcontextlost` and `webglcontextrestored` are monitored after startup.
-- Rebuilding in Eco mode remounts the canvas while preserving simulation and interface state.
+- Eco-mode reconstruction remounts the canvas while preserving simulation and interface state.
 
-## Keyboard Controls ⌨️
+## Keyboard controls
 
 | Key | Action |
 | --- | --- |
@@ -97,54 +148,58 @@ The interface remains semantic HTML above the canvas. Three.js renders the Solar
 | `B` | Open bookmarks |
 | `H` | Open space-history timeline |
 | `,` | Open display settings |
-| `1` / `2` / `3` | Explore / Scientific / Sandbox mode |
-| `Space` | Pause or resume while remembering the previous warp speed |
-| `+` / `-` | Move through time-warp presets |
-| `[` / `]` | Step backward or forward one simulated day |
-| Arrow keys | Previous or next body; move through an active tour |
-| `F` | Follow the selected body |
+| `1` / `2` / `3` | Explore / Scientific / Sandbox |
+| `Space` | Pause or resume |
+| `+` / `-` | Change time-warp preset |
+| `[` / `]` | Step one simulated day |
+| Arrow keys | Navigate bodies or active tour |
+| `F` | Follow selected body |
 | `M` | Switch orbit/fly camera mode |
 | `R` | Toggle camera auto-rotation |
-| `T` | Start or stop the classic guided tour |
+| `T` | Start or stop classic tour |
 | `S` | Enter or leave screenshot mode |
-| `Escape` | Close a surface, stop a tour, or reset the camera |
+| `Escape` | Close, stop, or reset current interaction |
 
-## Tech Stack 🛠️
+## Tech stack
 
-- **Framework:** [Next.js 16](https://nextjs.org/) (App Router)
-- **Language:** [TypeScript](https://www.typescriptlang.org/)
-- **3D Rendering:** [React Three Fiber](https://r3f.docs.pmnd.rs/) and [Three.js](https://threejs.org/)
-- **Stable GPU Backend:** WebGL 2
-- **Styling:** [Tailwind CSS](https://tailwindcss.com/)
-- **Components:** shadcn/ui / Radix UI
-- **State Management:** Zustand
-- **Icons:** Lucide React
+- Next.js 16, React 19, and TypeScript
+- React Three Fiber, Drei, and Three.js
+- Stable renderer: **WebGL 2**
+- Compressed textures: **KTX2/Basis Universal with WebP fallback**
+- Tailwind CSS and Radix/shadcn-style components
+- Zustand state management
+- Sharp asset generation
+- Puppeteer browser validation
 
-## Getting Started 🏁
+## Getting started
 
 ### Prerequisites
 
-Install [Bun](https://bun.sh/) (recommended) or Node.js/npm.
-
-### Installation
+Install [Bun](https://bun.sh/) or a compatible Node.js/npm environment.
 
 ```bash
 git clone https://github.com/YrFnS/Solar-System-Explorer.git
 cd Solar-System-Explorer
 bun install
-```
-
-### Development
-
-```bash
 bun run dev
 ```
 
-The pre-development hook regenerates optimized texture tiers when a source texture is new or changed. Open `http://localhost:3000`.
+Open `http://localhost:3000`.
 
-## Validation and Production Build ✅
+The development hook regenerates WebP tiers and copies the matching Basis JavaScript/WASM transcoder from the installed Three.js package.
 
-The production build is strict: Next.js no longer ignores TypeScript failures, React Strict Mode is enabled, and `noImplicitAny` is enforced.
+### Regenerating KTX2 assets
+
+Native Khronos KTX Software is needed only when the source catalogue changes:
+
+```bash
+bun run textures:ktx2:encode
+bun run textures:ktx2:verify
+```
+
+Normal builds verify committed KTX2 payloads and do not require the native encoder.
+
+## Validation and production build
 
 Run individual checks:
 
@@ -153,6 +208,7 @@ bun run audit
 bun run lint
 bun run typecheck
 bun run ephemeris:validate
+bun run textures:ktx2:verify
 bun run build
 bun run performance:budget
 bun run ui:smoke
@@ -164,40 +220,42 @@ Or run the complete local release gate:
 bun run quality:local
 ```
 
-The checks cover:
+The release gate covers:
 
 - import reachability and dependency reporting
 - ESLint and React 19 purity rules
-- strict TypeScript compilation
-- orbital positions and paths across multiple epochs and all three experience modes
-- automatic texture generation and optimized Next.js compilation
-- JavaScript chunk and texture-tier budgets
-- live Three.js draw-call, triangle, program, texture, geometry, and scene-object budgets
-- desktop WebGL 2, search, navigation, modes, screenshot capture, and renderer recovery
-- mobile touch navigation, inspector layout, mission-control scrolling, orientation changes, and accessible names
+- strict TypeScript
+- orbital positions across epochs and all three modes
+- WebP generation, Basis runtime packaging, and all 39 KTX2 payloads
+- JavaScript, WebP, KTX2, and live Three.js budgets
+- all 13 active KTX2 IDs plus forced WebP fallback
+- desktop/mobile layout and orientation
+- search, modes, screenshots, renderer recovery, and accessibility
 
-Run the standalone output:
+Run the standalone production output:
 
 ```bash
 bun run start
 ```
 
-## Release and Asset Documentation 📚
+## Documentation
 
 - [Changelog](CHANGELOG.md)
+- [KTX2/Basis texture catalogue](docs/KTX2_TEXTURES.md)
 - [Asset sources and redistribution notes](ASSET_SOURCES.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
-The project MIT license applies to project-authored code. It does not automatically relicense third-party source textures; verify every source asset before commercial redistribution.
+The MIT license covers project-authored code. It does not automatically relicense third-party source textures; WebP and KTX2 derivatives retain their source-asset constraints.
 
-## Architecture Notes 📝
+## Architecture notes
 
-- The application is client-side and requires no persistent database. Bookmarks, quality, motion, onboarding, and experience preferences are stored in the browser.
-- Simulation state, experience state, and rendering-quality state are separate Zustand stores, while the high-frequency orbital clock remains outside React state.
-- Broken Git LFS pointer files previously stored under model paths were removed; lightweight project-authored procedural renderers remain active.
-- The stable production renderer remains WebGL 2. A future WebGPU/TSL migration should remain isolated and benchmarked rather than replacing the renderer without evidence.
-- Fictional or speculative features such as traversable wormholes are confined to Sandbox-oriented presentation and are not part of the scientific ephemeris model.
+- The app is client-side and requires no persistent database.
+- Simulation, experience, performance, and texture-runtime state are separate; the high-frequency orbital clock remains outside React state.
+- Broken historical Git LFS model pointers were removed; project-authored procedural renderers remain active.
+- Committed `.ktx2` files are ordinary Git binaries so static deployments receive real payloads.
+- WebGL 2 remains the stable production backend. WebGPU/TSL work belongs in a separate benchmarked laboratory route.
+- Fictional systems such as traversable wormholes are confined to Sandbox-oriented presentation.
 
-## License 📄
+## License
 
 MIT

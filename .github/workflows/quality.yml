@@ -44,8 +44,14 @@ jobs:
       - name: Validate orbital engine
         run: bun run ephemeris:validate
 
-      - name: Generate optimized textures
+      - name: Generate optimized WebP fallbacks
         run: bun run textures:optimize
+
+      - name: Prepare Basis transcoder runtime
+        run: bun run textures:basis:sync
+
+      - name: Verify committed KTX2 textures
+        run: bun run textures:ktx2:verify
 
       - name: Build optimized application
         run: bun run build:next
@@ -53,5 +59,5 @@ jobs:
       - name: Enforce production artifact budgets
         run: bun run performance:budget
 
-      - name: Smoke test desktop, mobile, accessibility, and WebGL
+      - name: Smoke test desktop, mobile, accessibility, WebGL, and KTX2
         run: bun run ui:smoke

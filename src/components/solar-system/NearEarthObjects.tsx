@@ -1,11 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { useSolarSystemStore } from './store'
 import { getQualityProfile, usePerformanceStore } from './performance-store'
+import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 
 function seededRandom(seed: number) {
   return () => {
@@ -16,14 +16,7 @@ function seededRandom(seed: number) {
 
 export default function NearEarthObjects() {
   const meshRef = useRef<THREE.InstancedMesh>(null)
-  const sourceTexture = useTexture('/textures/moon.jpg')
-  const texture = useMemo(() => {
-    const ownedTexture = sourceTexture.clone()
-    ownedTexture.colorSpace = THREE.SRGBColorSpace
-    ownedTexture.anisotropy = 2
-    ownedTexture.needsUpdate = true
-    return ownedTexture
-  }, [sourceTexture])
+  const texture = useAdaptiveTexture('/textures/moon.jpg', { anisotropy: 2 })
   const showPhenomena = useSolarSystemStore((state) => state.showPhenomena)
   const isPaused = useSolarSystemStore((state) => state.isPaused)
   const timeSpeed = useSolarSystemStore((state) => state.timeSpeed)
@@ -31,8 +24,6 @@ export default function NearEarthObjects() {
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const profile = getQualityProfile({ preset, autoQuality })
   const count = Math.max(120, Math.round(1000 * profile.instanceDensity))
-
-  useEffect(() => () => texture.dispose(), [texture])
 
   useEffect(() => {
     if (!meshRef.current) return

@@ -2,7 +2,6 @@
 
 import { useMemo, useRef } from 'react'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import type {
   CentaurData,
@@ -21,6 +20,7 @@ import PlanetLabel from './PlanetLabel'
 import Rings from './Rings'
 import { getSimulationDateMs, J2000_UNIX_MS, DAY_MS } from './simulation-clock'
 import { useSolarSystemStore } from './store'
+import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 import VelocityVector from './VelocityVector'
 
 export type EphemerisSmallBodyData =
@@ -35,7 +35,7 @@ interface EphemerisSmallBodyProps {
 }
 
 function TexturedSurface({ body }: { body: DwarfPlanetData }) {
-  const texture = useTexture(body.textureUrl!)
+  const texture = useAdaptiveTexture(body.textureUrl!, { anisotropy: 4 })
   return (
     <mesh>
       <sphereGeometry args={[body.radius, 32, 24]} />

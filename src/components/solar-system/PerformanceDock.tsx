@@ -8,6 +8,8 @@ import {
   type QualityPreset,
   usePerformanceStore,
 } from './performance-store'
+import { KTX2_MANIFEST } from './textures/texture-manifest'
+import { useTextureRuntimeStore } from './textures/texture-runtime-store'
 
 const OPTIONS: Array<{ id: QualityPreset; label: string; note: string }> = [
   { id: 'auto', label: 'Auto', note: 'Adapts to this device and live frame rate.' },
@@ -30,6 +32,13 @@ export default function PerformanceDock() {
   const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
   const setPreset = usePerformanceStore((state) => state.setPreset)
   const setReducedMotion = usePerformanceStore((state) => state.setReducedMotion)
+  const textureEnabled = useTextureRuntimeStore((state) => state.enabled)
+  const textureBackend = useTextureRuntimeStore((state) => state.backend)
+  const requestedTextureIds = useTextureRuntimeStore((state) => state.requestedIds)
+  const loadedTextureIds = useTextureRuntimeStore((state) => state.loadedIds)
+  const failedTextureIds = useTextureRuntimeStore((state) => state.failedIds)
+  const textureFormats = useTextureRuntimeStore((state) => state.formats)
+  const setTextureEnabled = useTextureRuntimeStore((state) => state.setEnabled)
 
   const effectiveQuality = getEffectiveQuality({ preset, autoQuality })
   const profile = QUALITY_PROFILES[effectiveQuality]
@@ -42,6 +51,21 @@ export default function PerformanceDock() {
         ? 'bg-amber-400'
         : 'bg-rose-400'
   const liveLabel = idle ? 'IDLE' : `${fps} FPS`
+  const textureTier = effectiveQuality === 'eco'
+    ? '512'
+    : effectiveQuality === 'balanced'
+      ? '1K'
+      : '2K'
+  const textureBackendLabel = textureEnabled
+    ? textureBackend.toUpperCase()
+    : 'WEBP'
+  const requestedTextureCount = requestedTextureIds.length || KTX2_MANIFEST.textures.length
+  const textureStatus = textureBackend === 'ktx2'
+    ? `${loadedTextureIds.length}/${requestedTextureCount} compressed textures active`
+    : textureBackend === 'mixed'
+      ? `${loadedTextureIds.length}/${requestedTextureCount} compressed · ${failedTextureIds.length} fallback`
+      : 'Quality-tiered WebP fallback active'
+  const textureFormat = textureFormats[0]?.replace(/^RGBA?_/, '').replace(/_/g, ' ')
 
   useEffect(() => {
     if (!open) return
@@ -57,7 +81,10 @@ export default function PerformanceDock() {
   if (screenshotMode) return null
 
   return (
-    <div className="absolute right-3 top-14 sm:right-5 sm:top-16 z-40 pointer-events-auto">
+    <div
+      className="absolute right-3 top-14 z-40 pointer-events-auto sm:right-5 sm:top-16"
+      data-texture-backend={textureBackendLabel.toLowerCase()}
+    >
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -131,7 +158,23 @@ export default function PerformanceDock() {
             })}
           </div>
 
-          <div className="border-t border-white/10 px-4 py-3">
+          <div className="space-y-3 border-t border-white/10 px-4 py-3">
+            <label className="flex cursor-pointer items-center justify-between gap-4">
+              <span>
+                <span className="block text-[11px] font-medium text-white/80">GPU-compressed textures</span>
+                <span className="mt-0.5 block text-[9px] text-white/35">
+                  {textureStatus}{textureFormat ? ` · ${textureFormat}` : ''}
+                </span>
+              </span>
+              <input
+                type="checkbox"
+                checked={textureEnabled}
+                onChange={(event) => setTextureEnabled(event.target.checked)}
+                className="h-4 w-4 accent-amber-300"
+                aria-label="Use KTX2 GPU-compressed textures"
+              />
+            </label>
+
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <span>
                 <span className="block text-[11px] font-medium text-white/80">Reduced motion</span>
@@ -146,20 +189,26 @@ export default function PerformanceDock() {
             </label>
           </div>
 
-          <div className="grid grid-cols-3 gap-px border-t border-white/10 bg-white/10">
-            <div className="bg-[#07090f] px-3 py-2 text-center">
+          <div className="grid grid-cols-4 gap-px border-t border-white/10 bg-white/10">
+            <div className="bg-[#07090f] px-2 py-2 text-center">
               <span className="block text-[8px] uppercase tracking-wider text-white/30">Detail</span>
               <span className="mt-0.5 block font-mono text-[10px] text-white/65">
                 {Math.round(profile.instanceDensity * 100)}%
               </span>
             </div>
-            <div className="bg-[#07090f] px-3 py-2 text-center">
+            <div className="bg-[#07090f] px-2 py-2 text-center">
               <span className="block text-[8px] uppercase tracking-wider text-white/30">Texture</span>
               <span className="mt-0.5 block font-mono text-[10px] text-white/65">
-                {effectiveQuality === 'eco' ? '512' : effectiveQuality === 'balanced' ? '1K' : '2K'}
+                {textureTier}
               </span>
             </div>
-            <div className="bg-[#07090f] px-3 py-2 text-center">
+            <div className="bg-[#07090f] px-2 py-2 text-center">
+              <span className="block text-[8px] uppercase tracking-wider text-white/30">Codec</span>
+              <span className="mt-0.5 block font-mono text-[10px] text-white/65">
+                {textureBackendLabel}
+              </span>
+            </div>
+            <div className="bg-[#07090f] px-2 py-2 text-center">
               <span className="block text-[8px] uppercase tracking-wider text-white/30">Live</span>
               <span className="mt-0.5 block font-mono text-[10px] text-white/65">{liveLabel}</span>
             </div>

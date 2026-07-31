@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef } from 'react'
-import { Billboard, useTexture } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { PlanetData } from './data'
@@ -15,6 +15,8 @@ import PlanetLabel from './PlanetLabel'
 import Rings from './Rings'
 import { getSimulationDateMs } from './simulation-clock'
 import { useSolarSystemStore } from './store'
+import AdaptiveTexturedRings from './textures/AdaptiveTexturedRings'
+import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 import VelocityVector from './VelocityVector'
 
 interface EphemerisPlanetProps {
@@ -22,7 +24,7 @@ interface EphemerisPlanetProps {
 }
 
 function TexturedSurface({ data }: { data: PlanetData }) {
-  const texture = useTexture(data.textureUrl!)
+  const texture = useAdaptiveTexture(data.textureUrl!, { anisotropy: 4 })
 
   return (
     <mesh>
@@ -46,7 +48,7 @@ function ColorSurface({ data }: { data: PlanetData }) {
 }
 
 function CloudLayer({ data }: { data: PlanetData }) {
-  const texture = useTexture(data.cloudMapUrl!)
+  const texture = useAdaptiveTexture(data.cloudMapUrl!, { anisotropy: 2 })
   const ref = useRef<THREE.Mesh>(null)
 
   useFrame(() => {
@@ -236,16 +238,23 @@ export default function EphemerisPlanet({ data }: EphemerisPlanetProps) {
           {data.hasAtmosphere && data.atmosphereColor && <Atmosphere data={data} />}
         </group>
 
-        {data.hasRings && (
+        {data.hasRings && data.ringTextureUrl ? (
+          <AdaptiveTexturedRings
+            innerRadius={data.ringInnerRadius ?? data.radius * 1.25}
+            outerRadius={data.ringOuterRadius ?? data.radius * 2}
+            opacity={data.ringOpacity ?? 0.55}
+            planetRadius={data.radius}
+            textureUrl={data.ringTextureUrl}
+          />
+        ) : data.hasRings ? (
           <Rings
             innerRadius={data.ringInnerRadius ?? data.radius * 1.25}
             outerRadius={data.ringOuterRadius ?? data.radius * 2}
             color={data.ringColor ?? '#d4c090'}
             opacity={data.ringOpacity ?? 0.55}
             planetRadius={data.radius}
-            textureUrl={data.ringTextureUrl}
           />
-        )}
+        ) : null}
       </group>
 
       <PlanetGlow color={data.color} radius={data.radius} />

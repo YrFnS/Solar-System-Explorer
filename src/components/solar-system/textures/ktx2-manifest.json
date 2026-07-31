@@ -1,0 +1,162 @@
+{
+  "version": 2,
+  "tiers": [512, 1024, 2048],
+  "textures": [
+    {
+      "id": "sun",
+      "input": "/textures/sun.jpg",
+      "sources": ["/textures/sun.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 184,
+      "clevel": 4
+    },
+    {
+      "id": "mercury",
+      "input": "/textures/mercury.jpg",
+      "sources": ["/textures/mercury.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 180,
+      "clevel": 4
+    },
+    {
+      "id": "venus",
+      "input": "/textures/venus.jpg",
+      "sources": ["/textures/venus.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 176,
+      "clevel": 4
+    },
+    {
+      "id": "earth",
+      "input": "/textures/earth.jpg",
+      "sources": [
+        "/textures/earth.jpg",
+        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_specular_2048.jpg"
+      ],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 180,
+      "clevel": 4
+    },
+    {
+      "id": "moon",
+      "input": "/textures/moon.jpg",
+      "sources": [
+        "/textures/moon.jpg",
+        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg",
+        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moonmap1k.jpg",
+        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moonbump1k.jpg"
+      ],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 180,
+      "clevel": 4
+    },
+    {
+      "id": "mars",
+      "input": "/textures/mars.jpg",
+      "sources": ["/textures/mars.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 180,
+      "clevel": 4
+    },
+    {
+      "id": "jupiter",
+      "input": "/textures/jupiter.jpg",
+      "sources": ["/textures/jupiter.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 180,
+      "clevel": 4
+    },
+    {
+      "id": "saturn",
+      "input": "/textures/saturn.jpg",
+      "sources": ["/textures/saturn.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 176,
+      "clevel": 4
+    },
+    {
+      "id": "uranus",
+      "input": "/textures/uranus.jpg",
+      "sources": ["/textures/uranus.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 168,
+      "clevel": 4
+    },
+    {
+      "id": "neptune",
+      "input": "/textures/neptune.jpg",
+      "sources": ["/textures/neptune.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 176,
+      "clevel": 4
+    },
+    {
+      "id": "pluto",
+      "input": "/textures/pluto.jpg",
+      "sources": ["/textures/pluto.jpg"],
+      "role": "albedo",
+      "colorSpace": "srgb",
+      "alpha": false,
+      "codec": "basis-lz",
+      "qlevel": 180,
+      "clevel": 4
+    },
+    {
+      "id": "earth-clouds",
+      "input": "/textures/earth-clouds.svg",
+      "sources": [
+        "/textures/earth-clouds.svg",
+        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png"
+      ],
+      "role": "alpha",
+      "colorSpace": "srgb",
+      "alpha": true,
+      "codec": "uastc-ldr-4x4",
+      "uastcQuality": 2,
+      "uastcRdoLambda": 0.65,
+      "zstd": 18
+    },
+    {
+      "id": "saturn-ring",
+      "input": "/textures/saturn_ring.png",
+      "sources": ["/textures/saturn_ring.png"],
+      "role": "alpha",
+      "colorSpace": "srgb",
+      "alpha": true,
+      "codec": "uastc-ldr-4x4",
+      "uastcQuality": 2,
+      "uastcRdoLambda": 0.55,
+      "zstd": 18
+    }
+  ]
+}
