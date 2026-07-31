@@ -14,6 +14,10 @@ import { Canvas, extend } from '@react-three/fiber'
 import type { WebGLRenderer as LegacyWebGLRenderer } from 'three'
 import * as THREE from 'three/webgpu'
 import WebGPULabScene, { type LabFrameMetrics } from './WebGPULabScene'
+import {
+  LAB_SOLAR_WIND_COUNT,
+  LAB_STAR_COUNT,
+} from './LabParticleFields'
 import { useLabTextureStore } from './lab-texture-store'
 
 extend(THREE as any)
@@ -485,7 +489,7 @@ export default function WebGPULab() {
               </Link>
             </div>
             <p className="mt-3 text-[10px] leading-relaxed text-white/42">
-              A KTX2-textured Sun-and-planets parity scene using backend-neutral node materials and TSL atmospheres. Production remains unchanged on WebGL 2.
+              A KTX2-textured parity scene with backend-neutral planets, TSL atmospheres, and vertex-animated star and solar-wind fields. Production remains unchanged on WebGL 2.
             </p>
           </header>
 
@@ -587,6 +591,24 @@ export default function WebGPULab() {
               ) : null}
             </div>
 
+            <div className="rounded-2xl border border-white/8 bg-black/25 p-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[8px] font-semibold uppercase tracking-[0.18em] text-white/30">
+                  GPU particle fields
+                </span>
+                <span className="font-mono text-[10px] font-semibold text-violet-200">
+                  Vertex TSL
+                </span>
+              </div>
+              <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[8px] text-white/35">
+                <p>stars: {LAB_STAR_COUNT.toLocaleString()}</p>
+                <p>solar wind: {LAB_SOLAR_WIND_COUNT}</p>
+              </div>
+              <p className="mt-2 text-[8px] leading-relaxed text-white/32">
+                Position, twinkle, spiral drift, size, colour, and fade are derived in node graphs. JavaScript does not rewrite particle positions per frame.
+              </p>
+            </div>
+
             <div>
               <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/30">
                 Post-load frame sample
@@ -620,13 +642,14 @@ export default function WebGPULab() {
 
             <div className="rounded-2xl border border-cyan-200/10 bg-cyan-200/[0.035] p-3.5">
               <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-cyan-100/45">
-                W2 parity scope
+                W3 parity scope
               </p>
               <ul className="mt-2 space-y-1 text-[9px] leading-relaxed text-white/42">
-                <li>• One ephemeris-driven Sun and eight planets</li>
+                <li>• Ephemeris-driven Sun and eight planets</li>
                 <li>• Eleven active 1K KTX2 maps with procedural fallback</li>
-                <li>• TSL surface, cloud, ring, and atmosphere graphs</li>
-                <li>• Identical geometry, assets, and camera for both backends</li>
+                <li>• TSL surfaces, clouds, rings, and atmospheres</li>
+                <li>• Instanced TSL star field and GPU-animated solar wind</li>
+                <li>• Identical geometry, assets, effects, and camera for both backends</li>
               </ul>
             </div>
           </section>
