@@ -14,6 +14,7 @@ An interactive 3D Solar System experience built with **Next.js**, **React Three 
 - **Information and Comparison Tools:** Review physical facts, compare worlds, measure separation, use the responsive navigator, save bookmarks, and capture screenshots.
 - **Command Palette:** Search the complete body and mission catalogue with keyboard navigation using `Ctrl/⌘ K` or `/`.
 - **Adaptive Rendering:** Auto, Eco, Balanced, and Ultra profiles scale pixel density, geometry, textures, and particle populations for the current device.
+- **Adaptive KTX2 Pilot:** Earth, Moon, cloud, and ring textures can upgrade from WebP to GPU-compressed KTX2 with automatic fallback and visible diagnostics.
 - **Production Recovery:** WebGL startup and live context-loss failures provide a clear recovery path instead of leaving a black or frozen canvas.
 - **Reduced Motion:** A persistent accessibility preference slows decorative fields and disables automatic camera motion.
 
@@ -56,10 +57,31 @@ The explorer preserves visual richness without making every device render the sa
 - Meteor pools update active trails only and stop when phenomena are disabled or the simulation is paused.
 - When the simulation is paused and the camera is idle, React Three Fiber switches to **demand rendering**, allowing the GPU to sleep until interaction resumes.
 - Local textures are generated into 512 px, 1K, and 2K WebP tiers. Eco, Balanced, and Ultra choose the matching tier automatically.
+- The KTX2 pilot uses those same quality tiers, loading WebP immediately and upgrading supported textures asynchronously through Three.js `KTX2Loader`.
 - Common legacy third-party texture URLs are routed to self-hosted assets, including a local Earth cloud layer.
-- Quality, motion, and experience-mode preferences persist locally.
+- Quality, texture-backend, motion, and experience-mode preferences persist locally.
 
-Use the render-engine pill near the top-right to select a quality profile or leave it on **Auto**. Mission control is available near the lower-left edge.
+Use the render-engine pill near the top-right to select a quality profile or leave it on **Auto**. The same panel displays the active `KTX2`, `MIXED`, or `WEBP` texture backend and can switch GPU-compressed textures off for direct comparison. Mission control is available near the lower-left edge.
+
+## KTX2/Basis Texture Pilot 🗜️
+
+The optional texture experiment covers four representative assets at 512, 1024, and 2048 pixel tiers:
+
+- Earth albedo — BasisLZ/ETC1S
+- Moon albedo — BasisLZ/ETC1S
+- Earth cloud alpha layer — UASTC plus Zstandard
+- Saturn/Uranus ring alpha strip — UASTC plus Zstandard
+
+A material always receives its quality-tiered WebP first. The shared loader then detects the current WebGL 2 renderer's supported transcode target and replaces the pilot map only after a successful KTX2 load. Missing files, unsupported capabilities, Basis WebAssembly failures, network failures, and transcode failures all keep WebP active.
+
+Compare the two paths with the in-app rendering panel or URL overrides:
+
+```text
+?textures=ktx2
+?textures=webp
+```
+
+Detailed architecture, generation, and validation notes are available in [the KTX2 texture guide](docs/KTX2_TEXTURES.md).
 
 ## Interface Architecture 🧭
 
@@ -115,6 +137,7 @@ The interface remains semantic HTML above the canvas. Three.js renders the Solar
 - **Language:** [TypeScript](https://www.typescriptlang.org/)
 - **3D Rendering:** [React Three Fiber](https://r3f.docs.pmnd.rs/) and [Three.js](https://threejs.org/)
 - **Stable GPU Backend:** WebGL 2
+- **Compressed Textures:** KTX2/Basis pilot with WebP fallback
 - **Styling:** [Tailwind CSS](https://tailwindcss.com/)
 - **Components:** shadcn/ui / Radix UI
 - **State Management:** Zustand
@@ -140,7 +163,14 @@ bun install
 bun run dev
 ```
 
-The pre-development hook regenerates optimized texture tiers when a source texture is new or changed. Open `http://localhost:3000`.
+The pre-development hook regenerates WebP texture tiers and copies the matching Basis JavaScript/WASM transcoder from the installed Three.js package. Open `http://localhost:3000`.
+
+The native Khronos encoder is needed only when changing committed KTX2 assets:
+
+```bash
+bun run textures:ktx2:encode
+bun run textures:ktx2:verify
+```
 
 ## Validation and Production Build ✅
 
@@ -153,6 +183,7 @@ bun run audit
 bun run lint
 bun run typecheck
 bun run ephemeris:validate
+bun run textures:ktx2:verify
 bun run build
 bun run performance:budget
 bun run ui:smoke
@@ -170,10 +201,10 @@ The checks cover:
 - ESLint and React 19 purity rules
 - strict TypeScript compilation
 - orbital positions and paths across multiple epochs and all three experience modes
-- automatic texture generation and optimized Next.js compilation
-- JavaScript chunk and texture-tier budgets
+- automatic WebP generation, Basis runtime packaging, KTX2 verification, and optimized Next.js compilation
+- JavaScript, WebP-tier, and KTX2-tier budgets
 - live Three.js draw-call, triangle, program, texture, geometry, and scene-object budgets
-- desktop WebGL 2, search, navigation, modes, screenshot capture, and renderer recovery
+- desktop WebGL 2, KTX2 transcode, WebP fallback, search, navigation, modes, screenshot capture, and renderer recovery
 - mobile touch navigation, inspector layout, mission-control scrolling, orientation changes, and accessible names
 
 Run the standalone output:
@@ -185,6 +216,7 @@ bun run start
 ## Release and Asset Documentation 📚
 
 - [Changelog](CHANGELOG.md)
+- [KTX2/Basis texture pilot](docs/KTX2_TEXTURES.md)
 - [Asset sources and redistribution notes](ASSET_SOURCES.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 
@@ -192,9 +224,10 @@ The project MIT license applies to project-authored code. It does not automatica
 
 ## Architecture Notes 📝
 
-- The application is client-side and requires no persistent database. Bookmarks, quality, motion, onboarding, and experience preferences are stored in the browser.
-- Simulation state, experience state, and rendering-quality state are separate Zustand stores, while the high-frequency orbital clock remains outside React state.
+- The application is client-side and requires no persistent database. Bookmarks, quality, texture backend, motion, onboarding, and experience preferences are stored in the browser.
+- Simulation state, experience state, rendering-quality state, and texture-runtime diagnostics are separate Zustand stores, while the high-frequency orbital clock remains outside React state.
 - Broken Git LFS pointer files previously stored under model paths were removed; lightweight project-authored procedural renderers remain active.
+- Committed `.ktx2` assets are ordinary binary Git payloads rather than LFS pointers so static deployments receive real files.
 - The stable production renderer remains WebGL 2. A future WebGPU/TSL migration should remain isolated and benchmarked rather than replacing the renderer without evidence.
 - Fictional or speculative features such as traversable wormholes are confined to Sandbox-oriented presentation and are not part of the scientific ephemeris model.
 
