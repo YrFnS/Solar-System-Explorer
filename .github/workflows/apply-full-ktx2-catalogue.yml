@@ -1,0 +1,194 @@
+name: Apply Full KTX2 Catalogue Migration
+
+on:
+  push:
+    branches:
+      - agent/ktx2-textures
+    paths:
+      - '.github/workflows/apply-full-ktx2-catalogue.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out experiment branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/ktx2-textures
+          fetch-depth: 0
+
+      - name: Apply deterministic source updates
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text()
+              if old not in text:
+                  raise SystemExit(f"Expected source block was not found in {path}: {old[:100]!r}")
+              target.write_text(text.replace(old, new, 1))
+
+          # Sun uses the same adaptive KTX2/WebP path as planets and moons.
+          replace_once(
+              'src/components/solar-system/Sun.tsx',
+              "import { useTexture } from '@react-three/drei'\n",
+              '',
+          )
+          replace_once(
+              'src/components/solar-system/Sun.tsx',
+              "import { useSolarSystemStore } from './store'\n",
+              "import { useSolarSystemStore } from './store'\nimport { useAdaptiveTexture } from './textures/useAdaptiveTexture'\n",
+          )
+          replace_once(
+              'src/components/solar-system/Sun.tsx',
+              "  const sunTexture = useTexture(sunData.textureUrl!)",
+              "  const sunTexture = useAdaptiveTexture(sunData.textureUrl!, { anisotropy: 4 })",
+          )
+
+          # Render controls report requested/loaded catalogue coverage.
+          replace_once(
+              'src/components/solar-system/PerformanceDock.tsx',
+              "import { useTextureRuntimeStore } from './textures/texture-runtime-store'\n",
+              "import { KTX2_MANIFEST } from './textures/texture-manifest'\nimport { useTextureRuntimeStore } from './textures/texture-runtime-store'\n",
+          )
+          replace_once(
+              'src/components/solar-system/PerformanceDock.tsx',
+              "  const loadedTextureIds = useTextureRuntimeStore((state) => state.loadedIds)\n",
+              "  const requestedTextureIds = useTextureRuntimeStore((state) => state.requestedIds)\n  const loadedTextureIds = useTextureRuntimeStore((state) => state.loadedIds)\n",
+          )
+          replace_once(
+              'src/components/solar-system/PerformanceDock.tsx',
+              "  const textureStatus = textureBackend === 'ktx2'\n    ? `${loadedTextureIds.length} compressed textures active`\n    : textureBackend === 'mixed'\n      ? `${loadedTextureIds.length} compressed · ${failedTextureIds.length} fallback`\n      : 'Quality-tiered WebP fallback active'\n",
+              "  const requestedTextureCount = requestedTextureIds.length || KTX2_MANIFEST.textures.length\n  const textureStatus = textureBackend === 'ktx2'\n    ? `${loadedTextureIds.length}/${requestedTextureCount} compressed textures active`\n    : textureBackend === 'mixed'\n      ? `${loadedTextureIds.length}/${requestedTextureCount} compressed · ${failedTextureIds.length} fallback`\n      : 'Quality-tiered WebP fallback active'\n",
+          )
+
+          # Browser smoke tests derive the expected IDs from the manifest and
+          # enforce that WebP fallbacks are not left resident on the GPU.
+          replace_once(
+              'scripts/smoke-ui.mjs',
+              "import { cp, mkdir, rm } from 'node:fs/promises'",
+              "import { cp, mkdir, readFile, rm } from 'node:fs/promises'",
+          )
+          replace_once(
+              'scripts/smoke-ui.mjs',
+              "const standaloneNextRoot = path.join(standaloneRoot, '.next')\n\nconst RENDER_BUDGETS = {",
+              "const standaloneNextRoot = path.join(standaloneRoot, '.next')\nconst ktx2Manifest = JSON.parse(\n  await readFile(\n    path.resolve('src/components/solar-system/textures/ktx2-manifest.json'),\n    'utf8'\n  )\n)\nconst KTX2_CATALOGUE_IDS = ktx2Manifest.textures.map((entry) => entry.id)\n\nconst RENDER_BUDGETS = {",
+          )
+          replace_once(
+              'scripts/smoke-ui.mjs',
+              "  textures: 250,",
+              "  // Replacing WebP maps with KTX2 should not double texture residency.\n  textures: 22,",
+          )
+          replace_once(
+              'scripts/smoke-ui.mjs',
+              "\nconst KTX2_PILOT_IDS = ['earth', 'moon', 'earth-clouds', 'saturn-ring']",
+              '',
+          )
+          replace_once(
+              'scripts/smoke-ui.mjs',
+              'async function assertKtx2Pilot(page) {',
+              'async function assertKtx2Catalogue(page) {',
+          )
+          replace_once(
+              'scripts/smoke-ui.mjs',
+              "      && diagnostics.failedIds.length === 0\n      && expectedIds.every((id) => diagnostics.loadedIds.includes(id))",
+              "      && diagnostics.failedIds.length === 0\n      && expectedIds.every((id) => diagnostics.requestedIds.includes(id))\n      && expectedIds.every((id) => diagnostics.loadedIds.includes(id))",
+          )
+          replace_once(
+              'scripts/smoke-ui.mjs',
+              '  }, { timeout: 45_000 }, KTX2_PILOT_IDS)',
+              '  }, { timeout: 75_000 }, KTX2_CATALOGUE_IDS)',
+          )
+          replace_once(
+              'scripts/smoke-ui.mjs',
+              '  await assertKtx2Pilot(page)',
+              '  await assertKtx2Catalogue(page)',
+          )
+          replace_once(
+              'scripts/smoke-ui.mjs',
+              "  console.log(`[ui-smoke] KTX2 diagnostics ${JSON.stringify(diagnostics)}`)",
+              "  console.log(`[ui-smoke] KTX2 catalogue diagnostics ${JSON.stringify(diagnostics)}`)",
+          )
+
+          # Artifact budgets use the manifest count instead of a hard-coded pilot.
+          replace_once(
+              'scripts/check-performance-budget.mjs',
+              "const KTX2_TEXTURE_ROOT = path.join(ROOT, 'public', 'textures', 'ktx2')\n",
+              "const KTX2_TEXTURE_ROOT = path.join(ROOT, 'public', 'textures', 'ktx2')\nconst KTX2_MANIFEST_PATH = path.join(\n  ROOT,\n  'src',\n  'components',\n  'solar-system',\n  'textures',\n  'ktx2-manifest.json'\n)\n",
+          )
+          replace_once(
+              'scripts/check-performance-budget.mjs',
+              '  ktx2PilotTier: {',
+              '  ktx2CatalogueTier: {',
+          )
+          replace_once(
+              'scripts/check-performance-budget.mjs',
+              "async function main() {\n  const failures = []",
+              "async function main() {\n  const failures = []\n  const ktx2Manifest = JSON.parse(await readFile(KTX2_MANIFEST_PATH, 'utf8'))\n  const expectedKtx2Textures = ktx2Manifest.textures.length",
+          )
+          replace_once(
+              'scripts/check-performance-budget.mjs',
+              '    const budget = BUDGETS.ktx2PilotTier[width]',
+              '    const budget = BUDGETS.ktx2CatalogueTier[width]',
+          )
+          replace_once(
+              'scripts/check-performance-budget.mjs',
+              '    console.log(`[budget] ${width}px KTX2 pilot: ${formatBytes(tierSize)} across ${tierFiles.length} files`)',
+              '    console.log(`[budget] ${width}px KTX2 catalogue: ${formatBytes(tierSize)} across ${tierFiles.length} files`)',
+          )
+          replace_once(
+              'scripts/check-performance-budget.mjs',
+              "    if (tierFiles.length !== 4) {\n      failures.push(`${width}px KTX2 pilot contains ${tierFiles.length} files; expected 4`)\n    }",
+              "    if (tierFiles.length !== expectedKtx2Textures) {\n      failures.push(\n        `${width}px KTX2 catalogue contains ${tierFiles.length} files; expected ${expectedKtx2Textures}`\n      )\n    }",
+          )
+          replace_once(
+              'scripts/check-performance-budget.mjs',
+              '`${width}px KTX2 pilot ${formatBytes(tierSize)} exceeds ${formatBytes(budget)}`',
+              '`${width}px KTX2 catalogue ${formatBytes(tierSize)} exceeds ${formatBytes(budget)}`',
+          )
+
+          verify = Path('scripts/verify-ktx2.mjs')
+          verify.write_text(verify.read_text().replace('pilot tier', 'catalogue tier'))
+
+          workflow = Path('.github/workflows/generate-ktx2.yml')
+          workflow_text = workflow.read_text()
+          workflow_text = workflow_text.replace(
+              'name: Generate KTX2 Pilot Assets',
+              'name: Generate KTX2 Catalogue Assets',
+          )
+          workflow_text = workflow_text.replace(
+              'name: Encode and commit KTX2 textures',
+              'name: Encode and commit KTX2 catalogue',
+          )
+          workflow_text = workflow_text.replace(
+              'name: Encode pilot texture tiers',
+              'name: Encode texture catalogue tiers',
+          )
+          workflow.write_text(workflow_text)
+          PY
+
+      - name: Commit migration
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Catalogue source migration is already applied."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/components/solar-system/Sun.tsx \
+            src/components/solar-system/PerformanceDock.tsx \
+            scripts/smoke-ui.mjs \
+            scripts/check-performance-budget.mjs \
+            scripts/verify-ktx2.mjs \
+            .github/workflows/generate-ktx2.yml
+          git commit -m "finish active KTX2 texture catalogue migration"
+          git push origin HEAD:agent/ktx2-textures
