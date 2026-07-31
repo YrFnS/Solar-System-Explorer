@@ -1,97 +1,96 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSolarSystemStore } from './store'
+import {
+  getEffectiveQuality,
+  QUALITY_PROFILES,
+  usePerformanceStore,
+} from './performance-store'
 
-interface ParticleInfo {
-  angle: number
-  radius: number
-  y: number
-  speed: number
-  scale: number
-  rotX: number
-  rotY: number
-  rotZ: number
-  rotSpeedX: number
-  rotSpeedY: number
-  rotSpeedZ: number
-}
-
-const CENTAUR_INNER = 5.2  // Jupiter's orbit in AU
-const CENTAUR_OUTER = 30   // Neptune's orbit in AU
+const CENTAUR_INNER = 5.2
+const CENTAUR_OUTER = 30
 const CENTAUR_COUNT = 2000
-const TEXTURE_URL = 'https://raw.githubusercontent.com/jeromeetienne/threex.planets/master/images/moonmap1k.jpg'
+
+function seededRandom(seed: number) {
+  return () => {
+    seed = (seed * 16807) % 2147483647
+    return (seed - 1) / 2147483646
+  }
+}
 
 function CentaurBeltInner() {
   const meshRef = useRef<THREE.InstancedMesh>(null!)
   const dummy = useMemo(() => new THREE.Object3D(), [])
-  const texture = useMemo(() => {
-    const loader = new THREE.TextureLoader()
-    return loader.load(TEXTURE_URL)
-  }, [])
+  const quality = usePerformanceStore((state) => getEffectiveQuality(state))
+  const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
+  const effectiveCount = Math.max(
+    180,
+    Math.round(CENTAUR_COUNT * QUALITY_PROFILES[quality].instanceDensity)
+  )
 
-  const particleDataRef = useRef<ParticleInfo[]>([])
-  if (particleDataRef.current.length === 0) {
-    for (let i = 0; i < CENTAUR_COUNT; i++) {
-      particleDataRef.current.push({
-        angle: Math.random() * Math.PI * 2,
-        radius: CENTAUR_INNER + Math.random() * (CENTAUR_OUTER - CENTAUR_INNER),
-        y: (Math.random() - 0.5) * 2.0,
-        speed: 0.005 + Math.random() * 0.01,
-        scale: 0.3 + Math.random() * 1.2,
-        rotX: Math.random() * Math.PI * 2,
-        rotY: Math.random() * Math.PI * 2,
-        rotZ: Math.random() * Math.PI * 2,
-        rotSpeedX: (Math.random() - 0.5) * 0.3,
-        rotSpeedY: (Math.random() - 0.5) * 0.3,
-        rotSpeedZ: (Math.random() - 0.5) * 0.3,
-      })
+  useLayoutEffect(() => {
+    const mesh = meshRef.current
+    if (!mesh) return
+
+    const random = seededRandom(8831)
+    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage)
+
+    for (let index = 0; index < effectiveCount; index++) {
+      const angle = random() * Math.PI * 2
+      const radius = CENTAUR_INNER + random() * (CENTAUR_OUTER - CENTAUR_INNER)
+      const verticalPosition = (random() - 0.5) * 2
+      const scale = (0.3 + random() * 1.2) * 0.05
+
+      dummy.position.set(
+        Math.cos(angle) * radius,
+        verticalPosition,
+        Math.sin(angle) * radius
+      )
+      dummy.rotation.set(
+        random() * Math.PI * 2,
+        random() * Math.PI * 2,
+        random() * Math.PI * 2
+      )
+      dummy.scale.setScalar(scale)
+      dummy.updateMatrix()
+      mesh.setMatrixAt(index, dummy.matrix)
     }
-  }
+
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.computeBoundingSphere()
+  }, [dummy, effectiveCount])
 
   useFrame((_, delta) => {
     if (!meshRef.current) return
+
     const timeSpeed = useSolarSystemStore.getState().timeSpeed
-    const data = particleDataRef.current
-
-    for (let i = 0; i < CENTAUR_COUNT; i++) {
-      const p = data[i]
-      p.angle += delta * p.speed * timeSpeed
-
-      dummy.position.set(
-        Math.cos(p.angle) * p.radius,
-        p.y,
-        Math.sin(p.angle) * p.radius
-      )
-      dummy.scale.setScalar(p.scale * 0.05)
-      p.rotX += delta * p.rotSpeedX * timeSpeed
-      p.rotY += delta * p.rotSpeedY * timeSpeed
-      p.rotZ += delta * p.rotSpeedZ * timeSpeed
-      dummy.rotation.set(p.rotX, p.rotY, p.rotZ)
-      dummy.updateMatrix()
-      meshRef.current.setMatrixAt(i, dummy.matrix)
-    }
-    meshRef.current.instanceMatrix.needsUpdate = true
+    const motionFactor = reducedMotion ? 0.18 : 1
+    meshRef.current.rotation.y += delta * 0.0055 * timeSpeed * motionFactor
   })
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, CENTAUR_COUNT]}>
+    <instancedMesh
+      key={effectiveCount}
+      ref={meshRef}
+      args={[undefined, undefined, effectiveCount]}
+    >
       <dodecahedronGeometry args={[1, 0]} />
       <meshStandardMaterial
-        map={texture}
-        roughness={0.8}
-        metalness={0.1}
+        color="#8b7a68"
+        roughness={0.92}
+        metalness={0.04}
         transparent
-        opacity={0.8}
+        opacity={0.72}
       />
     </instancedMesh>
   )
 }
 
 export default function CentaurBelt() {
-  const showCentaurs = useSolarSystemStore((s) => s.showCentaurs)
+  const showCentaurs = useSolarSystemStore((state) => state.showCentaurs)
 
   if (!showCentaurs) return null
 

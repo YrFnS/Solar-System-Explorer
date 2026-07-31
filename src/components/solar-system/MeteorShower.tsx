@@ -1,15 +1,22 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useSolarSystemStore } from './store'
+import {
+  getEffectiveQuality,
+  QUALITY_PROFILES,
+  usePerformanceStore,
+} from './performance-store'
 
-const METEOR_COUNT = 100
+const BASE_METEOR_COUNT = 100
+const METEOR_TAIL_LENGTH = 10
 const METEOR_SPEED_MIN = 40
 const METEOR_SPEED_MAX = 80
-const METEOR_TAIL_LENGTH = 12
-const SPAWN_INTERVAL_MIN = 0.3 // seconds between spawns
-const SPAWN_INTERVAL_MAX = 2.0
+const SPAWN_INTERVAL_MIN = 0.45
+const SPAWN_INTERVAL_MAX = 2.2
+const HIDDEN_Y = -1000
 
 interface MeteorData {
   active: boolean
@@ -20,77 +27,124 @@ interface MeteorData {
   trail: THREE.Vector3[]
 }
 
+function randomSpawnInterval(reducedMotion: boolean) {
+  const interval = SPAWN_INTERVAL_MIN
+    + Math.random() * (SPAWN_INTERVAL_MAX - SPAWN_INTERVAL_MIN)
+  return reducedMotion ? interval * 2.4 : interval
+}
+
+function spawnMeteor(meteor: MeteorData, reducedMotion: boolean) {
+  const angle = Math.random() * Math.PI * 2
+  const height = 50 + Math.random() * 40
+  const radius = 30 + Math.random() * 50
+  const speedMultiplier = reducedMotion ? 0.45 : 1
+  const speed = (METEOR_SPEED_MIN
+    + Math.random() * (METEOR_SPEED_MAX - METEOR_SPEED_MIN)) * speedMultiplier
+  const downAngle = -0.5 - Math.random() * 0.5
+  const sideAngle = Math.random() * Math.PI * 2
+
+  meteor.position.set(
+    Math.cos(angle) * radius,
+    height,
+    Math.sin(angle) * radius
+  )
+  meteor.velocity.set(
+    Math.cos(sideAngle) * speed * 0.3,
+    downAngle * speed,
+    Math.sin(sideAngle) * speed * 0.3
+  )
+  meteor.lifetime = 0
+  meteor.maxLifetime = 1 + Math.random() * 1.5
+  meteor.active = true
+
+  for (const trailPoint of meteor.trail) {
+    trailPoint.copy(meteor.position)
+  }
+}
+
+function hideMeteor(
+  meteorIndex: number,
+  positionAttribute: THREE.BufferAttribute,
+  alphaAttribute: THREE.BufferAttribute,
+  sizeAttribute: THREE.BufferAttribute
+) {
+  for (let segment = 0; segment < METEOR_TAIL_LENGTH; segment++) {
+    const attributeIndex = meteorIndex * METEOR_TAIL_LENGTH + segment
+    positionAttribute.setXYZ(attributeIndex, 0, HIDDEN_Y, 0)
+    alphaAttribute.setX(attributeIndex, 0)
+    sizeAttribute.setX(attributeIndex, 0)
+  }
+}
+
 export default function MeteorShower() {
   const pointsRef = useRef<THREE.Points>(null!)
   const meteorsRef = useRef<MeteorData[]>([])
   const spawnTimerRef = useRef(0)
-  const nextSpawnRef = useRef(SPAWN_INTERVAL_MIN + Math.random() * (SPAWN_INTERVAL_MAX - SPAWN_INTERVAL_MIN))
+  const nextSpawnRef = useRef(SPAWN_INTERVAL_MIN)
+  const showPhenomena = useSolarSystemStore((state) => state.showPhenomena)
+  const quality = usePerformanceStore((state) => getEffectiveQuality(state))
+  const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
+  const meteorCount = Math.max(
+    16,
+    Math.round(BASE_METEOR_COUNT * QUALITY_PROFILES[quality].instanceDensity)
+  )
+  const totalPoints = meteorCount * METEOR_TAIL_LENGTH
 
-  // Total points = METEOR_COUNT * METEOR_TAIL_LENGTH (head + tail segments)
-  const totalPoints = METEOR_COUNT * METEOR_TAIL_LENGTH
-
-  const { positions, alphas, sizes } = useMemo(() => {
+  const { geometry, material, pool } = useMemo(() => {
     const positions = new Float32Array(totalPoints * 3)
     const alphas = new Float32Array(totalPoints)
     const sizes = new Float32Array(totalPoints)
+    const nextPool: MeteorData[] = []
 
-    // Initialize all meteors as inactive
-    for (let i = 0; i < METEOR_COUNT; i++) {
-      meteorsRef.current[i] = {
+    for (let meteorIndex = 0; meteorIndex < meteorCount; meteorIndex++) {
+      nextPool.push({
         active: false,
         lifetime: 0,
         maxLifetime: 0,
         position: new THREE.Vector3(),
         velocity: new THREE.Vector3(),
-        trail: [],
-      }
-      for (let j = 0; j < METEOR_TAIL_LENGTH; j++) {
-        const idx = (i * METEOR_TAIL_LENGTH + j) * 3
-        positions[idx] = 0
-        positions[idx + 1] = 0
-        positions[idx + 2] = 0
-        alphas[i * METEOR_TAIL_LENGTH + j] = 0
-        sizes[i * METEOR_TAIL_LENGTH + j] = 0
+        trail: Array.from(
+          { length: METEOR_TAIL_LENGTH },
+          () => new THREE.Vector3(0, HIDDEN_Y, 0)
+        ),
+      })
+
+      for (let segment = 0; segment < METEOR_TAIL_LENGTH; segment++) {
+        const pointIndex = meteorIndex * METEOR_TAIL_LENGTH + segment
+        positions[pointIndex * 3 + 1] = HIDDEN_Y
       }
     }
 
-    return { positions, alphas, sizes }
-  }, [])
+    const nextGeometry = new THREE.BufferGeometry()
+    nextGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    nextGeometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1))
+    nextGeometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
 
-  const geometry = useMemo(() => {
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    geo.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1))
-    geo.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1))
-    return geo
-  }, [positions, alphas, sizes])
-
-  const material = useMemo(() => {
-    return new THREE.ShaderMaterial({
+    const nextMaterial = new THREE.ShaderMaterial({
       uniforms: {
-        pixelRatio: { value: 1.0 },
+        pixelRatio: { value: 1 },
       },
       vertexShader: `
         attribute float aAlpha;
         attribute float aSize;
         varying float vAlpha;
         uniform float pixelRatio;
+
         void main() {
           vAlpha = aAlpha;
           vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-          gl_PointSize = aSize * pixelRatio * (200.0 / -mvPosition.z);
-          gl_PointSize = clamp(gl_PointSize, 0.0, 20.0);
+          gl_PointSize = clamp(aSize * pixelRatio * (200.0 / -mvPosition.z), 0.0, 20.0);
           gl_Position = projectionMatrix * mvPosition;
         }
       `,
       fragmentShader: `
         varying float vAlpha;
+
         void main() {
-          // Circular point with soft edges
-          float dist = length(gl_PointCoord - vec2(0.5));
-          if (dist > 0.5) discard;
-          float softEdge = 1.0 - smoothstep(0.2, 0.5, dist);
-          // White-yellow color for meteor head, fading to orange for tail
+          float distanceFromCenter = length(gl_PointCoord - vec2(0.5));
+          if (distanceFromCenter > 0.5) discard;
+
+          float softEdge = 1.0 - smoothstep(0.2, 0.5, distanceFromCenter);
           vec3 headColor = vec3(1.0, 1.0, 0.9);
           vec3 tailColor = vec3(1.0, 0.7, 0.3);
           vec3 color = mix(tailColor, headColor, vAlpha);
@@ -101,133 +155,97 @@ export default function MeteorShower() {
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     })
-  }, [])
 
-  const spawnMeteor = (meteor: MeteorData) => {
-    // Spawn at a random position high above the scene
-    const angle = Math.random() * Math.PI * 2
-    const height = 50 + Math.random() * 40
-    const radius = 30 + Math.random() * 50
-
-    meteor.position.set(
-      Math.cos(angle) * radius,
-      height,
-      Math.sin(angle) * radius
-    )
-
-    // Velocity direction: generally downward and inward with some randomness
-    const speed = METEOR_SPEED_MIN + Math.random() * (METEOR_SPEED_MAX - METEOR_SPEED_MIN)
-    const downAngle = -0.5 - Math.random() * 0.5 // mostly downward
-    const sideAngle = Math.random() * Math.PI * 2
-
-    meteor.velocity.set(
-      Math.cos(sideAngle) * speed * 0.3,
-      downAngle * speed,
-      Math.sin(sideAngle) * speed * 0.3
-    )
-
-    meteor.lifetime = 0
-    meteor.maxLifetime = 1.0 + Math.random() * 1.5
-    meteor.active = true
-    meteor.trail = []
-
-    // Pre-fill trail with starting position
-    for (let i = 0; i < METEOR_TAIL_LENGTH; i++) {
-      meteor.trail.push(meteor.position.clone())
+    return {
+      geometry: nextGeometry,
+      material: nextMaterial,
+      pool: nextPool,
     }
-  }
+  }, [meteorCount, totalPoints])
+
+  useEffect(() => {
+    meteorsRef.current = pool
+    spawnTimerRef.current = 0
+    nextSpawnRef.current = randomSpawnInterval(reducedMotion)
+
+    return () => {
+      geometry.dispose()
+      material.dispose()
+    }
+  }, [geometry, material, pool, reducedMotion])
 
   useFrame((_, delta) => {
-    if (!pointsRef.current) return
+    if (!pointsRef.current || !showPhenomena) return
 
-    const posAttr = pointsRef.current.geometry.attributes.position as THREE.BufferAttribute
-    const alphaAttr = pointsRef.current.geometry.attributes.aAlpha as THREE.BufferAttribute
-    const sizeAttr = pointsRef.current.geometry.attributes.aSize as THREE.BufferAttribute
+    const scene = useSolarSystemStore.getState()
+    if (scene.isPaused) return
 
+    const positionAttribute = geometry.getAttribute('position') as THREE.BufferAttribute
+    const alphaAttribute = geometry.getAttribute('aAlpha') as THREE.BufferAttribute
+    const sizeAttribute = geometry.getAttribute('aSize') as THREE.BufferAttribute
     const meteors = meteorsRef.current
+    let buffersChanged = false
 
-    // Spawn new meteors
     spawnTimerRef.current += delta
     if (spawnTimerRef.current >= nextSpawnRef.current) {
       spawnTimerRef.current = 0
-      nextSpawnRef.current = SPAWN_INTERVAL_MIN + Math.random() * (SPAWN_INTERVAL_MAX - SPAWN_INTERVAL_MIN)
+      nextSpawnRef.current = randomSpawnInterval(reducedMotion)
 
-      // Find an inactive meteor to spawn
-      for (let i = 0; i < METEOR_COUNT; i++) {
-        if (!meteors[i].active) {
-          spawnMeteor(meteors[i])
-          break
-        }
+      const inactiveMeteor = meteors.find((meteor) => !meteor.active)
+      if (inactiveMeteor) {
+        spawnMeteor(inactiveMeteor, reducedMotion)
+        buffersChanged = true
       }
     }
 
-    // Update all meteors
-    for (let i = 0; i < METEOR_COUNT; i++) {
-      const meteor = meteors[i]
+    for (let meteorIndex = 0; meteorIndex < meteors.length; meteorIndex++) {
+      const meteor = meteors[meteorIndex]
+      if (!meteor.active) continue
 
-      if (meteor.active) {
-        meteor.lifetime += delta
-
-        if (meteor.lifetime >= meteor.maxLifetime) {
-          meteor.active = false
-          // Zero out all trail points
-          for (let j = 0; j < METEOR_TAIL_LENGTH; j++) {
-            const idx = i * METEOR_TAIL_LENGTH + j
-            posAttr.setXYZ(idx, 0, -1000, 0)
-            alphaAttr.setX(idx, 0)
-            sizeAttr.setX(idx, 0)
-          }
-          continue
-        }
-
-        // Update position
-        meteor.position.addScaledVector(meteor.velocity, delta)
-
-        // Update trail: shift everything back, add new head position
-        meteor.trail.pop()
-        meteor.trail.unshift(meteor.position.clone())
-
-        // Fade based on lifetime
-        const lifeFraction = meteor.lifetime / meteor.maxLifetime
-        // Fade in quickly at start, fade out near end
-        const fadeAlpha = lifeFraction < 0.1
-          ? lifeFraction / 0.1
-          : lifeFraction > 0.7
-            ? 1.0 - (lifeFraction - 0.7) / 0.3
-            : 1.0
-
-        for (let j = 0; j < METEOR_TAIL_LENGTH; j++) {
-          const idx = i * METEOR_TAIL_LENGTH + j
-          const trailPoint = meteor.trail[j]
-
-          posAttr.setXYZ(idx, trailPoint.x, trailPoint.y, trailPoint.z)
-
-          // Head is brightest, tail fades
-          const tailFade = 1.0 - (j / METEOR_TAIL_LENGTH)
-          const alpha = tailFade * fadeAlpha
-          alphaAttr.setX(idx, alpha)
-
-          // Head is larger, tail shrinks
-          const size = j === 0 ? 3.0 : Math.max(0.5, 2.0 * tailFade)
-          sizeAttr.setX(idx, size)
-        }
-      } else {
-        // Inactive meteor - ensure all points are hidden
-        for (let j = 0; j < METEOR_TAIL_LENGTH; j++) {
-          const idx = i * METEOR_TAIL_LENGTH + j
-          posAttr.setXYZ(idx, 0, -1000, 0)
-          alphaAttr.setX(idx, 0)
-          sizeAttr.setX(idx, 0)
-        }
+      meteor.lifetime += delta
+      if (meteor.lifetime >= meteor.maxLifetime) {
+        meteor.active = false
+        hideMeteor(meteorIndex, positionAttribute, alphaAttribute, sizeAttribute)
+        buffersChanged = true
+        continue
       }
+
+      meteor.position.addScaledVector(meteor.velocity, delta)
+      for (let segment = METEOR_TAIL_LENGTH - 1; segment > 0; segment--) {
+        meteor.trail[segment].copy(meteor.trail[segment - 1])
+      }
+      meteor.trail[0].copy(meteor.position)
+
+      const lifeFraction = meteor.lifetime / meteor.maxLifetime
+      const fadeAlpha = lifeFraction < 0.1
+        ? lifeFraction / 0.1
+        : lifeFraction > 0.7
+          ? 1 - (lifeFraction - 0.7) / 0.3
+          : 1
+
+      for (let segment = 0; segment < METEOR_TAIL_LENGTH; segment++) {
+        const attributeIndex = meteorIndex * METEOR_TAIL_LENGTH + segment
+        const trailPoint = meteor.trail[segment]
+        const tailFade = 1 - segment / METEOR_TAIL_LENGTH
+
+        positionAttribute.setXYZ(attributeIndex, trailPoint.x, trailPoint.y, trailPoint.z)
+        alphaAttribute.setX(attributeIndex, tailFade * fadeAlpha)
+        sizeAttribute.setX(
+          attributeIndex,
+          segment === 0 ? 3 : Math.max(0.5, 2 * tailFade)
+        )
+      }
+      buffersChanged = true
     }
 
-    posAttr.needsUpdate = true
-    alphaAttr.needsUpdate = true
-    sizeAttr.needsUpdate = true
+    if (buffersChanged) {
+      positionAttribute.needsUpdate = true
+      alphaAttribute.needsUpdate = true
+      sizeAttribute.needsUpdate = true
+    }
   })
 
-  return (
-    <points ref={pointsRef} geometry={geometry} material={material} />
-  )
+  if (!showPhenomena) return null
+
+  return <points ref={pointsRef} geometry={geometry} material={material} />
 }

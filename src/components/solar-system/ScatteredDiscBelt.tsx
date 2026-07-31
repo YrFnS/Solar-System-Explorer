@@ -1,97 +1,98 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
+import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { useSolarSystemStore } from './store'
+import {
+  getEffectiveQuality,
+  QUALITY_PROFILES,
+  usePerformanceStore,
+} from './performance-store'
 
-interface ParticleInfo {
-  angle: number
-  radius: number
-  y: number
-  speed: number
-  scale: number
-  rotX: number
-  rotY: number
-  rotZ: number
-  rotSpeedX: number
-  rotSpeedY: number
-  rotSpeedZ: number
-}
-
-const SD_INNER = 35  // Scattered disc starts beyond Kuiper belt (~30 AU)
-const SD_OUTER = 100 // Scattered disc extends to ~100 AU
+const SD_INNER = 35
+const SD_OUTER = 100
 const SD_COUNT = 10000
+
+function seededRandom(seed: number) {
+  return () => {
+    seed ^= seed << 13
+    seed ^= seed >>> 17
+    seed ^= seed << 5
+    return (seed >>> 0) / 4294967296
+  }
+}
 
 function ScatteredDiscBeltInner() {
   const meshRef = useRef<THREE.InstancedMesh>(null!)
   const dummy = useMemo(() => new THREE.Object3D(), [])
+  const quality = usePerformanceStore((state) => getEffectiveQuality(state))
+  const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
+  const effectiveCount = Math.max(
+    300,
+    Math.round(SD_COUNT * QUALITY_PROFILES[quality].instanceDensity)
+  )
 
-  const particleDataRef = useRef<ParticleInfo[]>([])
-  if (particleDataRef.current.length === 0) {
-    for (let i = 0; i < SD_COUNT; i++) {
-      // Scattered disc objects have highly inclined orbits (can be >40 degrees)
-      const inclination = (Math.random() - 0.5) * 80 // -40 to +40 degrees
-      const inclinationRad = (inclination * Math.PI) / 180
-      particleDataRef.current.push({
-        angle: Math.random() * Math.PI * 2,
-        radius: SD_INNER + Math.random() * (SD_OUTER - SD_INNER),
-        y: (Math.random() - 0.5) * 20, // Larger Y spread due to high inclination
-        speed: 0.002 + Math.random() * 0.006,
-        scale: 0.2 + Math.random() * 1.0,
-        rotX: Math.random() * Math.PI * 2,
-        rotY: Math.random() * Math.PI * 2,
-        rotZ: Math.random() * Math.PI * 2,
-        rotSpeedX: (Math.random() - 0.5) * 0.2,
-        rotSpeedY: (Math.random() - 0.5) * 0.2,
-        rotSpeedZ: (Math.random() - 0.5) * 0.2,
-      })
+  useLayoutEffect(() => {
+    const mesh = meshRef.current
+    if (!mesh) return
+
+    const random = seededRandom(70123)
+    mesh.instanceMatrix.setUsage(THREE.StaticDrawUsage)
+
+    for (let index = 0; index < effectiveCount; index++) {
+      const angle = random() * Math.PI * 2
+      const radius = SD_INNER + random() * (SD_OUTER - SD_INNER)
+      const inclination = ((random() - 0.5) * 80 * Math.PI) / 180
+      const scale = (0.2 + random()) * 0.03
+
+      dummy.position.set(
+        Math.cos(angle) * radius,
+        Math.sin(angle) * Math.sin(inclination) * radius * 0.45,
+        Math.sin(angle) * Math.cos(inclination) * radius
+      )
+      dummy.rotation.set(
+        random() * Math.PI * 2,
+        random() * Math.PI * 2,
+        random() * Math.PI * 2
+      )
+      dummy.scale.setScalar(scale)
+      dummy.updateMatrix()
+      mesh.setMatrixAt(index, dummy.matrix)
     }
-  }
+
+    mesh.instanceMatrix.needsUpdate = true
+    mesh.computeBoundingSphere()
+  }, [dummy, effectiveCount])
 
   useFrame((_, delta) => {
     if (!meshRef.current) return
+
     const timeSpeed = useSolarSystemStore.getState().timeSpeed
-    const data = particleDataRef.current
-
-    for (let i = 0; i < SD_COUNT; i++) {
-      const p = data[i]
-      p.angle += delta * p.speed * timeSpeed
-
-      // Apply orbital inclination to Y position
-      const inclRad = (p.y / 10) * Math.PI / 180 * 20 // scaled inclination
-      dummy.position.set(
-        Math.cos(p.angle) * p.radius,
-        Math.sin(p.angle) * Math.sin(inclRad) * Math.abs(p.y),
-        Math.sin(p.angle) * p.radius
-      )
-      dummy.scale.setScalar(p.scale * 0.03)
-      p.rotX += delta * p.rotSpeedX * timeSpeed
-      p.rotY += delta * p.rotSpeedY * timeSpeed
-      p.rotZ += delta * p.rotSpeedZ * timeSpeed
-      dummy.rotation.set(p.rotX, p.rotY, p.rotZ)
-      dummy.updateMatrix()
-      meshRef.current.setMatrixAt(i, dummy.matrix)
-    }
-    meshRef.current.instanceMatrix.needsUpdate = true
+    const motionFactor = reducedMotion ? 0.15 : 1
+    meshRef.current.rotation.y += delta * 0.0018 * timeSpeed * motionFactor
   })
 
   return (
-    <instancedMesh ref={meshRef} args={[undefined, undefined, SD_COUNT]}>
+    <instancedMesh
+      key={effectiveCount}
+      ref={meshRef}
+      args={[undefined, undefined, effectiveCount]}
+    >
       <icosahedronGeometry args={[1, 0]} />
       <meshStandardMaterial
         color="#8899AA"
-        roughness={0.9}
-        metalness={0.1}
+        roughness={0.94}
+        metalness={0.03}
         transparent
-        opacity={0.6}
+        opacity={0.55}
       />
     </instancedMesh>
   )
 }
 
 export default function ScatteredDiscBelt() {
-  const showScatteredDisc = useSolarSystemStore((s) => s.showScatteredDisc)
+  const showScatteredDisc = useSolarSystemStore((state) => state.showScatteredDisc)
 
   if (!showScatteredDisc) return null
 

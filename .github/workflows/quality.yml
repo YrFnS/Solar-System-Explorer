@@ -1,0 +1,57 @@
+name: Quality
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - 'agent/**'
+
+concurrency:
+  group: quality-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build application
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Audit modules and dependencies
+        run: bun run audit
+
+      - name: Validate lint rules
+        run: bun run lint
+
+      - name: Validate TypeScript
+        run: bun run typecheck
+
+      - name: Validate orbital engine
+        run: bun run ephemeris:validate
+
+      - name: Generate optimized textures
+        run: bun run textures:optimize
+
+      - name: Build optimized application
+        run: bun run build:next
+
+      - name: Enforce production artifact budgets
+        run: bun run performance:budget
+
+      - name: Smoke test desktop, mobile, accessibility, and WebGL
+        run: bun run ui:smoke
