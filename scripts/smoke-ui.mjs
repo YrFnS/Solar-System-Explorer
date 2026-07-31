@@ -18,6 +18,7 @@ const RENDER_BUDGETS = {
   sceneObjects: 6_000,
 }
 
+const KTX2_PILOT_IDS = ['earth', 'moon', 'earth-clouds', 'saturn-ring']
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
 async function prepareStandaloneAssets() {
@@ -59,6 +60,7 @@ async function configurePage(page, viewport) {
     window.localStorage.setItem('solar-explorer-interface-guide-v4', 'complete')
     window.localStorage.setItem('solar-explorer-experience-mode-v1', 'explore')
     window.localStorage.setItem('solar-explorer-quality-preset-v1', 'eco')
+    window.localStorage.setItem('solar-explorer-ktx2-enabled-v1', 'true')
     window.sessionStorage.setItem('solar-explorer-scene-warmup-v1', 'complete')
   })
 }
@@ -69,8 +71,8 @@ function collectPageErrors(page) {
   return errors
 }
 
-async function waitForCore(page) {
-  await page.goto(`${baseUrl}/?diagnostics=1`, {
+async function waitForCore(page, route = '/?diagnostics=1&textures=ktx2') {
+  await page.goto(`${baseUrl}${route}`, {
     waitUntil: 'networkidle2',
     timeout: 75_000,
   })
@@ -156,6 +158,53 @@ async function assertRendererBudget(page) {
   }
 }
 
+async function assertKtx2Pilot(page) {
+  await page.waitForFunction((expectedIds) => {
+    const diagnostics = window.__SOLAR_TEXTURE_DIAGNOSTICS__
+    return Boolean(
+      diagnostics?.enabled
+      && diagnostics.backend === 'ktx2'
+      && diagnostics.failedIds.length === 0
+      && expectedIds.every((id) => diagnostics.loadedIds.includes(id))
+      && diagnostics.formats.length > 0
+    )
+  }, { timeout: 45_000 }, KTX2_PILOT_IDS)
+
+  const diagnostics = await page.evaluate(() => window.__SOLAR_TEXTURE_DIAGNOSTICS__)
+  console.log(`[ui-smoke] KTX2 diagnostics ${JSON.stringify(diagnostics)}`)
+}
+
+async function assertTextureBackendToggle(page) {
+  await page.click('[aria-label="Open rendering quality controls"]')
+  const toggle = await page.waitForSelector(
+    '[aria-label="Use KTX2 GPU-compressed textures"]',
+    { timeout: 15_000 }
+  )
+
+  const initiallyChecked = await toggle.evaluate((element) => element.checked)
+  if (!initiallyChecked) throw new Error('KTX2 toggle was not enabled after a successful pilot load')
+
+  await toggle.click()
+  await page.waitForFunction(() => {
+    const diagnostics = window.__SOLAR_TEXTURE_DIAGNOSTICS__
+    const dock = document.querySelector('[data-texture-backend]')
+    return diagnostics?.enabled === false
+      && diagnostics.backend === 'webp'
+      && dock?.getAttribute('data-texture-backend') === 'webp'
+  }, { timeout: 10_000 })
+
+  await toggle.click()
+  await page.waitForFunction(() => {
+    const diagnostics = window.__SOLAR_TEXTURE_DIAGNOSTICS__
+    const dock = document.querySelector('[data-texture-backend]')
+    return diagnostics?.enabled === true
+      && diagnostics.backend === 'ktx2'
+      && dock?.getAttribute('data-texture-backend') === 'ktx2'
+  }, { timeout: 10_000 })
+
+  await page.click('[aria-label="Close rendering quality controls"]')
+}
+
 async function runDesktop(browser) {
   const page = await browser.newPage()
   await configurePage(page, {
@@ -166,6 +215,7 @@ async function runDesktop(browser) {
   const pageErrors = collectPageErrors(page)
 
   await waitForCore(page)
+  await assertKtx2Pilot(page)
   await assertRendererBudget(page)
   await assertAccessibleSurface(page, 'desktop overview')
 
@@ -186,6 +236,8 @@ async function runDesktop(browser) {
       && text.includes('Earth')
       && text.includes('Sun distance')
   }, { timeout: 20_000 })
+
+  await assertTextureBackendToggle(page)
 
   await page.keyboard.press('2')
   await page.waitForFunction(() => document.body.textContent?.includes('Scientific'))
@@ -223,7 +275,38 @@ async function runDesktop(browser) {
   }
 
   await page.close()
-  console.log('[ui-smoke] desktop search, navigation, modes, screenshots, recovery, and accessibility passed')
+  console.log('[ui-smoke] desktop KTX2, search, modes, screenshots, recovery, and accessibility passed')
+}
+
+async function runWebpFallback(browser) {
+  const page = await browser.newPage()
+  await configurePage(page, {
+    width: 1024,
+    height: 640,
+    deviceScaleFactor: 1,
+  })
+  const pageErrors = collectPageErrors(page)
+
+  await waitForCore(page, '/?diagnostics=1&textures=webp')
+  await page.waitForFunction(() => {
+    const diagnostics = window.__SOLAR_TEXTURE_DIAGNOSTICS__
+    return diagnostics?.enabled === false
+      && diagnostics.backend === 'webp'
+      && diagnostics.loadedIds.length === 0
+  }, { timeout: 15_000 })
+
+  await page.click('[aria-label="Navigate to Earth"]')
+  await page.waitForFunction(() => {
+    const text = document.body.textContent || ''
+    return text.includes('Selected object') && text.includes('Earth')
+  }, { timeout: 20_000 })
+
+  if (pageErrors.length > 0) {
+    throw new Error(`WebP fallback page errors:\n${pageErrors.join('\n')}`)
+  }
+
+  await page.close()
+  console.log('[ui-smoke] explicit WebP fallback passed')
 }
 
 async function runMobile(browser) {
@@ -364,6 +447,7 @@ async function main() {
     })
 
     await runDesktop(browser)
+    await runWebpFallback(browser)
     await runMobile(browser)
   } catch (error) {
     console.error('[ui-smoke] failed')
