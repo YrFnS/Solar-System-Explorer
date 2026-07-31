@@ -4,7 +4,31 @@ All notable changes to Solar System Explorer are documented here.
 
 The project follows a phase-based development history while the first major production release is prepared.
 
-## Unreleased — Production Candidate
+## Unreleased — KTX2/Basis Texture Pilot
+
+### Added
+
+- Three-tier KTX2 pilot manifest for Earth, the Moon, Earth clouds, and the shared Saturn/Uranus ring texture.
+- Dedicated Khronos KTX Software 4.4.2 workflow that encodes, validates, and commits real `.ktx2` binaries.
+- Shared Three.js `KTX2Loader` runtime with renderer capability detection, per-tier caching, and Basis WebAssembly packaging.
+- Runtime texture diagnostics reporting active backend, transcode formats, successful assets, and fallbacks.
+- In-app GPU-compressed texture switch plus `?textures=ktx2` and `?textures=webp` comparison modes.
+- KTX2 file validation, per-tier artifact budgets, and browser transcode tests.
+
+### Changed
+
+- Pilot planet, moon, cloud, and textured-ring surfaces render their quality-tiered WebP immediately, then upgrade asynchronously to KTX2 when supported.
+- The WebP optimizer now accepts the project-authored SVG cloud source, preserving a local fallback at every quality tier.
+- Development and production builds copy the Basis JavaScript/WASM runtime from the installed Three.js package.
+
+### Safety and compatibility
+
+- WebGL 2 remains the stable renderer.
+- WebP remains the permanent fallback for missing KTX2 files, unsupported formats, WASM failures, network errors, and transcode errors.
+- KTX2 files are committed as regular binary payloads rather than Git LFS pointers.
+- WebGPU/TSL remains a separate future experiment.
+
+## Production Candidate — P1 through P5
 
 ### P5 — Production hardening and release preparation
 
