@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import { OrbitControls } from '@react-three/drei'
-import { useFrame, type RootState } from '@react-three/fiber'
+import { useFrame, useThree, type RootState } from '@react-three/fiber'
 import * as THREE from 'three/webgpu'
 import {
   cameraPosition,
@@ -27,6 +27,12 @@ import LabTslSunEffects from './LabSunEffects'
 import LabTslNebulaHaze from './LabNebulaHaze'
 import LabTslGravitationalObjects from './LabGravitationalObjects'
 import LabTslPostProcessing from './LabPostProcessing'
+import {
+  LAB_BENCHMARK_BASELINE_CAMERA,
+  LAB_BENCHMARK_BASELINE_TARGET,
+  LAB_BENCHMARK_PREPARE_EVENT,
+  LAB_BENCHMARK_RESET_METRICS_EVENT,
+} from './lab-benchmark-protocol'
 import { useLabTextureStore } from './lab-texture-store'
 import { useLabKtx2Texture } from './useLabKtx2Texture'
 
@@ -42,7 +48,13 @@ export interface LabFrameMetrics {
 
 interface WebGPULabSceneProps {
   onMetrics: (metrics: LabFrameMetrics) => void
+  onCameraInteraction: () => void
   postProcessingEnabled: boolean
+}
+
+interface OrbitControlsLike {
+  target: THREE.Vector3
+  update: () => void
 }
 
 const LAB_START_DATE_MS = Date.UTC(2026, 0, 1, 0, 0, 0)
@@ -347,11 +359,33 @@ function readRendererCounters(state: RootState) {
 
 function LabMetricsProbe({
   onMetrics,
-}: Pick<WebGPULabSceneProps, 'onMetrics'>) {
+  sampleKey,
+}: Pick<WebGPULabSceneProps, 'onMetrics'> & { sampleKey: string }) {
   const samplesRef = useRef<number[]>([])
   const lastPublishRef = useRef(0)
   const readyRef = useRef(false)
   const textureBackend = useLabTextureStore((state) => state.backend)
+
+  useEffect(() => {
+    samplesRef.current = []
+    lastPublishRef.current = 0
+    readyRef.current = false
+  }, [sampleKey])
+
+  useEffect(() => {
+    const resetMetrics = () => {
+      samplesRef.current = []
+      lastPublishRef.current = 0
+      readyRef.current = false
+    }
+    window.addEventListener(LAB_BENCHMARK_RESET_METRICS_EVENT, resetMetrics)
+    window.addEventListener(LAB_BENCHMARK_PREPARE_EVENT, resetMetrics)
+
+    return () => {
+      window.removeEventListener(LAB_BENCHMARK_RESET_METRICS_EVENT, resetMetrics)
+      window.removeEventListener(LAB_BENCHMARK_PREPARE_EVENT, resetMetrics)
+    }
+  }, [])
 
   useFrame((state, delta) => {
     if (textureBackend !== 'ktx2') {
@@ -395,8 +429,41 @@ function LabMetricsProbe({
   return null
 }
 
+function LabBenchmarkCameraBridge() {
+  const camera = useThree((state) => state.camera)
+  const controls = useThree((state) => state.controls) as unknown as OrbitControlsLike | null
+
+  useEffect(() => {
+    const prepareCamera = () => {
+      camera.position.set(...LAB_BENCHMARK_BASELINE_CAMERA)
+      camera.lookAt(...LAB_BENCHMARK_BASELINE_TARGET)
+      camera.updateMatrixWorld()
+
+      if (
+        camera instanceof THREE.PerspectiveCamera
+        || camera instanceof THREE.OrthographicCamera
+      ) {
+        camera.updateProjectionMatrix()
+      }
+
+      if (controls) {
+        controls.target.set(...LAB_BENCHMARK_BASELINE_TARGET)
+        controls.update()
+      }
+    }
+    window.addEventListener(LAB_BENCHMARK_PREPARE_EVENT, prepareCamera)
+
+    return () => {
+      window.removeEventListener(LAB_BENCHMARK_PREPARE_EVENT, prepareCamera)
+    }
+  }, [camera, controls])
+
+  return null
+}
+
 export default function WebGPULabScene({
   onMetrics,
+  onCameraInteraction,
   postProcessingEnabled,
 }: WebGPULabSceneProps) {
   return (
@@ -419,8 +486,13 @@ export default function WebGPULabScene({
         minDistance={5}
         maxDistance={145}
         zoomSpeed={0.85}
+        onStart={onCameraInteraction}
       />
-      <LabMetricsProbe onMetrics={onMetrics} />
+      <LabBenchmarkCameraBridge />
+      <LabMetricsProbe
+        onMetrics={onMetrics}
+        sampleKey={postProcessingEnabled ? 'bloom' : 'direct'}
+      />
       <LabTslPostProcessing enabled={postProcessingEnabled} />
     </>
   )
