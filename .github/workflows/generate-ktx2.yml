@@ -81,7 +81,7 @@ jobs:
       - name: Commit generated binaries when changed
         run: |
           set -euo pipefail
-          if git diff --quiet -- public/textures/ktx2; then
+          if [ -z "$(git status --porcelain -- public/textures/ktx2)" ]; then
             echo "KTX2 assets are already current."
             exit 0
           fi
