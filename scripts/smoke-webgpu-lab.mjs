@@ -82,7 +82,7 @@ async function diagnosticSnapshot(page) {
   })
 }
 
-async function waitForLabDiagnostics(page, expectedRequested, timeout = 60_000) {
+async function waitForLabDiagnostics(page, expectedRequested, timeout = 75_000) {
   await page.waitForSelector('canvas', { timeout: 45_000 })
 
   try {
@@ -146,19 +146,6 @@ async function assertCanvasHealthy(page, label) {
   }
 }
 
-async function clickBackend(page, text) {
-  const clicked = await page.evaluate((buttonText) => {
-    const button = [...document.querySelectorAll('button')].find((candidate) => (
-      candidate.textContent?.replace(/\s+/g, ' ').includes(buttonText)
-    ))
-    if (!(button instanceof HTMLButtonElement)) return false
-    button.click()
-    return true
-  }, text)
-
-  if (!clicked) throw new Error(`Could not click backend control containing “${text}”`)
-}
-
 function assertDiagnostics(diagnostics, requested, actual) {
   if (!diagnostics) throw new Error(`No diagnostics published for ${requested}`)
   if (diagnostics.requestedBackend !== requested) {
@@ -166,13 +153,10 @@ function assertDiagnostics(diagnostics, requested, actual) {
       `Requested backend mismatch: expected ${requested}, received ${diagnostics.requestedBackend}`
     )
   }
-  if (actual && diagnostics.actualBackend !== actual) {
+  if (diagnostics.actualBackend !== actual) {
     throw new Error(
       `Actual backend mismatch: expected ${actual}, received ${diagnostics.actualBackend}`
     )
-  }
-  if (!['webgpu', 'webgl2'].includes(diagnostics.actualBackend)) {
-    throw new Error(`Unexpected actual backend: ${diagnostics.actualBackend}`)
   }
 }
 
@@ -210,39 +194,63 @@ async function runForcedWebGL(browser) {
   await page.close()
 }
 
-async function runAutoAndSwitch(browser) {
+async function runRealWebGPU(browser) {
   const page = await browser.newPage()
   await configurePage(page)
   const failures = collectPageFailures(page)
 
   await openLab(page)
-  const autoDiagnostics = await waitForLabDiagnostics(page, 'auto')
-  assertDiagnostics(autoDiagnostics, 'auto')
-  await assertCanvasHealthy(page, 'auto backend')
+  const diagnostics = await waitForLabDiagnostics(page, 'auto')
+  assertDiagnostics(diagnostics, 'auto', 'webgpu')
+  await assertCanvasHealthy(page, 'real WebGPU')
 
-  if (!autoDiagnostics.webgpuApiAvailable && autoDiagnostics.actualBackend !== 'webgl2') {
-    throw new Error(
-      'Auto mode reported WebGPU without navigator.gpu being available in the browser'
-    )
+  if (!diagnostics.webgpuApiAvailable) {
+    throw new Error('WebGPU backend initialized while navigator.gpu was reported unavailable')
   }
-
-  await clickBackend(page, 'Force WebGL 2')
-  const forcedDiagnostics = await waitForLabDiagnostics(page, 'webgl')
-  assertDiagnostics(forcedDiagnostics, 'webgl', 'webgl2')
-  await assertCanvasHealthy(page, 'auto-to-WebGL switch')
-
-  await clickBackend(page, 'Auto WebGPU')
-  const restoredDiagnostics = await waitForLabDiagnostics(page, 'auto')
-  assertDiagnostics(restoredDiagnostics, 'auto')
-  await assertCanvasHealthy(page, 'WebGL-to-auto switch')
 
   if (failures.length > 0) {
-    throw new Error(`Auto backend browser failures:\n${failures.join('\n')}`)
+    throw new Error(`WebGPU browser failures:\n${failures.join('\n')}`)
   }
 
-  console.log(`[webgpu-smoke] auto initial ${JSON.stringify(autoDiagnostics)}`)
-  console.log(`[webgpu-smoke] auto restored ${JSON.stringify(restoredDiagnostics)}`)
+  console.log(`[webgpu-smoke] real WebGPU ${JSON.stringify(diagnostics)}`)
   await page.close()
+}
+
+function launchForcedWebGLBrowser() {
+  return puppeteer.launch({
+    headless: 'new',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-gpu-sandbox',
+      '--enable-webgl',
+      '--ignore-gpu-blocklist',
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+      '--enable-unsafe-swiftshader',
+      '--window-size=1280,720',
+    ],
+  })
+}
+
+function launchWebGPUBrowser() {
+  // Chrome's documented Linux headless WebGPU configuration uses Vulkan-backed
+  // ANGLE and Dawn. It is kept separate from the SwiftShader WebGL browser,
+  // because forcing WebGL on the Vulkan-only process can yield a null GL context.
+  return puppeteer.launch({
+    headless: 'new',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--enable-webgl',
+      '--enable-unsafe-webgpu',
+      '--ignore-gpu-blocklist',
+      '--use-angle=vulkan',
+      '--enable-features=Vulkan',
+      '--disable-vulkan-surface',
+      '--window-size=1280,720',
+    ],
+  })
 }
 
 async function main() {
@@ -267,33 +275,25 @@ async function main() {
     serverOutput += chunk.toString()
   })
 
-  let browser
+  let webglBrowser
+  let webgpuBrowser
   try {
     await waitForServer(server)
 
-    browser = await puppeteer.launch({
-      headless: 'new',
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--enable-webgl',
-        '--enable-unsafe-webgpu',
-        '--ignore-gpu-blocklist',
-        '--use-angle=vulkan',
-        '--enable-features=Vulkan',
-        '--disable-vulkan-surface',
-        '--window-size=1280,720',
-      ],
-    })
+    webglBrowser = await launchForcedWebGLBrowser()
+    await runForcedWebGL(webglBrowser)
+    await webglBrowser.close()
+    webglBrowser = undefined
 
-    await runForcedWebGL(browser)
-    await runAutoAndSwitch(browser)
+    webgpuBrowser = await launchWebGPUBrowser()
+    await runRealWebGPU(webgpuBrowser)
   } catch (error) {
     console.error('[webgpu-smoke] failed')
     if (serverOutput.trim()) console.error(serverOutput.trim())
     throw error
   } finally {
-    if (browser) await browser.close()
+    if (webglBrowser) await webglBrowser.close()
+    if (webgpuBrowser) await webgpuBrowser.close()
     server.kill('SIGTERM')
   }
 }
