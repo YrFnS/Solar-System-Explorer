@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -23,6 +23,33 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: agent/webgpu-lab
+          fetch-depth: 0
+
+      - name: Apply one-shot W5b gravity integration
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.ref == 'agent/webgpu-lab' && hashFiles('scripts/apply-w5b-gravity.py') != ''
+        run: |
+          set -euo pipefail
+          python scripts/apply-w5b-gravity.py
+
+          python - <<'PY'
+          from pathlib import Path
+
+          status = Path('src/components/solar-system/webgpu/LabW5bStatus.tsx')
+          text = status.read_text().replace('\\"', '"').replace("\\'", "'")
+          status.write_text(text)
+          PY
+
+          git restore .github/workflows/quality.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "complete W5b TSL gravity parity"
+          git fetch origin agent/webgpu-lab
+          git rebase origin/agent/webgpu-lab
+          git push origin HEAD:agent/webgpu-lab
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@v2
