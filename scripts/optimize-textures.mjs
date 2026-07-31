@@ -7,7 +7,7 @@ const scriptDirectory = path.dirname(fileURLToPath(import.meta.url))
 const projectRoot = path.resolve(scriptDirectory, '..')
 const textureRoot = path.join(projectRoot, 'public', 'textures')
 const outputRoot = path.join(textureRoot, 'optimized')
-const textureExtensions = new Set(['.jpg', '.jpeg', '.png'])
+const textureExtensions = new Set(['.jpg', '.jpeg', '.png', '.svg'])
 const widths = [512, 1024, 2048]
 
 async function collectTextures(directory) {
@@ -15,7 +15,7 @@ async function collectTextures(directory) {
   const files = []
 
   for (const entry of entries) {
-    if (entry.name === 'optimized') continue
+    if (entry.name === 'optimized' || entry.name === 'ktx2') continue
 
     const absolutePath = path.join(directory, entry.name)
     if (entry.isDirectory()) {
