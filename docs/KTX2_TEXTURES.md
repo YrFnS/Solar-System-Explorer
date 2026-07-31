@@ -1,73 +1,95 @@
-# KTX2/Basis Texture Pilot
+# KTX2/Basis Texture Catalogue
 
-This experiment adds GPU-compressed textures to the existing WebGL 2 explorer without removing the stable quality-tiered WebP path.
+Solar System Explorer uses GPU-compressed KTX2/Basis textures for every active authored surface map while retaining the quality-tiered WebP pipeline as an immediate, permanent fallback.
 
-## Goals
+The stable renderer remains WebGL 2. This texture architecture is also reusable by the separate WebGPU laboratory.
 
-- reduce decoded GPU texture memory and upload bandwidth
-- preserve immediate rendering through the current WebP tiers
-- test color, alpha, and radial-strip texture cases before converting the full catalogue
-- keep KTX2 useful for a later WebGPU experiment
-- make all failures observable and recoverable
+## Active catalogue
 
-## Pilot textures
+The manifest contains 13 unique runtime textures, each encoded at 512, 1024, and 2048 pixel tiers for a total of 39 committed KTX2 binaries.
 
-| ID | Source | Role | Codec | Tiers |
-| --- | --- | --- | --- | --- |
-| `earth` | `/textures/earth.jpg` | sRGB albedo | BasisLZ/ETC1S | 512, 1024, 2048 |
-| `moon` | `/textures/moon.jpg` | sRGB albedo | BasisLZ/ETC1S | 512, 1024, 2048 |
-| `earth-clouds` | `/textures/earth-clouds.svg` | sRGB alpha | UASTC + Zstd | 512, 1024, 2048 |
-| `saturn-ring` | `/textures/saturn_ring.png` | sRGB alpha strip | UASTC + Zstd | 512, 1024, 2048 |
+| ID | Runtime use | Codec |
+| --- | --- | --- |
+| `sun` | Solar surface | BasisLZ / ETC1S |
+| `mercury` | Mercury surface | BasisLZ / ETC1S |
+| `venus` | Venus surface | BasisLZ / ETC1S |
+| `earth` | Earth surface and local Earth-compatible aliases | BasisLZ / ETC1S |
+| `moon` | Moon, shared moon aliases, and near-Earth rocky bodies | BasisLZ / ETC1S |
+| `mars` | Mars surface | BasisLZ / ETC1S |
+| `jupiter` | Jupiter surface | BasisLZ / ETC1S |
+| `saturn` | Saturn surface | BasisLZ / ETC1S |
+| `uranus` | Uranus surface | BasisLZ / ETC1S |
+| `neptune` | Neptune surface | BasisLZ / ETC1S |
+| `pluto` | Pluto surface | BasisLZ / ETC1S |
+| `earth-clouds` | Earth cloud alpha layer | UASTC + Zstandard |
+| `saturn-ring` | Shared Saturn/Uranus radial alpha strip | UASTC + Zstandard |
 
-The ring texture is shared by Saturn and Uranus in the current catalogue.
+Procedural colours, generated particles, shader-only effects, and inactive source images do not need KTX2 payloads. New authored maps should be added to `ktx2-manifest.json` before becoming active runtime dependencies.
 
 ## Validated asset measurements
 
-The pinned Khronos KTX Software 4.4.2 workflow generated all 12 files, generated mipmaps, and validated each file with `ktx validate --gltf-basisu`.
+Khronos KTX Software 4.4.2 generated mipmaps and validated every output using `ktx validate --gltf-basisu`.
 
-| Tier | Earth | Moon | Clouds | Ring | Total |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 512 | 28.4 KiB | 36.3 KiB | 18.3 KiB | 7.6 KiB | 92.8 kB |
-| 1024 | 73.0 KiB | 113.8 KiB | 45.3 KiB | 17.4 KiB | 255.5 kB |
-| 2048 | 206.9 KiB | 404.2 KiB | 45.3 KiB | 36.8 KiB | 709.8 kB |
+| Tier | Files | Total KTX2 payload |
+| --- | ---: | ---: |
+| 512 | 13 | 349.2 kB |
+| 1024 | 13 | 1.03 MB |
+| 2048 | 13 | 3.32 MB |
 
-The project-authored cloud source is 1024 × 512, so its 2048 quality-tier entry intentionally preserves the source resolution instead of enlarging it. The narrow radial ring strips are edge-padded to portable 4 × 4 block boundaries without adding transparent seams.
+For comparison, all generated WebP fallbacks total 234.3 kB, 1.07 MB, and 4.74 MB for the same three quality levels. KTX2 is not always the smallest network payload—especially at 512 px—but it avoids expanding every selected map into an ordinary uncompressed GPU texture.
+
+The project-authored cloud source is 1024 × 512, so its Ultra entry intentionally preserves source resolution rather than enlarging it. Narrow ring strips are edge-padded to portable 4 × 4 block boundaries without introducing transparent seams.
 
 ## Runtime flow
 
 ```text
-Component requests a texture
+Material requests an authored texture
           │
-          ├─ WebP tier loads immediately through useTexture
+          ├─ matching WebP tier renders immediately
           │
-          └─ KTX2Loader initializes for the active renderer
+          └─ shared KTX2Loader initializes for the active renderer
                     │
                     ├─ detect supported GPU transcode target
-                    ├─ load matching 512 / 1K / 2K KTX2 tier
-                    ├─ cache by renderer, texture ID, and quality tier
-                    └─ replace the material map after success
+                    ├─ load matching 512 / 1K / 2K KTX2 payload
+                    ├─ cache by renderer, texture ID, and tier
+                    ├─ switch every material consumer after success
+                    └─ release the shared WebP GPU allocation
 ```
 
-A missing KTX2 file, unsupported compressed format, failed WASM load, network error, or transcode error leaves the WebP texture active. KTX2 is an enhancement, not a single point of failure.
+Shared fallback maps are reference-coordinated. For example, the Moon and near-Earth objects share one source, while Saturn and Uranus share one ring source. WebP is released only when every consumer of that source has confirmed its KTX2 replacement.
+
+`Texture.dispose()` frees the WebP GPU allocation but keeps the decoded browser image cached. Disabling KTX2 therefore restores WebP without another network request. A missing KTX2 file, unsupported format, failed WASM load, network error, or transcode error leaves WebP active.
+
+## Measured residency result
+
+A real WebGL 2 browser test first exposed an incorrect implementation that retained 28 textures after loading the full catalogue. The coordinated source-disposal design reduced final texture residency to 15—the same count as the pre-KTX2 baseline—while all 13 compressed maps remained active.
+
+This regression is now protected by the renderer budget in `scripts/smoke-ui.mjs`.
 
 ## Comparison controls
 
-The render-engine panel includes **GPU-compressed textures**. Turning it off switches the pilot surfaces to WebP immediately. Turning it on reuses any successfully cached KTX2 texture.
+The render-engine panel includes **GPU-compressed textures**. It reports requested/loaded catalogue coverage and the active backend:
 
-URL overrides are also available:
+```text
+KTX2   all requested maps compressed
+MIXED  at least one map remains on WebP
+WEBP   compressed textures disabled or unavailable
+```
+
+Direct comparison modes are available:
 
 ```text
 ?textures=ktx2
 ?textures=webp
 ```
 
-The runtime publishes diagnostic information to:
+Runtime diagnostics are published to:
 
 ```js
 window.__SOLAR_TEXTURE_DIAGNOSTICS__
 ```
 
-It includes the active backend, loaded and failed texture IDs, GPU texture formats, and the latest fallback error.
+Diagnostics include requested, loaded, and failed IDs; transcode formats; backend; and the latest fallback error.
 
 ## Asset generation
 
@@ -75,9 +97,9 @@ The repository pins Khronos KTX Software 4.4.2 in `.github/workflows/generate-kt
 
 The generation sequence is:
 
-1. read `ktx2-manifest.json`
-2. resize the source with Sharp into a temporary PNG
-3. encode BasisLZ or UASTC with generated mipmaps
+1. read `src/components/solar-system/textures/ktx2-manifest.json`
+2. resize each source into a deterministic temporary PNG with Sharp
+3. encode BasisLZ or UASTC and generate mipmaps
 4. validate with `ktx validate --gltf-basisu`
 5. commit the `.ktx2` files as ordinary binary Git payloads
 
@@ -88,7 +110,7 @@ bun run textures:ktx2:encode
 bun run textures:ktx2:verify
 ```
 
-Normal development and production builds do not require the native encoder. They verify committed KTX2 files and copy the Basis JavaScript/WASM transcoder from the installed Three.js package:
+Normal development and deployment do not require the native encoder. They verify the committed assets and copy the matching Three.js Basis JavaScript/WASM transcoder:
 
 ```bash
 bun run textures:basis:sync
@@ -97,19 +119,20 @@ bun run build
 
 ## Release gates
 
-The PR must pass:
+The catalogue is required to pass:
 
-- complete 12-file pilot set
-- valid KTX2 signatures
-- Khronos validation in the generation workflow
-- per-tier KTX2 artifact budgets
-- clean lint and strict TypeScript
-- production Next.js build
-- browser transcode of all four pilot IDs using a real WebGL 2 context
-- KTX2-to-WebP-to-KTX2 control switching
-- explicit `?textures=webp` fallback session
-- existing desktop, mobile, accessibility, screenshot, and context-recovery tests
+- all 39 signatures and per-tier file counts
+- pinned Khronos validation during generation
+- JavaScript, WebP, and KTX2 artifact budgets
+- clean ESLint and strict TypeScript
+- optimized Next.js production compilation
+- all 13 requested and loaded IDs in a real WebGL 2 browser
+- zero KTX2 failures
+- renderer texture residency at or below the guarded budget
+- KTX2 → WebP → KTX2 switching
+- an explicit `?textures=webp` session
+- desktop, mobile, accessibility, screenshot, orientation, and context-recovery tests
 
-## Full-catalogue decision
+## Current validation snapshot
 
-The remaining textures should be converted only after the pilot is visually inspected at close range and its measurements are compared with WebP. The full migration should preserve the same manifest, fallback, diagnostics, and validation architecture.
+The final automated run loaded all 13 IDs with no failures, selected `RGB_ETC2` and `RGBA_ASTC_4x4` transcode formats, and reported 15 resident textures. Draw calls, geometry, shader-program counts, mobile layout, screenshots, and renderer recovery remained within the existing production budgets.
