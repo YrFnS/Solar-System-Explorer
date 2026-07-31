@@ -24,7 +24,9 @@ The production scene still contains several mature GLSL visual systems. Moving t
 | W2 | KTX2 surfaces, atmospheres, Earth clouds, and rings | Complete |
 | W3 | Deterministic TSL stars and solar wind | Complete |
 | W4 | TSL Sun corona, outer glow, and restrained flare arcs | Complete |
-| W5 | Nebula, gravitational objects, and post-processing | Not started |
+| W5a | Restrained TSL nebula/background haze | Complete |
+| W5b | Black-hole and wormhole presentation | Not started |
+| W5c | Backend-neutral post-processing experiments | Not started |
 
 ## Backend modes
 
@@ -149,17 +151,51 @@ It records:
 - `material-tsl` animation
 - `cpuVertexUpdates: false`
 
-The route also displays a compact W4 status surface so the active effect contract is visible without opening developer tools.
+## W5a — restrained TSL nebula haze
+
+W5a adds two deterministic BackSide haze shells around the existing W1–W4 scene:
+
+- `tsl-nebula-inner`
+- `tsl-nebula-outer`
+
+The shells deliberately remain simple and restrained:
+
+- two low-opacity sphere geometries rather than a volumetric raymarch
+- additive Node Materials with depth writes disabled
+- fixed radii, rotations, phases, colours, and animation rates
+- position-derived wave fields evaluated from `positionLocal`
+- slow material-time animation evaluated from the TSL `time` node
+- no JavaScript vertex updates
+- no post-processing dependency
+
+The runtime contract is published only while the scene component is mounted:
+
+```js
+window.__SOLAR_WEBGPU_LAB_NEBULA__
+```
+
+It records:
+
+- both exact visual-system IDs
+- `shellCount: 2`
+- `animationMode: 'material-tsl'`
+- `cpuVertexUpdates: false`
+- `postProcessing: false`
+
+Publishing the object from the component lifecycle means the smoke test proves the haze scene mounted; importing the module alone is not enough to satisfy the gate.
+
+The route displays a compact W5a status surface with the active Sun, flare, and haze counts. The main renderer-control component remains focused on backend, texture, particle, and frame diagnostics.
 
 ## Runtime diagnostics
 
-The laboratory publishes four diagnostic objects:
+The laboratory publishes five diagnostic objects:
 
 ```js
 window.__SOLAR_WEBGPU_LAB__
 window.__SOLAR_WEBGPU_LAB_TEXTURES__
 window.__SOLAR_WEBGPU_LAB_EFFECTS__
 window.__SOLAR_WEBGPU_LAB_SUN__
+window.__SOLAR_WEBGPU_LAB_NEBULA__
 ```
 
 Together they expose:
@@ -173,7 +209,8 @@ Together they expose:
 - requested, loaded, failed, and transcoded KTX2 maps
 - active GPU particle systems and counts
 - active Sun systems and flare count
-- CPU-update contracts
+- active nebula systems and shell count
+- CPU-update and post-processing contracts
 
 ## Strict browser gate
 
@@ -192,13 +229,17 @@ Before reporting success, it verifies:
 - all three W4 Sun-system IDs are present
 - exactly five flare arcs are active
 - Sun animation is `material-tsl` with no CPU vertex updates
-- the visible W4 status surface is present
+- both W5a nebula-system IDs are present
+- exactly two haze shells are active
+- nebula animation is `material-tsl` with no CPU vertex updates
+- W5a does not depend on post-processing
+- the visible W5a status surface is present
 - at least 30 frame samples are collected after KTX2 readiness
 - no uncaught browser errors or invalid canvas layout
 
-The latest hosted run completed the complete repository gate, including lint, strict TypeScript, ephemeris validation, all 39 production KTX2 assets, the optimized Next.js build, artifact budgets, production desktop/mobile tests, and the WebGPU laboratory smoke test.
+The complete repository gate also retains lint, strict TypeScript, ephemeris validation, all 39 production KTX2 assets, the optimized Next.js build, artifact budgets, and production desktop/mobile/recovery tests.
 
-Its forced-WebGL W4 sample reported 66 draw calls. Auto fallback samples reported 76 and 68 draw calls across initial and remounted scenes. These are software-renderer validation measurements, not real-device performance claims.
+Hosted software-renderer frame rates are validation measurements, not physical-device performance claims.
 
 ## Hosted-runner WebGPU limitation
 
@@ -248,15 +289,15 @@ Production must remain on WebGL 2 until the laboratory demonstrates:
 
 ## Next migration order
 
-W5 should remain incremental rather than becoming one large effects rewrite:
+W5 remains incremental rather than becoming one large effects rewrite:
 
 ```text
-W5a  restrained TSL nebula/background field
-W5b  black-hole and wormhole presentation
-W5c  backend-neutral post-processing experiments
+W5a  restrained TSL nebula/background haze        complete
+W5b  black-hole and wormhole presentation         next
+W5c  backend-neutral post-processing experiments  deferred
 ```
 
-Each stage must retain the W1–W4 workload, add effect-specific diagnostics, and repeat forced-WebGL, Auto-fallback, real-adapter, remount, KTX2, and post-load frame gates before the next stage begins.
+W5b must retain the complete W1–W5a workload, add effect-specific diagnostics, and repeat forced-WebGL, Auto-fallback, real-adapter, remount, KTX2, and post-load frame gates. Post-processing remains deferred until gravitational-object presentation passes without it.
 
 ## Official references
 
