@@ -2,7 +2,6 @@
 
 import { useRef } from 'react'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import type { MoonData } from './data'
 import {
@@ -13,6 +12,7 @@ import { useExperienceStore } from './experience-store'
 import PlanetLabel from './PlanetLabel'
 import { getSimulationDateMs } from './simulation-clock'
 import { useSolarSystemStore } from './store'
+import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 
 interface EphemerisMoonProps {
   moon: MoonData
@@ -28,7 +28,7 @@ function TexturedMoonSurface({
   meshRef: React.RefObject<THREE.Mesh | null>
   onClick: (event: ThreeEvent<MouseEvent>) => void
 }) {
-  const texture = useTexture(moon.textureUrl!)
+  const texture = useAdaptiveTexture(moon.textureUrl!, { anisotropy: 4 })
 
   return (
     <mesh ref={meshRef} onClick={onClick}>
