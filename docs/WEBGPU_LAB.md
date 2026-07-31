@@ -28,10 +28,11 @@ A separate route keeps comparisons honest:
 | W5b | Black-hole and wormhole presentation without screen-space distortion | Complete |
 | W5c | Toggleable backend-neutral TSL threshold bloom | Complete |
 | W6 | Fixed-camera, four-configuration real-device evidence recorder | Complete |
+| W7 | Multi-device evidence analysis and conservative renderer recommendation | Complete |
 
-## Backend modes
+## Routes and backend modes
 
-### Auto WebGPU
+### Automatic WebGPU selection
 
 ```text
 /lab/webgpu
@@ -62,47 +63,27 @@ This creates the same `WebGPURenderer` with `forceWebGL: true`. Geometry, KTX2 m
 
 This keeps the same renderer and scene but bypasses the W5c `RenderPipeline`. The laboratory toggle changes between threshold bloom and direct rendering without remounting the backend.
 
+### Evidence analysis
+
+```text
+/lab/webgpu/results
+```
+
+This route loads the current browser session or imports one or more benchmark JSON exports. It never compares records across incompatible devices or workloads.
+
 ## W1 — renderer and TSL foundation
 
-W1 established:
-
-- asynchronous React Three Fiber renderer initialization;
-- actual backend inspection through `isWebGPUBackend` and `isWebGLBackend`;
-- ephemeris-driven Sun and eight planets;
-- shared production orbit calculations;
-- backend-neutral Node Materials;
-- shared camera and controls;
-- initialization, FPS, average, P95, longest-frame, sample, draw-call, and triangle diagnostics;
-- complete Canvas remounts during backend switching.
+W1 established asynchronous React Three Fiber renderer initialization, actual backend inspection, ephemeris-driven planets, shared production orbit calculations, backend-neutral Node Materials, shared camera controls, frame diagnostics, and complete Canvas remounts during backend switching.
 
 ## W2 — KTX2 surfaces and atmospheres
 
-The lab uses a fixed 1K parity tier with 11 unique maps:
+The lab uses a fixed 1K parity tier with 11 unique maps: the Sun, eight planets, Earth clouds, and the shared Saturn/Uranus ring map.
 
-- Sun;
-- Mercury;
-- Venus;
-- Earth;
-- Earth clouds;
-- Mars;
-- Jupiter;
-- Saturn;
-- shared Saturn/Uranus ring map;
-- Uranus;
-- Neptune.
-
-The maps load through `KTX2Loader.detectSupport(WebGPURenderer)`. Procedural TSL colours remain visible while maps load and after any texture failure.
-
-W2 also added TSL planetary surfaces, Fresnel-style atmospheres, Earth clouds, radial ring UV reconstruction, and post-load frame sampling.
+The maps load through `KTX2Loader.detectSupport(WebGPURenderer)`. Procedural TSL colours remain visible while maps load and after any texture failure. W2 also added TSL planetary surfaces, Fresnel-style atmospheres, Earth clouds, radial ring UV reconstruction, and post-load frame sampling.
 
 ## W3 — deterministic TSL particles
 
-W3 adds:
-
-- 1,600 deterministic instanced stars;
-- 320 deterministic solar-wind particles.
-
-TSL evaluates star position, colour, size, opacity, and twinkle, plus solar-wind radial travel, spiral drift, colour transition, size, and fade. JavaScript does not rewrite particle positions each frame.
+W3 adds 1,600 deterministic instanced stars and 320 deterministic solar-wind particles. TSL evaluates position, colour, size, opacity, twinkle, radial travel, spiral drift, and fade. JavaScript does not rewrite particle positions each frame.
 
 Runtime contract:
 
@@ -112,13 +93,7 @@ window.__SOLAR_WEBGPU_LAB_EFFECTS__
 
 ## W4 — TSL Sun presentation
 
-W4 adds:
-
-1. an additive BackSide corona with view-dependent rim intensity;
-2. a restrained outer glow;
-3. five fixed torus flare arcs with TSL colour and opacity sweeps.
-
-JavaScript creates and disposes geometry and materials but does not rewrite Sun vertices each frame.
+W4 adds an additive BackSide corona, a restrained outer glow, and five fixed torus flare arcs with TSL colour and opacity sweeps. JavaScript creates and disposes geometry and materials but does not rewrite Sun vertices each frame.
 
 Runtime contract:
 
@@ -128,12 +103,7 @@ window.__SOLAR_WEBGPU_LAB_SUN__
 
 ## W5a — restrained TSL nebula haze
 
-W5a adds two deterministic BackSide haze shells:
-
-- `tsl-nebula-inner`;
-- `tsl-nebula-outer`.
-
-They use low-opacity additive Node Materials, fixed transforms and phases, position-derived wave fields, slow material-time animation, no CPU vertex updates, and no post-processing.
+W5a adds two deterministic BackSide haze shells with low-opacity additive Node Materials, fixed transforms and phases, position-derived wave fields, slow material-time animation, no CPU vertex updates, and no post-processing.
 
 Runtime contract, published only while mounted:
 
@@ -145,17 +115,13 @@ window.__SOLAR_WEBGPU_LAB_NEBULA__
 
 W5b adds one deterministic black hole and one deterministic wormhole.
 
-The black hole includes an event-horizon core, TSL halo, two accretion discs, and one photon ring. The wormhole includes two TSL mouth surfaces, one open throat, and animated rim layers.
-
-The presentation deliberately avoids physical ray-traced lensing, screen-space distortion, and post-processing.
+The black hole includes an event-horizon core, TSL halo, two accretion discs, and one photon ring. The wormhole includes two TSL mouth surfaces, one open throat, and animated rim layers. The presentation deliberately avoids physical ray-traced lensing, screen-space distortion, and post-processing.
 
 Runtime contract, published only while mounted:
 
 ```js
 window.__SOLAR_WEBGPU_LAB_GRAVITY__
 ```
-
-It records six exact system IDs, two objects, one black hole, two accretion discs, one wormhole, two mouths, material-TSL animation, no CPU vertex updates, and no screen-space distortion.
 
 ## W5c — toggleable TSL render pipeline
 
@@ -169,19 +135,7 @@ W5c adds one deliberately small backend-neutral post-processing experiment:
 - threshold `0.78`;
 - smooth width `0.08`.
 
-The in-panel checkbox switches between:
-
-```text
-render-pipeline-tsl
-```
-
-and:
-
-```text
-direct-render
-```
-
-without remounting the renderer. No CPU pixel rewriting or screen-space lensing/distortion is used.
+The in-panel checkbox switches between `render-pipeline-tsl` and `direct-render` without remounting the renderer. No CPU pixel rewriting or screen-space lensing is used.
 
 Runtime contract:
 
@@ -191,18 +145,17 @@ window.__SOLAR_WEBGPU_LAB_POST__
 
 ## W6 — real-device benchmark protocol
 
-W6 turns the completed parity scene into a repeatable evidence recorder.
+W6 turns the parity scene into a repeatable evidence recorder.
 
 The benchmark panel provides:
 
-- one shared camera position at `[0, 34, 62]`;
-- one shared target at `[0, 0, 0]`;
+- shared camera position `[0, 34, 62]` and target `[0, 0, 0]`;
 - a fresh rolling window after camera preparation, bloom changes, or renderer changes;
-- a minimum of 90 fresh frames before a record can be saved;
-- automatic invalidation when the user starts moving the camera;
+- at least 90 fresh frames before a record can be saved;
+- automatic invalidation when camera interaction begins;
 - session storage for up to 16 records;
 - JSON download and clipboard export;
-- a visible coverage matrix for all four required configurations.
+- visible coverage for all four required configurations.
 
 The required physical-device matrix is:
 
@@ -213,17 +166,7 @@ WebGL 2 + bloom
 WebGL 2 + direct rendering
 ```
 
-A record includes:
-
-- requested and actual backend;
-- renderer backend class and adapter status;
-- fallback reason when applicable;
-- initialization time;
-- average, P95, longest-frame, FPS, sample count, draw calls, and triangles;
-- KTX2 backend and transcode formats;
-- viewport, DPR, screen, user agent, CPU concurrency, and approximate device memory when exposed;
-- exact scene counts and post-processing parameters;
-- fixed camera and simulation settings.
+A record includes backend and adapter state, fallback reason, initialization time, average/P95/longest frame time, FPS, sample count, renderer counters, KTX2 formats, viewport, DPR, screen, user agent, available hardware hints, exact scene counts, post-processing parameters, and fixed camera/simulation settings.
 
 Runtime contract:
 
@@ -231,11 +174,42 @@ Runtime contract:
 window.__SOLAR_WEBGPU_LAB_BENCHMARK__
 ```
 
-The browser gate also verifies that manual camera movement invalidates a prepared baseline, bloom and direct samples use separate fresh frame windows, two WebGL records survive a reload through session storage, and clearing removes the session.
+## W7 — evidence analysis and promotion gate
+
+W7 converts raw captures into a conservative renderer decision.
+
+The evidence workspace can:
+
+- load records from the current benchmark session;
+- import multiple JSON exports from physical devices;
+- validate schema version and reject incomplete records;
+- reject records with fewer than 90 frame samples;
+- deduplicate repeated records;
+- group records by physical-device/browser environment;
+- pair WebGPU and WebGL 2 only when viewport, DPR, camera, simulation, scene workload, texture backend, and texture formats match;
+- compare bloom and direct rendering separately;
+- use medians when repeated captures exist;
+- report average, P95, longest-frame, FPS, and initialization deltas;
+- export a decision report containing raw evidence and derived analysis.
+
+Positive percentages mean WebGPU was faster. The recommendation engine is intentionally conservative:
+
+- fewer than two complete devices — insufficient evidence;
+- any material matched WebGPU regression — keep WebGL 2;
+- at least two complete devices with consistent wins — justify a WebGPU opt-in while keeping WebGL 2 as default;
+- at least four complete devices, wins in at least 75% of matched modes, and at least 5% median P95 improvement — consider a controlled WebGPU-default trial.
+
+A complete device has all four configurations. Timing recommendations never replace visual, crash, context/device-loss, thermal, fan, battery, and browser-support review.
+
+Runtime contract:
+
+```js
+window.__SOLAR_WEBGPU_BENCHMARK_ANALYSIS__
+```
 
 ## Runtime diagnostics
 
-The laboratory publishes eight diagnostic surfaces:
+The laboratory and evidence workspace publish nine diagnostic surfaces:
 
 ```js
 window.__SOLAR_WEBGPU_LAB__
@@ -246,33 +220,27 @@ window.__SOLAR_WEBGPU_LAB_NEBULA__
 window.__SOLAR_WEBGPU_LAB_GRAVITY__
 window.__SOLAR_WEBGPU_LAB_POST__
 window.__SOLAR_WEBGPU_LAB_BENCHMARK__
+window.__SOLAR_WEBGPU_BENCHMARK_ANALYSIS__
 ```
 
-Together they expose backend selection, adapter status, fallback reasons, initialization, rolling frame metrics, KTX2 state, migrated visual systems, object counts, post-processing mode, zero-CPU-update contracts, benchmark readiness, coverage, and exported records.
-
-## Strict browser gate
+## Strict release gate
 
 The production-standalone gates verify:
 
-- forced WebGL 2 initialization and interaction;
-- capability-aware Auto selection;
+- forced WebGL 2 initialization and capability-aware Auto selection;
 - Auto → forced WebGL 2 → Auto remounts;
-- all 11 laboratory KTX2 maps loaded with zero failures;
-- compressed transcode-format reporting;
-- exact W3 particle IDs and counts;
-- exact W4 Sun IDs and five flare arcs;
-- exact W5a nebula IDs and two shells;
-- exact W5b gravitational IDs and object counts;
-- exact W5c pipeline IDs and pass counts;
-- bloom → direct render → bloom switching without a renderer remount;
-- material/vertex TSL animation contracts;
+- all 11 laboratory KTX2 maps with zero failures;
+- exact W3 particle, W4 Sun, W5a nebula, and W5b gravitational contracts;
+- W5c bloom/direct switching without renderer remount;
 - no CPU position, vertex, or pixel rewriting;
 - no screen-space distortion;
-- visible W5c and W6 controls;
 - fixed-camera preparation and camera-interaction invalidation;
 - separate 90-frame bloom and direct benchmark windows;
-- session-persistent benchmark records and four-configuration coverage metadata;
-- no uncaught browser errors or invalid canvas layout.
+- session-persistent benchmark records;
+- benchmark schema, pairing, regression, and promotion-threshold validation;
+- current-session and multi-file evidence import;
+- opt-in and controlled-default-trial recommendation rendering;
+- no uncaught browser errors or invalid layout.
 
 The repository gate also retains module/dependency audit, clean ESLint, strict TypeScript, ephemeris validation, all 39 production KTX2 files, optimized Next.js build, artifact budgets, and production desktop/mobile/accessibility/recovery tests.
 
@@ -281,11 +249,13 @@ Local validation commands:
 ```bash
 bun run webgpu:smoke
 bun run webgpu:benchmark:smoke
+bun run webgpu:analysis:validate
+bun run webgpu:results:smoke
 ```
 
 ## Hosted-runner WebGPU limitation
 
-GitHub-hosted Chromium exposes `navigator.gpu` but returns no usable core or compatibility Dawn adapter in this workflow. The mandatory hosted gate therefore proves correct detection, safe fallback, complete TSL/KTX2 parity on the WebGL 2 backend, stable remounts, and the full benchmark protocol.
+GitHub-hosted Chromium exposes `navigator.gpu` but returns no usable core or compatibility Dawn adapter in this workflow. Hosted CI therefore proves correct detection, safe fallback, complete TSL/KTX2 parity on the WebGL 2 backend, stable remounts, the benchmark protocol, and the evidence-analysis rules.
 
 A physical device or self-hosted runner can require a genuine WebGPU result with:
 
@@ -305,11 +275,12 @@ Production must remain on WebGL 2 until the lab demonstrates:
 4. stable camera, KTX2, screenshots, and recovery;
 5. measurable benefit on target physical devices;
 6. reliable WebGL 2 fallback;
-7. no significant regression on integrated graphics or mobile hardware.
+7. no significant regression on integrated graphics or mobile hardware;
+8. evidence-workspace thresholds reached without thermal or stability regressions.
 
 ## Current conclusion
 
-W1 through W6 are complete as an isolated laboratory. The next work is running and exporting the four records on each target device:
+W1 through W7 are complete as an isolated laboratory. The remaining work is evidence collection on physical hardware:
 
 ```text
 Desktop discrete GPU
@@ -318,9 +289,7 @@ Android phone
 Apple device where WebGPU is available
 ```
 
-For each device, prepare the baseline before the first capture, record bloom and direct modes, switch backend, prepare the baseline again, and record the other two modes. Compare initialization, average frame time, P95 frame time, longest frame, stability, and visual parity—not CI software-renderer FPS.
-
-Production should not change until those measurements justify an opt-in renderer setting.
+On each device, record the four configurations using the fixed baseline. Import all exported files into `/lab/webgpu/results`. Production should remain WebGL 2 until the resulting recommendation and manual visual/power review justify an opt-in renderer setting or controlled default trial.
 
 ## Official references
 
