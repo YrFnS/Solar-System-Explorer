@@ -44,6 +44,9 @@ jobs:
       - name: Validate orbital engine
         run: bun run ephemeris:validate
 
+      - name: Validate benchmark decision engine
+        run: bun run webgpu:analysis:validate
+
       - name: Generate optimized WebP fallbacks
         run: bun run textures:optimize
 
@@ -67,3 +70,6 @@ jobs:
 
       - name: Smoke test real-device benchmark protocol
         run: bun run webgpu:benchmark:smoke
+
+      - name: Smoke test benchmark evidence workspace
+        run: bun run webgpu:results:smoke
