@@ -27,6 +27,7 @@ A separate route keeps comparisons honest:
 | W5a | Restrained TSL nebula/background haze | Complete |
 | W5b | Black-hole and wormhole presentation without screen-space distortion | Complete |
 | W5c | Toggleable backend-neutral TSL threshold bloom | Complete |
+| W6 | Fixed-camera, four-configuration real-device evidence recorder | Complete |
 
 ## Backend modes
 
@@ -188,9 +189,53 @@ Runtime contract:
 window.__SOLAR_WEBGPU_LAB_POST__
 ```
 
+## W6 — real-device benchmark protocol
+
+W6 turns the completed parity scene into a repeatable evidence recorder.
+
+The benchmark panel provides:
+
+- one shared camera position at `[0, 34, 62]`;
+- one shared target at `[0, 0, 0]`;
+- a fresh rolling window after camera preparation, bloom changes, or renderer changes;
+- a minimum of 90 fresh frames before a record can be saved;
+- automatic invalidation when the user starts moving the camera;
+- session storage for up to 16 records;
+- JSON download and clipboard export;
+- a visible coverage matrix for all four required configurations.
+
+The required physical-device matrix is:
+
+```text
+WebGPU + bloom
+WebGPU + direct rendering
+WebGL 2 + bloom
+WebGL 2 + direct rendering
+```
+
+A record includes:
+
+- requested and actual backend;
+- renderer backend class and adapter status;
+- fallback reason when applicable;
+- initialization time;
+- average, P95, longest-frame, FPS, sample count, draw calls, and triangles;
+- KTX2 backend and transcode formats;
+- viewport, DPR, screen, user agent, CPU concurrency, and approximate device memory when exposed;
+- exact scene counts and post-processing parameters;
+- fixed camera and simulation settings.
+
+Runtime contract:
+
+```js
+window.__SOLAR_WEBGPU_LAB_BENCHMARK__
+```
+
+The browser gate also verifies that manual camera movement invalidates a prepared baseline, bloom and direct samples use separate fresh frame windows, two WebGL records survive a reload through session storage, and clearing removes the session.
+
 ## Runtime diagnostics
 
-The laboratory publishes seven diagnostic surfaces:
+The laboratory publishes eight diagnostic surfaces:
 
 ```js
 window.__SOLAR_WEBGPU_LAB__
@@ -200,13 +245,14 @@ window.__SOLAR_WEBGPU_LAB_SUN__
 window.__SOLAR_WEBGPU_LAB_NEBULA__
 window.__SOLAR_WEBGPU_LAB_GRAVITY__
 window.__SOLAR_WEBGPU_LAB_POST__
+window.__SOLAR_WEBGPU_LAB_BENCHMARK__
 ```
 
-Together they expose backend selection, adapter status, fallback reasons, initialization, rolling frame metrics, KTX2 state, migrated visual systems, object counts, post-processing mode, and zero-CPU-update contracts.
+Together they expose backend selection, adapter status, fallback reasons, initialization, rolling frame metrics, KTX2 state, migrated visual systems, object counts, post-processing mode, zero-CPU-update contracts, benchmark readiness, coverage, and exported records.
 
 ## Strict browser gate
 
-The W5c production-standalone gate verifies:
+The production-standalone gates verify:
 
 - forced WebGL 2 initialization and interaction;
 - capability-aware Auto selection;
@@ -222,41 +268,24 @@ The W5c production-standalone gate verifies:
 - material/vertex TSL animation contracts;
 - no CPU position, vertex, or pixel rewriting;
 - no screen-space distortion;
-- visible W5c status UI;
-- at least 30 post-KTX2 frame samples;
+- visible W5c and W6 controls;
+- fixed-camera preparation and camera-interaction invalidation;
+- separate 90-frame bloom and direct benchmark windows;
+- session-persistent benchmark records and four-configuration coverage metadata;
 - no uncaught browser errors or invalid canvas layout.
 
 The repository gate also retains module/dependency audit, clean ESLint, strict TypeScript, ephemeris validation, all 39 production KTX2 files, optimized Next.js build, artifact budgets, and production desktop/mobile/accessibility/recovery tests.
 
-## Latest hosted validation
+Local validation commands:
 
-The final W5c Quality run passed every gate.
-
-Production remained at its established smoke-test baseline:
-
-```text
-Draw calls:      333
-Triangles:       90,688
-Textures:        15
-Programs:        30
-Scene objects:   569
+```bash
+bun run webgpu:smoke
+bun run webgpu:benchmark:smoke
 ```
-
-Artifact budgets remained green:
-
-```text
-JavaScript chunks:       39
-Largest chunk:           649.7 kB
-Total static JavaScript: 2.97 MB
-```
-
-The hosted software renderer loaded all 11 lab KTX2 maps with zero failures and reported `RGB_ETC2` plus `RGBA_ASTC_4x4`.
-
-W5c's software-renderer samples showed 448 draw calls in forced WebGL 2 and 462 after Auto fallback/remount. These FPS and frame-time values are validation data, not physical-device performance claims. The increase confirms that even restrained bloom has a measurable cost and must remain optional until real-device testing is complete.
 
 ## Hosted-runner WebGPU limitation
 
-GitHub-hosted Chromium exposes `navigator.gpu` but returns no usable core or compatibility Dawn adapter in this workflow. The mandatory hosted gate therefore proves correct detection, safe fallback, complete TSL/KTX2 parity on the WebGL 2 backend, and stable remounts.
+GitHub-hosted Chromium exposes `navigator.gpu` but returns no usable core or compatibility Dawn adapter in this workflow. The mandatory hosted gate therefore proves correct detection, safe fallback, complete TSL/KTX2 parity on the WebGL 2 backend, stable remounts, and the full benchmark protocol.
 
 A physical device or self-hosted runner can require a genuine WebGPU result with:
 
@@ -280,7 +309,7 @@ Production must remain on WebGL 2 until the lab demonstrates:
 
 ## Current conclusion
 
-W1 through W5c are complete as an isolated laboratory. The next work is evidence gathering rather than adding more effects:
+W1 through W6 are complete as an isolated laboratory. The next work is running and exporting the four records on each target device:
 
 ```text
 Desktop discrete GPU
@@ -289,7 +318,9 @@ Android phone
 Apple device where WebGPU is available
 ```
 
-Compare Auto WebGPU, forced WebGL 2, bloom enabled, and direct render using the same camera, DPR, date, and workload. Production should not change until those measurements justify an opt-in renderer setting.
+For each device, prepare the baseline before the first capture, record bloom and direct modes, switch backend, prepare the baseline again, and record the other two modes. Compare initialization, average frame time, P95 frame time, longest frame, stability, and visual parity—not CI software-renderer FPS.
+
+Production should not change until those measurements justify an opt-in renderer setting.
 
 ## Official references
 
