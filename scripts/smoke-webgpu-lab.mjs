@@ -82,6 +82,44 @@ async function diagnosticSnapshot(page) {
   })
 }
 
+async function probeWebGPUAdapters(page) {
+  return page.evaluate(async () => {
+    if (!('gpu' in navigator)) {
+      return {
+        apiAvailable: false,
+        core: { available: false, error: 'navigator.gpu is unavailable' },
+        compatibility: { available: false, error: 'navigator.gpu is unavailable' },
+      }
+    }
+
+    const probe = async (options) => {
+      try {
+        const adapter = await navigator.gpu.requestAdapter(options)
+        return {
+          available: Boolean(adapter),
+          features: adapter ? [...adapter.features].sort() : [],
+          error: null,
+        }
+      } catch (error) {
+        return {
+          available: false,
+          features: [],
+          error: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }
+
+    return {
+      apiAvailable: true,
+      core: await probe({ powerPreference: 'high-performance' }),
+      compatibility: await probe({
+        powerPreference: 'high-performance',
+        featureLevel: 'compatibility',
+      }),
+    }
+  })
+}
+
 async function waitForLabDiagnostics(page, expectedRequested, timeout = 75_000) {
   await page.waitForSelector('canvas', { timeout: 45_000 })
 
@@ -200,6 +238,15 @@ async function runRealWebGPU(browser) {
   const failures = collectPageFailures(page)
 
   await openLab(page)
+  const adapterProbe = await probeWebGPUAdapters(page)
+  console.log(`[webgpu-smoke] adapter probe ${JSON.stringify(adapterProbe)}`)
+
+  if (!adapterProbe.compatibility.available) {
+    throw new Error(
+      `Chromium did not expose the compatibility WebGPU adapter required by three.js r184: ${JSON.stringify(adapterProbe)}`
+    )
+  }
+
   const diagnostics = await waitForLabDiagnostics(page, 'auto')
   assertDiagnostics(diagnostics, 'auto', 'webgpu')
   await assertCanvasHealthy(page, 'real WebGPU')
@@ -234,24 +281,27 @@ function launchForcedWebGLBrowser() {
 }
 
 function launchWebGPUBrowser() {
-  // Chromium's test infrastructure can explicitly select Dawn's SwiftShader
-  // adapter. This proves a real WebGPUBackend in generic Linux CI without
-  // claiming the hosted runner has a hardware Vulkan device.
+  // Use Chromium's Linux software-WebGPU path: Dawn selects its SwiftShader
+  // adapter while ANGLE and compositing run through Vulkan SwiftShader. This
+  // proves an actual WebGPUBackend without claiming the runner has a real GPU.
   return puppeteer.launch({
     headless: 'new',
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-gpu-sandbox',
-      '--enable-webgl',
       '--enable-unsafe-webgpu',
-      '--enable-unsafe-swiftshader',
+      '--enable-webgpu-developer-features',
+      '--enable-blink-features=WebGPUCompatibilityMode',
+      '--enable-features=Vulkan',
+      '--use-angle=vulkan',
+      '--use-vulkan=swiftshader',
+      '--use-webgpu-adapter=swiftshader',
+      '--disable-vulkan-surface',
       '--ignore-gpu-blocklist',
       '--use-gpu-in-tests',
-      '--use-webgpu-adapter=swiftshader',
-      '--use-gl=angle',
-      '--use-angle=swiftshader',
       '--enable-dawn-features=allow_unsafe_apis',
+      '--enable-accelerated-2d-canvas',
       '--window-size=1280,720',
     ],
   })
