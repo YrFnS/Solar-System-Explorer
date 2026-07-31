@@ -1,0 +1,64 @@
+name: Apply WebGPU Lab Type Fixes
+
+on:
+  push:
+    branches:
+      - agent/webgpu-lab
+    paths:
+      - '.github/workflows/apply-webgpu-lab-type-fixes.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out experiment branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/webgpu-lab
+          fetch-depth: 0
+
+      - name: Apply strict renderer typings and audit-visible import
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          lab = Path('src/components/solar-system/webgpu/WebGPULab.tsx')
+          text = lab.read_text()
+          text = text.replace(
+              "import { Canvas, extend } from '@react-three/fiber'",
+              "import { Canvas, extend } from '@react-three/fiber'\nimport type { WebGLRenderer as LegacyWebGLRenderer } from 'three'",
+          )
+          text = text.replace(
+              'extend(THREE as unknown as Record<string, unknown>)',
+              'extend(THREE as any)',
+          )
+          text = text.replace(
+              'return renderer as unknown as THREE.WebGLRenderer',
+              'return renderer as unknown as LegacyWebGLRenderer',
+          )
+          lab.write_text(text)
+
+          route = Path('src/app/lab/webgpu/page.tsx')
+          route_text = route.read_text().replace(
+              "() => import('@/components/solar-system/webgpu/WebGPULab')",
+              "() => import('../../../components/solar-system/webgpu/WebGPULab')",
+          )
+          route.write_text(route_text)
+
+          Path('.github/workflows/apply-webgpu-lab-type-fixes.yml').unlink()
+          PY
+
+      - name: Commit fixes
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix strict WebGPU lab renderer types"
+          git pull --rebase origin agent/webgpu-lab
+          git push origin HEAD:agent/webgpu-lab
