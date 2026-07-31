@@ -9,6 +9,19 @@ const baseUrl = `http://${host}:${port}`
 const standaloneRoot = path.resolve('.next', 'standalone')
 const standaloneNextRoot = path.join(standaloneRoot, '.next')
 const requireRealWebGPU = process.env.WEBGPU_REQUIRE_REAL === '1'
+const EXPECTED_TEXTURE_IDS = [
+  'sun',
+  'mercury',
+  'venus',
+  'earth',
+  'earth-clouds',
+  'mars',
+  'jupiter',
+  'saturn',
+  'saturn-ring',
+  'uranus',
+  'neptune',
+]
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -71,13 +84,14 @@ async function diagnosticSnapshot(page) {
     const canvas = document.querySelector('canvas')
     return {
       diagnostics: window.__SOLAR_WEBGPU_LAB__ ?? null,
+      textureDiagnostics: window.__SOLAR_WEBGPU_LAB_TEXTURES__ ?? null,
       canvas: canvas
         ? {
             width: canvas.clientWidth,
             height: canvas.clientHeight,
           }
         : null,
-      bodyText: (document.body.textContent ?? '').replace(/\s+/g, ' ').slice(0, 1_200),
+      bodyText: (document.body.textContent ?? '').replace(/\s+/g, ' ').slice(0, 1_500),
       navigatorGpu: 'gpu' in navigator,
     }
   })
@@ -124,12 +138,12 @@ async function probeWebGPUAdapters(page) {
   })
 }
 
-async function waitForLabDiagnostics(page, expectedRequested, timeout = 75_000) {
+async function waitForLabDiagnostics(page, expectedRequested, timeout = 90_000) {
   await page.waitForSelector('canvas', { timeout: 45_000 })
 
   try {
     await page.waitForFunction(
-      (requested) => {
+      (requested, expectedTextureIds) => {
         const diagnostics = window.__SOLAR_WEBGPU_LAB__
         const metrics = diagnostics?.metrics
         return Boolean(
@@ -140,6 +154,13 @@ async function waitForLabDiagnostics(page, expectedRequested, timeout = 75_000) 
           && diagnostics.initializationMs !== null
           && Number.isFinite(diagnostics.initializationMs)
           && diagnostics.initializationMs >= 0
+          && diagnostics.textureBackend === 'ktx2'
+          && diagnostics.textureFailedIds.length === 0
+          && diagnostics.textureRequestedIds.length === expectedTextureIds.length
+          && diagnostics.textureLoadedIds.length === expectedTextureIds.length
+          && expectedTextureIds.every((id) => diagnostics.textureRequestedIds.includes(id))
+          && expectedTextureIds.every((id) => diagnostics.textureLoadedIds.includes(id))
+          && diagnostics.textureFormats.length > 0
           && metrics
           && metrics.samples >= 30
           && Number.isFinite(metrics.fps)
@@ -153,12 +174,13 @@ async function waitForLabDiagnostics(page, expectedRequested, timeout = 75_000) 
         )
       },
       { timeout },
-      expectedRequested
+      expectedRequested,
+      EXPECTED_TEXTURE_IDS
     )
   } catch (error) {
     const snapshot = await diagnosticSnapshot(page)
     throw new Error(
-      `Timed out waiting for ${expectedRequested} lab diagnostics: ${JSON.stringify(snapshot)}`,
+      `Timed out waiting for ${expectedRequested} W2 diagnostics: ${JSON.stringify(snapshot)}`,
       { cause: error }
     )
   }
@@ -188,6 +210,31 @@ async function assertCanvasHealthy(page, label) {
   }
 }
 
+function assertTextureDiagnostics(diagnostics) {
+  if (diagnostics.textureBackend !== 'ktx2') {
+    throw new Error(`Expected KTX2 texture backend, received ${diagnostics.textureBackend}`)
+  }
+  if (diagnostics.textureFailedIds.length > 0) {
+    throw new Error(`KTX2 texture failures: ${diagnostics.textureFailedIds.join(', ')}`)
+  }
+
+  const missingRequested = EXPECTED_TEXTURE_IDS.filter(
+    (id) => !diagnostics.textureRequestedIds.includes(id)
+  )
+  const missingLoaded = EXPECTED_TEXTURE_IDS.filter(
+    (id) => !diagnostics.textureLoadedIds.includes(id)
+  )
+
+  if (missingRequested.length || missingLoaded.length) {
+    throw new Error(
+      `Incomplete W2 texture set: ${JSON.stringify({ missingRequested, missingLoaded })}`
+    )
+  }
+  if (diagnostics.textureFormats.length === 0) {
+    throw new Error('KTX2 textures loaded without a reported transcode format')
+  }
+}
+
 function assertDiagnostics(diagnostics, requested, actual) {
   if (!diagnostics) throw new Error(`No diagnostics published for ${requested}`)
   if (diagnostics.requestedBackend !== requested) {
@@ -200,6 +247,7 @@ function assertDiagnostics(diagnostics, requested, actual) {
       `Actual backend mismatch: expected ${actual}, received ${diagnostics.actualBackend}`
     )
   }
+  assertTextureDiagnostics(diagnostics)
 }
 
 async function openLab(page, suffix = '') {
@@ -237,15 +285,15 @@ async function runForcedWebGL(browser) {
   await assertCanvasHealthy(page, 'forced WebGL 2')
 
   const text = await page.evaluate(() => document.body.textContent ?? '')
-  if (!text.includes('W1 parity scope')) {
-    throw new Error('Forced WebGL 2 lab UI did not render the expected controls')
+  if (!text.includes('W2 parity scope') || !text.includes('KTX2 ready')) {
+    throw new Error('Forced WebGL 2 lab UI did not render the W2 texture controls')
   }
 
   if (failures.length > 0) {
     throw new Error(`Forced WebGL 2 browser failures:\n${failures.join('\n')}`)
   }
 
-  console.log(`[webgpu-smoke] forced WebGL 2 ${JSON.stringify(diagnostics)}`)
+  console.log(`[webgpu-smoke] forced WebGL 2 W2 ${JSON.stringify(diagnostics)}`)
   await page.close()
 }
 
@@ -289,8 +337,8 @@ async function runAutoSelection(browser) {
   }
 
   console.log(`[webgpu-smoke] auto adapter probe ${JSON.stringify(adapterProbe)}`)
-  console.log(`[webgpu-smoke] auto selected ${JSON.stringify(diagnostics)}`)
-  console.log(`[webgpu-smoke] auto restored ${JSON.stringify(restoredDiagnostics)}`)
+  console.log(`[webgpu-smoke] auto W2 selected ${JSON.stringify(diagnostics)}`)
+  console.log(`[webgpu-smoke] auto W2 restored ${JSON.stringify(restoredDiagnostics)}`)
   await page.close()
 }
 
@@ -325,7 +373,7 @@ async function runOptionalRealWebGPU(browser) {
     throw new Error(`WebGPU browser failures:\n${failures.join('\n')}`)
   }
 
-  console.log(`[webgpu-smoke] real WebGPU ${JSON.stringify(diagnostics)}`)
+  console.log(`[webgpu-smoke] real WebGPU W2 ${JSON.stringify(diagnostics)}`)
   await page.close()
 }
 
