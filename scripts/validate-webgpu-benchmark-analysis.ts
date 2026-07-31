@@ -136,7 +136,11 @@ assert.equal(defaultTrial.recommendation, 'consider-webgpu-default')
 assert.equal(defaultTrial.confidence, 'high')
 
 const regressionRecords = [
-  ...twoDeviceRecords,
+  ...twoDeviceRecords.filter((record) => !(
+    record.environment.platform === 'Device-B'
+    && record.actualBackend === 'webgpu'
+    && record.postProcessingEnabled
+  )),
   createRecord({
     device: 'Device-B',
     backend: 'webgpu',
