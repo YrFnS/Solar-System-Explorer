@@ -19,6 +19,30 @@ export const LAB_VISUAL_SYSTEMS = [
   'tsl-solar-wind',
 ] as const
 
+export interface LabEffectsDiagnostics {
+  visualSystems: string[]
+  starCount: number
+  solarWindCount: number
+  animationMode: 'vertex-tsl'
+  cpuPositionUpdates: false
+}
+
+declare global {
+  interface Window {
+    __SOLAR_WEBGPU_LAB_EFFECTS__?: LabEffectsDiagnostics
+  }
+}
+
+if (typeof window !== 'undefined') {
+  window.__SOLAR_WEBGPU_LAB_EFFECTS__ = {
+    visualSystems: [...LAB_VISUAL_SYSTEMS],
+    starCount: LAB_STAR_COUNT,
+    solarWindCount: LAB_SOLAR_WIND_COUNT,
+    animationMode: 'vertex-tsl',
+    cpuPositionUpdates: false,
+  }
+}
+
 function seededRandom(initialSeed: number) {
   let seed = initialSeed
   return () => {
