@@ -42,11 +42,22 @@ function cliCodec(codec) {
   return codec === 'uastc-ldr-4x4' ? 'uastc' : codec
 }
 
+function roundUpToBlock(value, blockSize = 4) {
+  return Math.max(blockSize, Math.ceil(value / blockSize) * blockSize)
+}
+
 async function encodeTexture(entry, width) {
   const sourcePath = path.join(root, 'public', entry.input.replace(/^\/+/, ''))
   const metadata = await sharp(sourcePath, { limitInputPixels: false }).metadata()
   const sourceWidth = metadata.width ?? width
-  const targetWidth = Math.min(width, sourceWidth)
+  const sourceHeight = metadata.height ?? sourceWidth
+  const targetWidth = Math.max(1, Math.min(width, sourceWidth))
+  const targetHeight = Math.max(
+    1,
+    Math.round(sourceHeight * (targetWidth / sourceWidth))
+  )
+  const encodedWidth = roundUpToBlock(targetWidth)
+  const encodedHeight = roundUpToBlock(targetHeight)
   const tempPath = path.join(tempRoot, `${entry.id}-${width}.png`)
   const outputDirectory = path.join(outputRoot, String(width))
   const outputPath = path.join(outputDirectory, `${entry.id}.ktx2`)
@@ -56,9 +67,26 @@ async function encodeTexture(entry, width) {
 
   let image = sharp(sourcePath, { limitInputPixels: false }).resize({
     width: targetWidth,
-    fit: 'inside',
+    height: targetHeight,
+    fit: 'fill',
     withoutEnlargement: true,
   })
+
+  const rightPadding = encodedWidth - targetWidth
+  const bottomPadding = encodedHeight - targetHeight
+  if (rightPadding > 0 || bottomPadding > 0) {
+    // Copy only the final edge pixels. This satisfies the 4x4 block boundary
+    // required by KHR_texture_basisu without introducing a transparent seam in
+    // radial ring strips or equirectangular maps.
+    image = image.extend({
+      top: 0,
+      left: 0,
+      right: rightPadding,
+      bottom: bottomPadding,
+      extendWith: 'copy',
+    })
+  }
+
   image = entry.alpha ? image.ensureAlpha() : image.removeAlpha()
   await image.png({ compressionLevel: 9, palette: false }).toFile(tempPath)
 
@@ -115,7 +143,8 @@ async function encodeTexture(entry, width) {
 
   const outputStats = await stat(outputPath)
   console.log(
-    `[ktx2] ${entry.id} ${width}px ${entry.codec}: ${(outputStats.size / 1024).toFixed(1)} KiB`
+    `[ktx2] ${entry.id} ${width}px ${entry.codec} `
+      + `${encodedWidth}x${encodedHeight}: ${(outputStats.size / 1024).toFixed(1)} KiB`
   )
 }
 
