@@ -8,6 +8,7 @@ const host = '127.0.0.1'
 const baseUrl = `http://${host}:${port}`
 const standaloneRoot = path.resolve('.next', 'standalone')
 const standaloneNextRoot = path.join(standaloneRoot, '.next')
+const requireRealWebGPU = process.env.WEBGPU_REQUIRE_REAL === '1'
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -92,9 +93,15 @@ async function probeWebGPUAdapters(page) {
       }
     }
 
-    const probe = async (options) => {
+    const probe = async (featureLevel) => {
       try {
-        const adapter = await navigator.gpu.requestAdapter(options)
+        const preferredOptions = featureLevel
+          ? { powerPreference: 'high-performance', featureLevel }
+          : { powerPreference: 'high-performance' }
+        const fallbackOptions = featureLevel ? { featureLevel } : {}
+        const adapter = await navigator.gpu.requestAdapter(preferredOptions)
+          ?? await navigator.gpu.requestAdapter(fallbackOptions)
+
         return {
           available: Boolean(adapter),
           features: adapter ? [...adapter.features].sort() : [],
@@ -111,11 +118,8 @@ async function probeWebGPUAdapters(page) {
 
     return {
       apiAvailable: true,
-      core: await probe({ powerPreference: 'high-performance' }),
-      compatibility: await probe({
-        powerPreference: 'high-performance',
-        featureLevel: 'compatibility',
-      }),
+      core: await probe(null),
+      compatibility: await probe('compatibility'),
     }
   })
 }
@@ -209,6 +213,19 @@ async function openLab(page, suffix = '') {
   )
 }
 
+async function clickBackend(page, text) {
+  const clicked = await page.evaluate((buttonText) => {
+    const button = [...document.querySelectorAll('button')].find((candidate) => (
+      candidate.textContent?.replace(/\s+/g, ' ').includes(buttonText)
+    ))
+    if (!(button instanceof HTMLButtonElement)) return false
+    button.click()
+    return true
+  }, text)
+
+  if (!clicked) throw new Error(`Could not click backend control containing “${text}”`)
+}
+
 async function runForcedWebGL(browser) {
   const page = await browser.newPage()
   await configurePage(page)
@@ -232,29 +249,78 @@ async function runForcedWebGL(browser) {
   await page.close()
 }
 
-async function runRealWebGPU(browser) {
+async function runAutoSelection(browser) {
   const page = await browser.newPage()
   await configurePage(page)
   const failures = collectPageFailures(page)
 
   await openLab(page)
   const adapterProbe = await probeWebGPUAdapters(page)
-  console.log(`[webgpu-smoke] adapter probe ${JSON.stringify(adapterProbe)}`)
+  const expectedBackend = adapterProbe.core.available ? 'webgpu' : 'webgl2'
+  const diagnostics = await waitForLabDiagnostics(page, 'auto')
 
-  if (!adapterProbe.compatibility.available) {
-    throw new Error(
-      `Chromium did not expose the compatibility WebGPU adapter required by three.js r184: ${JSON.stringify(adapterProbe)}`
-    )
+  assertDiagnostics(diagnostics, 'auto', expectedBackend)
+  await assertCanvasHealthy(page, 'automatic backend selection')
+
+  if (expectedBackend === 'webgpu') {
+    if (diagnostics.adapterStatus !== 'available') {
+      throw new Error(`WebGPU initialized without a successful adapter preflight: ${JSON.stringify(diagnostics)}`)
+    }
+  } else {
+    if (!['unavailable', 'error'].includes(diagnostics.adapterStatus)) {
+      throw new Error(`WebGL fallback did not report adapter unavailability: ${JSON.stringify(diagnostics)}`)
+    }
+    if (!diagnostics.fallbackReason) {
+      throw new Error('WebGL fallback did not publish a reason')
+    }
+  }
+
+  await clickBackend(page, 'Force WebGL 2')
+  const forcedDiagnostics = await waitForLabDiagnostics(page, 'webgl')
+  assertDiagnostics(forcedDiagnostics, 'webgl', 'webgl2')
+
+  await clickBackend(page, 'Auto WebGPU')
+  const restoredDiagnostics = await waitForLabDiagnostics(page, 'auto')
+  assertDiagnostics(restoredDiagnostics, 'auto', expectedBackend)
+  await assertCanvasHealthy(page, 'restored automatic backend selection')
+
+  if (failures.length > 0) {
+    throw new Error(`Automatic backend browser failures:\n${failures.join('\n')}`)
+  }
+
+  console.log(`[webgpu-smoke] auto adapter probe ${JSON.stringify(adapterProbe)}`)
+  console.log(`[webgpu-smoke] auto selected ${JSON.stringify(diagnostics)}`)
+  console.log(`[webgpu-smoke] auto restored ${JSON.stringify(restoredDiagnostics)}`)
+  await page.close()
+}
+
+async function runOptionalRealWebGPU(browser) {
+  const page = await browser.newPage()
+  await configurePage(page)
+  const failures = collectPageFailures(page)
+
+  await openLab(page)
+  const adapterProbe = await probeWebGPUAdapters(page)
+  console.log(`[webgpu-smoke] software WebGPU adapter probe ${JSON.stringify(adapterProbe)}`)
+
+  if (!adapterProbe.core.available) {
+    await page.close()
+    const message = 'This Chromium build exposes navigator.gpu but no usable Dawn adapter; real WebGPU validation was skipped.'
+    if (requireRealWebGPU) throw new Error(message)
+    console.log(`[webgpu-smoke] ${message}`)
+    return
   }
 
   const diagnostics = await waitForLabDiagnostics(page, 'auto')
   assertDiagnostics(diagnostics, 'auto', 'webgpu')
   await assertCanvasHealthy(page, 'real WebGPU')
 
+  if (diagnostics.adapterStatus !== 'available') {
+    throw new Error(`Real WebGPU did not report a successful adapter preflight: ${JSON.stringify(diagnostics)}`)
+  }
   if (!diagnostics.webgpuApiAvailable) {
     throw new Error('WebGPU backend initialized while navigator.gpu was reported unavailable')
   }
-
   if (failures.length > 0) {
     throw new Error(`WebGPU browser failures:\n${failures.join('\n')}`)
   }
@@ -281,9 +347,10 @@ function launchForcedWebGLBrowser() {
 }
 
 function launchWebGPUBrowser() {
-  // Use Chromium's Linux software-WebGPU path: Dawn selects its SwiftShader
-  // adapter while ANGLE and compositing run through Vulkan SwiftShader. This
-  // proves an actual WebGPUBackend without claiming the runner has a real GPU.
+  // Use Chromium's Linux software-WebGPU path when this packaged browser
+  // includes a Dawn SwiftShader adapter. Not every distribution ships it, so
+  // the mandatory gate remains capability-aware and WEBGPU_REQUIRE_REAL=1 can
+  // be used on a self-hosted runner or real device.
   return puppeteer.launch({
     headless: 'new',
     args: [
@@ -336,11 +403,12 @@ async function main() {
 
     webglBrowser = await launchForcedWebGLBrowser()
     await runForcedWebGL(webglBrowser)
+    await runAutoSelection(webglBrowser)
     await webglBrowser.close()
     webglBrowser = undefined
 
     webgpuBrowser = await launchWebGPUBrowser()
-    await runRealWebGPU(webgpuBrowser)
+    await runOptionalRealWebGPU(webgpuBrowser)
   } catch (error) {
     console.error('[webgpu-smoke] failed')
     if (serverOutput.trim()) console.error(serverOutput.trim())
