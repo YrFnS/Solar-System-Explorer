@@ -112,7 +112,7 @@ async function main() {
 
   for (const tier of manifest.tiers) {
     console.log(
-      `[ktx2] ${tier}px pilot tier: ${formatBytes(sizesByTier.get(tier) ?? 0)}`
+      `[ktx2] ${tier}px catalogue tier: ${formatBytes(sizesByTier.get(tier) ?? 0)}`
     )
   }
   console.log(

@@ -5,6 +5,14 @@ const ROOT = process.cwd()
 const CHUNKS_ROOT = path.join(ROOT, '.next', 'static', 'chunks')
 const OPTIMIZED_TEXTURE_ROOT = path.join(ROOT, 'public', 'textures', 'optimized')
 const KTX2_TEXTURE_ROOT = path.join(ROOT, 'public', 'textures', 'ktx2')
+const KTX2_MANIFEST_PATH = path.join(
+  ROOT,
+  'src',
+  'components',
+  'solar-system',
+  'textures',
+  'ktx2-manifest.json'
+)
 
 const BUDGETS = {
   largestJavaScriptChunk: 2_000_000,
@@ -15,7 +23,7 @@ const BUDGETS = {
     1024: 20_000_000,
     2048: 36_000_000,
   },
-  ktx2PilotTier: {
+  ktx2CatalogueTier: {
     512: 4_000_000,
     1024: 12_000_000,
     2048: 32_000_000,
@@ -75,6 +83,8 @@ async function routeFiles() {
 
 async function main() {
   const failures = []
+  const ktx2Manifest = JSON.parse(await readFile(KTX2_MANIFEST_PATH, 'utf8'))
+  const expectedKtx2Textures = ktx2Manifest.textures.length
   const chunks = await collectFiles(CHUNKS_ROOT, '.js')
   const chunkStats = await Promise.all(chunks.map(async (file) => ({
     file,
@@ -129,15 +139,17 @@ async function main() {
     const tierDirectory = `${path.sep}${width}${path.sep}`
     const tierFiles = ktx2Files.filter((file) => file.includes(tierDirectory))
     const tierSize = await totalSize(tierFiles)
-    const budget = BUDGETS.ktx2PilotTier[width]
-    console.log(`[budget] ${width}px KTX2 pilot: ${formatBytes(tierSize)} across ${tierFiles.length} files`)
+    const budget = BUDGETS.ktx2CatalogueTier[width]
+    console.log(`[budget] ${width}px KTX2 catalogue: ${formatBytes(tierSize)} across ${tierFiles.length} files`)
 
-    if (tierFiles.length !== 4) {
-      failures.push(`${width}px KTX2 pilot contains ${tierFiles.length} files; expected 4`)
+    if (tierFiles.length !== expectedKtx2Textures) {
+      failures.push(
+        `${width}px KTX2 catalogue contains ${tierFiles.length} files; expected ${expectedKtx2Textures}`
+      )
     }
     if (tierSize > budget) {
       failures.push(
-        `${width}px KTX2 pilot ${formatBytes(tierSize)} exceeds ${formatBytes(budget)}`
+        `${width}px KTX2 catalogue ${formatBytes(tierSize)} exceeds ${formatBytes(budget)}`
       )
     }
   }

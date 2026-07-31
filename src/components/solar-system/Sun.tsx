@@ -6,6 +6,7 @@ import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
 import { sunData } from './data'
 import { useSolarSystemStore } from './store'
+import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 
 const SOLAR_WIND_COUNT = 200
 
@@ -404,7 +405,7 @@ export default function Sun() {
   const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
   const selectedBody = useSolarSystemStore((s) => s.selectedBody)
 
-  const sunTexture = useTexture(sunData.textureUrl!)
+  const sunTexture = useAdaptiveTexture(sunData.textureUrl!, { anisotropy: 4 })
 
   useFrame((_, delta) => {
     if (meshRef.current) {

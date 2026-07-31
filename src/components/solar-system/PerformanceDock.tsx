@@ -8,6 +8,7 @@ import {
   type QualityPreset,
   usePerformanceStore,
 } from './performance-store'
+import { KTX2_MANIFEST } from './textures/texture-manifest'
 import { useTextureRuntimeStore } from './textures/texture-runtime-store'
 
 const OPTIONS: Array<{ id: QualityPreset; label: string; note: string }> = [
@@ -33,6 +34,7 @@ export default function PerformanceDock() {
   const setReducedMotion = usePerformanceStore((state) => state.setReducedMotion)
   const textureEnabled = useTextureRuntimeStore((state) => state.enabled)
   const textureBackend = useTextureRuntimeStore((state) => state.backend)
+  const requestedTextureIds = useTextureRuntimeStore((state) => state.requestedIds)
   const loadedTextureIds = useTextureRuntimeStore((state) => state.loadedIds)
   const failedTextureIds = useTextureRuntimeStore((state) => state.failedIds)
   const textureFormats = useTextureRuntimeStore((state) => state.formats)
@@ -57,10 +59,11 @@ export default function PerformanceDock() {
   const textureBackendLabel = textureEnabled
     ? textureBackend.toUpperCase()
     : 'WEBP'
+  const requestedTextureCount = requestedTextureIds.length || KTX2_MANIFEST.textures.length
   const textureStatus = textureBackend === 'ktx2'
-    ? `${loadedTextureIds.length} compressed textures active`
+    ? `${loadedTextureIds.length}/${requestedTextureCount} compressed textures active`
     : textureBackend === 'mixed'
-      ? `${loadedTextureIds.length} compressed · ${failedTextureIds.length} fallback`
+      ? `${loadedTextureIds.length}/${requestedTextureCount} compressed · ${failedTextureIds.length} fallback`
       : 'Quality-tiered WebP fallback active'
   const textureFormat = textureFormats[0]?.replace(/^RGBA?_/, '').replace(/_/g, ' ')
 
