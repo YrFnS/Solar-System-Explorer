@@ -11,10 +11,11 @@ import {
 } from 'react'
 import Link from 'next/link'
 import { Canvas, extend } from '@react-three/fiber'
+import type { WebGLRenderer as LegacyWebGLRenderer } from 'three'
 import * as THREE from 'three/webgpu'
 import WebGPULabScene, { type LabFrameMetrics } from './WebGPULabScene'
 
-extend(THREE as unknown as Record<string, unknown>)
+extend(THREE as any)
 
 type RequestedBackend = 'auto' | 'webgl'
 type ActualBackend = 'webgpu' | 'webgl2' | 'unknown'
@@ -194,7 +195,7 @@ export default function WebGPULab() {
         })
       })
 
-      return renderer as unknown as THREE.WebGLRenderer
+      return renderer as unknown as LegacyWebGLRenderer
     } catch (error) {
       const message = error instanceof Error
         ? error.message

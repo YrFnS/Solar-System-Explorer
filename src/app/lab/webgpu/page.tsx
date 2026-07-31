@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 
 const WebGPULab = dynamic(
-  () => import('@/components/solar-system/webgpu/WebGPULab'),
+  () => import('../../../components/solar-system/webgpu/WebGPULab'),
   {
     ssr: false,
     loading: () => (
