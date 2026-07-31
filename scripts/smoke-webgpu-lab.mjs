@@ -22,6 +22,12 @@ const EXPECTED_TEXTURE_IDS = [
   'uranus',
   'neptune',
 ]
+const EXPECTED_VISUAL_SYSTEMS = [
+  'tsl-star-field',
+  'tsl-solar-wind',
+]
+const EXPECTED_STAR_COUNT = 1_600
+const EXPECTED_SOLAR_WIND_COUNT = 320
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -85,6 +91,7 @@ async function diagnosticSnapshot(page) {
     return {
       diagnostics: window.__SOLAR_WEBGPU_LAB__ ?? null,
       textureDiagnostics: window.__SOLAR_WEBGPU_LAB_TEXTURES__ ?? null,
+      effectsDiagnostics: window.__SOLAR_WEBGPU_LAB_EFFECTS__ ?? null,
       canvas: canvas
         ? {
             width: canvas.clientWidth,
@@ -143,8 +150,15 @@ async function waitForLabDiagnostics(page, expectedRequested, timeout = 90_000) 
 
   try {
     await page.waitForFunction(
-      (requested, expectedTextureIds) => {
+      (
+        requested,
+        expectedTextureIds,
+        expectedVisualSystems,
+        expectedStarCount,
+        expectedSolarWindCount
+      ) => {
         const diagnostics = window.__SOLAR_WEBGPU_LAB__
+        const effects = window.__SOLAR_WEBGPU_LAB_EFFECTS__
         const metrics = diagnostics?.metrics
         return Boolean(
           diagnostics
@@ -161,6 +175,13 @@ async function waitForLabDiagnostics(page, expectedRequested, timeout = 90_000) 
           && expectedTextureIds.every((id) => diagnostics.textureRequestedIds.includes(id))
           && expectedTextureIds.every((id) => diagnostics.textureLoadedIds.includes(id))
           && diagnostics.textureFormats.length > 0
+          && effects
+          && effects.visualSystems.length === expectedVisualSystems.length
+          && expectedVisualSystems.every((id) => effects.visualSystems.includes(id))
+          && effects.starCount === expectedStarCount
+          && effects.solarWindCount === expectedSolarWindCount
+          && effects.animationMode === 'vertex-tsl'
+          && effects.cpuPositionUpdates === false
           && metrics
           && metrics.samples >= 30
           && Number.isFinite(metrics.fps)
@@ -175,12 +196,15 @@ async function waitForLabDiagnostics(page, expectedRequested, timeout = 90_000) 
       },
       { timeout },
       expectedRequested,
-      EXPECTED_TEXTURE_IDS
+      EXPECTED_TEXTURE_IDS,
+      EXPECTED_VISUAL_SYSTEMS,
+      EXPECTED_STAR_COUNT,
+      EXPECTED_SOLAR_WIND_COUNT
     )
   } catch (error) {
     const snapshot = await diagnosticSnapshot(page)
     throw new Error(
-      `Timed out waiting for ${expectedRequested} W2 diagnostics: ${JSON.stringify(snapshot)}`,
+      `Timed out waiting for ${expectedRequested} W3 diagnostics: ${JSON.stringify(snapshot)}`,
       { cause: error }
     )
   }
@@ -235,6 +259,37 @@ function assertTextureDiagnostics(diagnostics) {
   }
 }
 
+async function assertEffectsDiagnostics(page) {
+  const effects = await page.evaluate(() => window.__SOLAR_WEBGPU_LAB_EFFECTS__)
+  if (!effects) throw new Error('W3 TSL effect diagnostics were not published')
+
+  const missingSystems = EXPECTED_VISUAL_SYSTEMS.filter(
+    (id) => !effects.visualSystems.includes(id)
+  )
+  const unexpectedSystems = effects.visualSystems.filter(
+    (id) => !EXPECTED_VISUAL_SYSTEMS.includes(id)
+  )
+
+  if (missingSystems.length || unexpectedSystems.length) {
+    throw new Error(
+      `Unexpected W3 visual systems: ${JSON.stringify({ missingSystems, unexpectedSystems })}`
+    )
+  }
+  if (effects.starCount !== EXPECTED_STAR_COUNT) {
+    throw new Error(`Expected ${EXPECTED_STAR_COUNT} TSL stars, received ${effects.starCount}`)
+  }
+  if (effects.solarWindCount !== EXPECTED_SOLAR_WIND_COUNT) {
+    throw new Error(
+      `Expected ${EXPECTED_SOLAR_WIND_COUNT} solar-wind particles, received ${effects.solarWindCount}`
+    )
+  }
+  if (effects.animationMode !== 'vertex-tsl' || effects.cpuPositionUpdates !== false) {
+    throw new Error(`W3 particle animation contract failed: ${JSON.stringify(effects)}`)
+  }
+
+  return effects
+}
+
 function assertDiagnostics(diagnostics, requested, actual) {
   if (!diagnostics) throw new Error(`No diagnostics published for ${requested}`)
   if (diagnostics.requestedBackend !== requested) {
@@ -281,6 +336,7 @@ async function runForcedWebGL(browser) {
 
   await openLab(page, '?backend=webgl')
   const diagnostics = await waitForLabDiagnostics(page, 'webgl')
+  const effects = await assertEffectsDiagnostics(page)
   assertDiagnostics(diagnostics, 'webgl', 'webgl2')
   await assertCanvasHealthy(page, 'forced WebGL 2')
 
@@ -293,7 +349,9 @@ async function runForcedWebGL(browser) {
     throw new Error(`Forced WebGL 2 browser failures:\n${failures.join('\n')}`)
   }
 
-  console.log(`[webgpu-smoke] forced WebGL 2 W2 ${JSON.stringify(diagnostics)}`)
+  console.log(
+    `[webgpu-smoke] forced WebGL 2 W3 ${JSON.stringify({ diagnostics, effects })}`
+  )
   await page.close()
 }
 
@@ -306,6 +364,7 @@ async function runAutoSelection(browser) {
   const adapterProbe = await probeWebGPUAdapters(page)
   const expectedBackend = adapterProbe.core.available ? 'webgpu' : 'webgl2'
   const diagnostics = await waitForLabDiagnostics(page, 'auto')
+  const effects = await assertEffectsDiagnostics(page)
 
   assertDiagnostics(diagnostics, 'auto', expectedBackend)
   await assertCanvasHealthy(page, 'automatic backend selection')
@@ -325,10 +384,12 @@ async function runAutoSelection(browser) {
 
   await clickBackend(page, 'Force WebGL 2')
   const forcedDiagnostics = await waitForLabDiagnostics(page, 'webgl')
+  await assertEffectsDiagnostics(page)
   assertDiagnostics(forcedDiagnostics, 'webgl', 'webgl2')
 
   await clickBackend(page, 'Auto WebGPU')
   const restoredDiagnostics = await waitForLabDiagnostics(page, 'auto')
+  const restoredEffects = await assertEffectsDiagnostics(page)
   assertDiagnostics(restoredDiagnostics, 'auto', expectedBackend)
   await assertCanvasHealthy(page, 'restored automatic backend selection')
 
@@ -337,8 +398,12 @@ async function runAutoSelection(browser) {
   }
 
   console.log(`[webgpu-smoke] auto adapter probe ${JSON.stringify(adapterProbe)}`)
-  console.log(`[webgpu-smoke] auto W2 selected ${JSON.stringify(diagnostics)}`)
-  console.log(`[webgpu-smoke] auto W2 restored ${JSON.stringify(restoredDiagnostics)}`)
+  console.log(
+    `[webgpu-smoke] auto W3 selected ${JSON.stringify({ diagnostics, effects })}`
+  )
+  console.log(
+    `[webgpu-smoke] auto W3 restored ${JSON.stringify({ diagnostics: restoredDiagnostics, effects: restoredEffects })}`
+  )
   await page.close()
 }
 
@@ -360,6 +425,7 @@ async function runOptionalRealWebGPU(browser) {
   }
 
   const diagnostics = await waitForLabDiagnostics(page, 'auto')
+  const effects = await assertEffectsDiagnostics(page)
   assertDiagnostics(diagnostics, 'auto', 'webgpu')
   await assertCanvasHealthy(page, 'real WebGPU')
 
@@ -373,7 +439,7 @@ async function runOptionalRealWebGPU(browser) {
     throw new Error(`WebGPU browser failures:\n${failures.join('\n')}`)
   }
 
-  console.log(`[webgpu-smoke] real WebGPU W2 ${JSON.stringify(diagnostics)}`)
+  console.log(`[webgpu-smoke] real WebGPU W3 ${JSON.stringify({ diagnostics, effects })}`)
   await page.close()
 }
 
