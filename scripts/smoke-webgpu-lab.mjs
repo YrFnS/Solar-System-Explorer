@@ -65,35 +65,61 @@ async function configurePage(page) {
   })
 }
 
+async function diagnosticSnapshot(page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('canvas')
+    return {
+      diagnostics: window.__SOLAR_WEBGPU_LAB__ ?? null,
+      canvas: canvas
+        ? {
+            width: canvas.clientWidth,
+            height: canvas.clientHeight,
+          }
+        : null,
+      bodyText: (document.body.textContent ?? '').replace(/\s+/g, ' ').slice(0, 1_200),
+      navigatorGpu: 'gpu' in navigator,
+    }
+  })
+}
+
 async function waitForLabDiagnostics(page, expectedRequested, timeout = 60_000) {
   await page.waitForSelector('canvas', { timeout: 45_000 })
-  await page.waitForFunction(
-    (requested) => {
-      const diagnostics = window.__SOLAR_WEBGPU_LAB__
-      const metrics = diagnostics?.metrics
-      return Boolean(
-        diagnostics
-        && diagnostics.requestedBackend === requested
-        && (diagnostics.actualBackend === 'webgpu' || diagnostics.actualBackend === 'webgl2')
-        && diagnostics.backendClass
-        && diagnostics.initializationMs !== null
-        && Number.isFinite(diagnostics.initializationMs)
-        && diagnostics.initializationMs >= 0
-        && metrics
-        && metrics.samples >= 30
-        && Number.isFinite(metrics.fps)
-        && metrics.fps > 0
-        && Number.isFinite(metrics.averageFrameMs)
-        && metrics.averageFrameMs > 0
-        && Number.isFinite(metrics.p95FrameMs)
-        && metrics.p95FrameMs > 0
-        && Number.isFinite(metrics.longestFrameMs)
-        && metrics.longestFrameMs > 0
-      )
-    },
-    { timeout },
-    expectedRequested
-  )
+
+  try {
+    await page.waitForFunction(
+      (requested) => {
+        const diagnostics = window.__SOLAR_WEBGPU_LAB__
+        const metrics = diagnostics?.metrics
+        return Boolean(
+          diagnostics
+          && diagnostics.requestedBackend === requested
+          && (diagnostics.actualBackend === 'webgpu' || diagnostics.actualBackend === 'webgl2')
+          && diagnostics.backendClass
+          && diagnostics.initializationMs !== null
+          && Number.isFinite(diagnostics.initializationMs)
+          && diagnostics.initializationMs >= 0
+          && metrics
+          && metrics.samples >= 30
+          && Number.isFinite(metrics.fps)
+          && metrics.fps > 0
+          && Number.isFinite(metrics.averageFrameMs)
+          && metrics.averageFrameMs > 0
+          && Number.isFinite(metrics.p95FrameMs)
+          && metrics.p95FrameMs > 0
+          && Number.isFinite(metrics.longestFrameMs)
+          && metrics.longestFrameMs > 0
+        )
+      },
+      { timeout },
+      expectedRequested
+    )
+  } catch (error) {
+    const snapshot = await diagnosticSnapshot(page)
+    throw new Error(
+      `Timed out waiting for ${expectedRequested} lab diagnostics: ${JSON.stringify(snapshot)}`,
+      { cause: error }
+    )
+  }
 
   return page.evaluate(() => window.__SOLAR_WEBGPU_LAB__)
 }
@@ -241,17 +267,16 @@ async function main() {
     await waitForServer(server)
 
     browser = await puppeteer.launch({
-      headless: true,
+      headless: 'new',
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
-        '--disable-gpu-sandbox',
         '--enable-webgl',
         '--enable-unsafe-webgpu',
         '--ignore-gpu-blocklist',
-        '--use-gl=angle',
-        '--use-angle=swiftshader',
-        '--enable-unsafe-swiftshader',
+        '--use-angle=vulkan',
+        '--enable-features=Vulkan',
+        '--disable-vulkan-surface',
         '--window-size=1280,720',
       ],
     })
