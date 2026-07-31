@@ -345,7 +345,9 @@ function readRendererCounters(state: RootState) {
   }
 }
 
-function LabMetricsProbe({ onMetrics }: WebGPULabSceneProps) {
+function LabMetricsProbe({
+  onMetrics,
+}: Pick<WebGPULabSceneProps, 'onMetrics'>) {
   const samplesRef = useRef<number[]>([])
   const lastPublishRef = useRef(0)
   const readyRef = useRef(false)
