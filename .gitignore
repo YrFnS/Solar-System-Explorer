@@ -20,8 +20,10 @@ node_modules
 # production
 /build
 
-# generated texture tiers
+# generated texture tiers and runtime transcoder
 /public/textures/optimized/
+/public/basis/
+/.cache/
 
 # misc
 .DS_Store
