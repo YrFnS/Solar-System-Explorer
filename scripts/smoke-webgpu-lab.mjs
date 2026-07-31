@@ -234,20 +234,24 @@ function launchForcedWebGLBrowser() {
 }
 
 function launchWebGPUBrowser() {
-  // Chrome's documented Linux headless WebGPU configuration uses Vulkan-backed
-  // ANGLE and Dawn. It is kept separate from the SwiftShader WebGL browser,
-  // because forcing WebGL on the Vulkan-only process can yield a null GL context.
+  // Chromium's test infrastructure can explicitly select Dawn's SwiftShader
+  // adapter. This proves a real WebGPUBackend in generic Linux CI without
+  // claiming the hosted runner has a hardware Vulkan device.
   return puppeteer.launch({
     headless: 'new',
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
+      '--disable-gpu-sandbox',
       '--enable-webgl',
       '--enable-unsafe-webgpu',
+      '--enable-unsafe-swiftshader',
       '--ignore-gpu-blocklist',
-      '--use-angle=vulkan',
-      '--enable-features=Vulkan',
-      '--disable-vulkan-surface',
+      '--use-gpu-in-tests',
+      '--use-webgpu-adapter=swiftshader',
+      '--use-gl=angle',
+      '--use-angle=swiftshader',
+      '--enable-dawn-features=allow_unsafe_apis',
       '--window-size=1280,720',
     ],
   })
