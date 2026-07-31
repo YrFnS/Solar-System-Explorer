@@ -35,6 +35,13 @@ function selectedTextureIds() {
   return new Set(value.split(',').map((id) => id.trim()).filter(Boolean))
 }
 
+function cliCodec(codec) {
+  // KTX Software 4.4.2 exposes the UASTC LDR 4x4 encoder through the
+  // historical `uastc` alias. The manifest keeps the explicit semantic name
+  // so it remains forward-compatible with the newer KTX tool vocabulary.
+  return codec === 'uastc-ldr-4x4' ? 'uastc' : codec
+}
+
 async function encodeTexture(entry, width) {
   const sourcePath = path.join(root, 'public', entry.input.replace(/^\/+/, ''))
   const metadata = await sharp(sourcePath, { limitInputPixels: false }).metadata()
@@ -68,14 +75,18 @@ async function encodeTexture(entry, width) {
     '--format',
     format,
     '--encode',
-    entry.codec,
+    cliCodec(entry.codec),
     '--generate-mipmap',
     '--mipmap-filter',
     'lanczos4',
+    '--assign-tf',
+    entry.colorSpace === 'srgb' ? 'srgb' : 'linear',
     '--assign-texcoord-origin',
     'top-left',
+    // One encoder thread plus disabled UASTC RDO multithreading keeps the
+    // pinned Linux asset build reproducible.
     '--threads',
-    '2',
+    '1',
   ]
 
   if (entry.codec === 'basis-lz') {
