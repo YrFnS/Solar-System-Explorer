@@ -2,19 +2,19 @@
 
 The laboratory at `/lab/webgpu` evaluates Three.js `WebGPURenderer` without changing the production explorer at `/`.
 
-Production remains on the established `WebGLRenderer` / WebGL 2 architecture. The lab is an evidence-gathering route, not a production renderer switch.
+Production remains on the established `WebGLRenderer` / WebGL 2 architecture. The laboratory is an evidence-gathering route, not a production renderer switch.
 
 ## Why the route is isolated
 
-Three.js `WebGPURenderer` initializes asynchronously, can fall back to a WebGL 2 backend, and does not support the production scene's existing `ShaderMaterial`, `RawShaderMaterial`, or `onBeforeCompile()` customizations. Those effects must be migrated to Node Materials and TSL incrementally.
+Three.js `WebGPURenderer` initializes asynchronously, can fall back to a WebGL 2 backend, and does not support the production scene's existing `ShaderMaterial`, `RawShaderMaterial`, or `onBeforeCompile()` customizations. Those effects must move to Node Materials and TSL incrementally.
 
-A separate route keeps the comparison honest:
+A separate route keeps comparisons honest:
 
-- the production application remains stable;
-- each visual system can be checked independently;
+- production remains stable;
+- each visual system is validated independently;
 - missing effects cannot be hidden inside a large renderer rewrite;
-- WebGL and WebGPU can use the same geometry, assets, camera, KTX2 tier, and TSL graphs;
-- performance is measured instead of assumed.
+- both backends use the same geometry, camera, assets, KTX2 tier, and TSL graphs;
+- performance is measured rather than assumed.
 
 ## Milestone status
 
@@ -25,8 +25,8 @@ A separate route keeps the comparison honest:
 | W3 | Deterministic TSL stars and solar wind | Complete |
 | W4 | TSL Sun corona, glow, and flare arcs | Complete |
 | W5a | Restrained TSL nebula/background haze | Complete |
-| W5b | Black-hole and wormhole presentation without post-processing | Complete |
-| W5c | Backend-neutral post-processing experiments | Deferred |
+| W5b | Black-hole and wormhole presentation without screen-space distortion | Complete |
+| W5c | Toggleable backend-neutral TSL threshold bloom | Complete |
 
 ## Backend modes
 
@@ -36,14 +36,14 @@ A separate route keeps the comparison honest:
 /lab/webgpu
 ```
 
-Auto mode performs an explicit adapter and device preflight. It distinguishes:
+Auto mode performs an explicit adapter and device preflight:
 
-1. `navigator.gpu` is unavailable — use the WebGL 2 backend.
-2. the WebGPU API exists but no usable adapter is returned — use WebGL 2 and display the reason.
-3. a usable adapter and device are available — initialize `WebGPUBackend`.
-4. adapter preflight succeeds but renderer initialization fails — retry safely with WebGL 2 and expose the failure reason.
+1. `navigator.gpu` unavailable — use WebGL 2.
+2. API present but no usable adapter — use WebGL 2 and expose the reason.
+3. Usable adapter and device — initialize `WebGPUBackend`.
+4. Adapter succeeds but renderer initialization fails — retry safely with WebGL 2.
 
-The UI reports the backend detected after `renderer.init()`. The presence of `navigator.gpu` alone is never treated as proof that WebGPU is active.
+The UI reports the backend detected after `renderer.init()`. `navigator.gpu` alone is never treated as proof that WebGPU is active.
 
 ### Forced WebGL 2
 
@@ -51,7 +51,15 @@ The UI reports the backend detected after `renderer.init()`. The presence of `na
 /lab/webgpu?backend=webgl
 ```
 
-This creates the same `WebGPURenderer` with `forceWebGL: true`. The scene keeps the same geometry, KTX2 maps, TSL graphs, camera, animation rate, DPR bounds, object counts, and controls.
+This creates the same `WebGPURenderer` with `forceWebGL: true`. Geometry, KTX2 maps, TSL graphs, camera, animation rate, DPR, object counts, and controls remain identical.
+
+### Direct-render comparison
+
+```text
+/lab/webgpu?post=off
+```
+
+This keeps the same renderer and scene but bypasses the W5c `RenderPipeline`. The laboratory toggle changes between threshold bloom and direct rendering without remounting the backend.
 
 ## W1 — renderer and TSL foundation
 
@@ -62,15 +70,13 @@ W1 established:
 - ephemeris-driven Sun and eight planets;
 - shared production orbit calculations;
 - backend-neutral Node Materials;
-- one shared camera and controls configuration;
-- initialization, FPS, average-frame, P95-frame, longest-frame, sample-count, draw-call, and triangle diagnostics;
-- complete Canvas remounts when switching backends.
+- shared camera and controls;
+- initialization, FPS, average, P95, longest-frame, sample, draw-call, and triangle diagnostics;
+- complete Canvas remounts during backend switching.
 
 ## W2 — KTX2 surfaces and atmospheres
 
-The laboratory uses a fixed 1K parity tier so backend comparisons do not accidentally measure different texture resolutions.
-
-The active set contains 11 unique maps:
+The lab uses a fixed 1K parity tier with 11 unique maps:
 
 - Sun;
 - Mercury;
@@ -84,20 +90,20 @@ The active set contains 11 unique maps:
 - Uranus;
 - Neptune.
 
-The maps load through `KTX2Loader.detectSupport(WebGPURenderer)`. Procedural TSL colours remain visible during loading and after any texture failure.
+The maps load through `KTX2Loader.detectSupport(WebGPURenderer)`. Procedural TSL colours remain visible while maps load and after any texture failure.
 
-W2 also added TSL planetary surfaces, Fresnel-style atmospheres, the Earth cloud layer, radial ring UV reconstruction, and post-load frame sampling after the full KTX2 set is ready.
+W2 also added TSL planetary surfaces, Fresnel-style atmospheres, Earth clouds, radial ring UV reconstruction, and post-load frame sampling.
 
 ## W3 — deterministic TSL particles
 
-W3 adds two deterministic instanced Node Material systems:
+W3 adds:
 
-- 1,600 stars;
-- 320 solar-wind particles.
+- 1,600 deterministic instanced stars;
+- 320 deterministic solar-wind particles.
 
-TSL evaluates star position, colour, size, opacity, and twinkle, plus solar-wind radial travel, spiral drift, colour transition, size, and fade. JavaScript does not rewrite particle positions every frame.
+TSL evaluates star position, colour, size, opacity, and twinkle, plus solar-wind radial travel, spiral drift, colour transition, size, and fade. JavaScript does not rewrite particle positions each frame.
 
-The runtime contract is published as:
+Runtime contract:
 
 ```js
 window.__SOLAR_WEBGPU_LAB_EFFECTS__
@@ -107,19 +113,17 @@ window.__SOLAR_WEBGPU_LAB_EFFECTS__
 
 W4 adds:
 
-1. an additive BackSide corona using view-dependent rim intensity and animated latitude variation;
+1. an additive BackSide corona with view-dependent rim intensity;
 2. a restrained outer glow;
 3. five fixed torus flare arcs with TSL colour and opacity sweeps.
 
-JavaScript creates and disposes the geometry and materials but does not rewrite Sun vertices every frame.
+JavaScript creates and disposes geometry and materials but does not rewrite Sun vertices each frame.
 
-The runtime contract is published as:
+Runtime contract:
 
 ```js
 window.__SOLAR_WEBGPU_LAB_SUN__
 ```
-
-It records the three exact Sun-system IDs, five flare arcs, `material-tsl` animation, and `cpuVertexUpdates: false`.
 
 ## W5a — restrained TSL nebula haze
 
@@ -128,61 +132,65 @@ W5a adds two deterministic BackSide haze shells:
 - `tsl-nebula-inner`;
 - `tsl-nebula-outer`.
 
-The shells use low-opacity additive Node Materials, fixed transforms and phases, position-derived wave fields, slow TSL material-time animation, no CPU vertex updates, and no post-processing.
+They use low-opacity additive Node Materials, fixed transforms and phases, position-derived wave fields, slow material-time animation, no CPU vertex updates, and no post-processing.
 
-The component publishes its runtime contract only while mounted:
+Runtime contract, published only while mounted:
 
 ```js
 window.__SOLAR_WEBGPU_LAB_NEBULA__
 ```
 
-This proves that the scene object mounted; importing the module alone cannot satisfy the browser gate.
-
 ## W5b — TSL gravitational presentation
 
-W5b adds one deterministic black hole and one deterministic wormhole while preserving the complete W1–W5a workload.
+W5b adds one deterministic black hole and one deterministic wormhole.
 
-### Black hole
+The black hole includes an event-horizon core, TSL halo, two accretion discs, and one photon ring. The wormhole includes two TSL mouth surfaces, one open throat, and animated rim layers.
 
-The laboratory black hole contains:
+The presentation deliberately avoids physical ray-traced lensing, screen-space distortion, and post-processing.
 
-- an opaque event-horizon core;
-- a view-dependent TSL shadow halo;
-- two additive accretion discs with independent TSL flow fields;
-- one animated photon ring.
-
-### Wormhole
-
-The laboratory wormhole contains:
-
-- two TSL mouth surfaces;
-- one open throat mesh;
-- animated rim layers around both mouths.
-
-The presentation is intentionally restrained. It does not claim physical ray-traced lensing, does not modify the screen-space image, and does not use post-processing.
-
-The mounted runtime contract is published as:
+Runtime contract, published only while mounted:
 
 ```js
 window.__SOLAR_WEBGPU_LAB_GRAVITY__
 ```
 
-It records:
+It records six exact system IDs, two objects, one black hole, two accretion discs, one wormhole, two mouths, material-TSL animation, no CPU vertex updates, and no screen-space distortion.
 
-- six exact gravitational-system IDs;
-- `objectCount: 2`;
-- one black hole;
-- two accretion discs;
-- one wormhole;
-- two wormhole mouths;
-- `animationMode: 'material-tsl'`;
-- `cpuVertexUpdates: false`;
-- `postProcessing: false`;
-- `screenSpaceDistortion: false`.
+## W5c — toggleable TSL render pipeline
+
+W5c adds one deliberately small backend-neutral post-processing experiment:
+
+- one TSL scene pass;
+- one threshold bloom pass;
+- one Three.js `RenderPipeline`;
+- strength `0.18`;
+- radius `0.16`;
+- threshold `0.78`;
+- smooth width `0.08`.
+
+The in-panel checkbox switches between:
+
+```text
+render-pipeline-tsl
+```
+
+and:
+
+```text
+direct-render
+```
+
+without remounting the renderer. No CPU pixel rewriting or screen-space lensing/distortion is used.
+
+Runtime contract:
+
+```js
+window.__SOLAR_WEBGPU_LAB_POST__
+```
 
 ## Runtime diagnostics
 
-The laboratory publishes six diagnostic objects:
+The laboratory publishes seven diagnostic surfaces:
 
 ```js
 window.__SOLAR_WEBGPU_LAB__
@@ -191,37 +199,40 @@ window.__SOLAR_WEBGPU_LAB_EFFECTS__
 window.__SOLAR_WEBGPU_LAB_SUN__
 window.__SOLAR_WEBGPU_LAB_NEBULA__
 window.__SOLAR_WEBGPU_LAB_GRAVITY__
+window.__SOLAR_WEBGPU_LAB_POST__
 ```
 
-Together they expose backend selection, adapter status, fallback reasons, renderer initialization, rolling frame metrics, KTX2 state, active particle systems, Sun effects, nebula shells, gravitational objects, and the no-CPU-update/no-post-processing contracts.
+Together they expose backend selection, adapter status, fallback reasons, initialization, rolling frame metrics, KTX2 state, migrated visual systems, object counts, post-processing mode, and zero-CPU-update contracts.
 
 ## Strict browser gate
 
-The production standalone build is tested rather than a development server. The W5b gate verifies:
+The W5c production-standalone gate verifies:
 
 - forced WebGL 2 initialization and interaction;
 - capability-aware Auto selection;
-- Auto → forced WebGL 2 → Auto renderer remounts;
-- all 11 expected laboratory KTX2 maps loaded with zero failures;
-- compressed transcode format reporting;
+- Auto → forced WebGL 2 → Auto remounts;
+- all 11 laboratory KTX2 maps loaded with zero failures;
+- compressed transcode-format reporting;
 - exact W3 particle IDs and counts;
 - exact W4 Sun IDs and five flare arcs;
 - exact W5a nebula IDs and two shells;
-- exact W5b gravity IDs, object counts, disc count, and mouth count;
-- material-TSL animation with no CPU position or vertex rewrites;
-- no W5a/W5b post-processing;
-- no W5b screen-space distortion;
-- the visible W5b status surface;
+- exact W5b gravitational IDs and object counts;
+- exact W5c pipeline IDs and pass counts;
+- bloom → direct render → bloom switching without a renderer remount;
+- material/vertex TSL animation contracts;
+- no CPU position, vertex, or pixel rewriting;
+- no screen-space distortion;
+- visible W5c status UI;
 - at least 30 post-KTX2 frame samples;
 - no uncaught browser errors or invalid canvas layout.
 
-The complete repository gate also retains the module/dependency audit, clean ESLint, strict TypeScript, ephemeris validation, all 39 production KTX2 files, optimized Next.js build, artifact budgets, and production desktop/mobile/accessibility/recovery tests.
+The repository gate also retains module/dependency audit, clean ESLint, strict TypeScript, ephemeris validation, all 39 production KTX2 files, optimized Next.js build, artifact budgets, and production desktop/mobile/accessibility/recovery tests.
 
 ## Latest hosted validation
 
-The final W5b Quality run passed.
+The final W5c Quality run passed every gate.
 
-Production stayed at its established smoke-test baseline:
+Production remained at its established smoke-test baseline:
 
 ```text
 Draw calls:      333
@@ -231,21 +242,21 @@ Programs:        30
 Scene objects:   569
 ```
 
-Artifact measurements remained within budget:
+Artifact budgets remained green:
 
 ```text
 JavaScript chunks:       39
-Largest chunk:           651.3 kB
+Largest chunk:           649.7 kB
 Total static JavaScript: 2.97 MB
 ```
 
-The hosted software renderer loaded all 11 laboratory KTX2 maps with zero failures and reported `RGB_ETC2` and `RGBA_ASTC_4x4`. W5b samples used 66 draw calls in forced WebGL 2, 74 after Auto fallback, and 68 after the Auto remount.
+The hosted software renderer loaded all 11 lab KTX2 maps with zero failures and reported `RGB_ETC2` plus `RGBA_ASTC_4x4`.
 
-These frame rates and frame times are software-renderer validation data, not physical-device performance claims.
+W5c's software-renderer samples showed 448 draw calls in forced WebGL 2 and 462 after Auto fallback/remount. These FPS and frame-time values are validation data, not physical-device performance claims. The increase confirms that even restrained bloom has a measurable cost and must remain optional until real-device testing is complete.
 
 ## Hosted-runner WebGPU limitation
 
-GitHub-hosted Chromium currently exposes `navigator.gpu` but returns no usable core or compatibility Dawn adapter in this workflow. The mandatory hosted gate therefore proves correct detection, safe fallback, complete TSL/KTX2 parity on the WebGL 2 backend, and stable remounts.
+GitHub-hosted Chromium exposes `navigator.gpu` but returns no usable core or compatibility Dawn adapter in this workflow. The mandatory hosted gate therefore proves correct detection, safe fallback, complete TSL/KTX2 parity on the WebGL 2 backend, and stable remounts.
 
 A physical device or self-hosted runner can require a genuine WebGPU result with:
 
@@ -253,45 +264,32 @@ A physical device or self-hosted runner can require a genuine WebGPU result with
 WEBGPU_REQUIRE_REAL=1 bun run webgpu:smoke
 ```
 
-When that flag is set, fallback fails the test instead of being accepted.
-
-## Comparison rules
-
-A valid backend comparison keeps constant:
-
-- Three.js and React Three Fiber versions;
-- viewport and DPR;
-- camera position;
-- date and animation rate;
-- object count and geometry detail;
-- TSL material graph;
-- lighting;
-- KTX2 tier and transcode workload;
-- browser and device.
-
-Real-device decisions should use average frame time, P95 frame time, initialization cost, visual parity, and stability on the same hardware.
+When that flag is set, fallback fails the test.
 
 ## Promotion boundary
 
-Production must remain on WebGL 2 until the laboratory demonstrates:
+Production must remain on WebGL 2 until the lab demonstrates:
 
 1. visual parity for every migrated system;
-2. no silent WebGL fallback during claimed WebGPU tests;
+2. no silent fallback during claimed WebGPU tests;
 3. acceptable initialization and shader-compilation behaviour;
-4. stable camera, selection, KTX2, screenshots, and recovery;
-5. a measurable improvement or another concrete operational benefit on target devices;
+4. stable camera, KTX2, screenshots, and recovery;
+5. measurable benefit on target physical devices;
 6. reliable WebGL 2 fallback;
 7. no significant regression on integrated graphics or mobile hardware.
 
-## Next migration order
+## Current conclusion
+
+W1 through W5c are complete as an isolated laboratory. The next work is evidence gathering rather than adding more effects:
 
 ```text
-W5a  restrained TSL nebula/background haze        complete
-W5b  black-hole and wormhole presentation         complete
-W5c  backend-neutral post-processing experiments  deferred
+Desktop discrete GPU
+Desktop integrated GPU
+Android phone
+Apple device where WebGPU is available
 ```
 
-W5c should begin with one optional, low-cost backend-neutral pass and must be switchable off. It should not attempt a large bloom, lensing, and distortion stack in one change. Production remains unchanged until physical-device comparisons justify a renderer option.
+Compare Auto WebGPU, forced WebGL 2, bloom enabled, and direct render using the same camera, DPR, date, and workload. Production should not change until those measurements justify an opt-in renderer setting.
 
 ## Official references
 
