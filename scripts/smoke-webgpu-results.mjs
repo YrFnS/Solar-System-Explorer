@@ -143,6 +143,19 @@ function collectPageFailures(page) {
   return failures
 }
 
+async function clickButtonContaining(page, label) {
+  const clicked = await page.evaluate((text) => {
+    const button = [...document.querySelectorAll('button')].find((candidate) => (
+      candidate.textContent?.replace(/\s+/g, ' ').includes(text)
+    ))
+    if (!(button instanceof HTMLButtonElement) || button.disabled) return false
+    button.click()
+    return true
+  }, label)
+
+  if (!clicked) throw new Error(`Could not click enabled button containing “${label}”`)
+}
+
 async function runResultsWorkspace(browser) {
   const page = await browser.newPage()
   await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 })
@@ -161,7 +174,7 @@ async function runResultsWorkspace(browser) {
   await page.evaluate((key, records) => {
     sessionStorage.setItem(key, JSON.stringify(records))
   }, storageKey, twoDevicePayload.records)
-  await page.click('button:nth-of-type(1)')
+  await clickButtonContaining(page, 'Load current session')
   await page.waitForFunction(() => {
     const diagnostics = window.__SOLAR_WEBGPU_BENCHMARK_ANALYSIS__
     return diagnostics?.recordCount === 8
@@ -179,7 +192,7 @@ async function runResultsWorkspace(browser) {
     throw new Error('The evidence workspace did not render the opt-in recommendation')
   }
 
-  await page.click('button:last-of-type')
+  await clickButtonContaining(page, 'Clear workspace')
   await page.waitForFunction(() => (
     window.__SOLAR_WEBGPU_BENCHMARK_ANALYSIS__?.recordCount === 0
   ), { timeout: 10_000 })
