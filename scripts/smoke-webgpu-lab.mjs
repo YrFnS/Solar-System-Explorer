@@ -39,6 +39,19 @@ const EXPECTED_NEBULA_SYSTEMS = [
   'tsl-nebula-outer',
 ]
 const EXPECTED_NEBULA_SHELL_COUNT = 2
+const EXPECTED_GRAVITY_SYSTEMS = [
+  'tsl-black-hole-shadow',
+  'tsl-black-hole-accretion',
+  'tsl-black-hole-photon-ring',
+  'tsl-wormhole-mouths',
+  'tsl-wormhole-throat',
+  'tsl-wormhole-rims',
+]
+const EXPECTED_GRAVITY_OBJECT_COUNT = 2
+const EXPECTED_BLACK_HOLE_COUNT = 1
+const EXPECTED_ACCRETION_DISC_COUNT = 2
+const EXPECTED_WORMHOLE_COUNT = 1
+const EXPECTED_WORMHOLE_MOUTH_COUNT = 2
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
@@ -105,6 +118,7 @@ async function diagnosticSnapshot(page) {
       effectsDiagnostics: window.__SOLAR_WEBGPU_LAB_EFFECTS__ ?? null,
       sunDiagnostics: window.__SOLAR_WEBGPU_LAB_SUN__ ?? null,
       nebulaDiagnostics: window.__SOLAR_WEBGPU_LAB_NEBULA__ ?? null,
+      gravityDiagnostics: window.__SOLAR_WEBGPU_LAB_GRAVITY__ ?? null,
       canvas: canvas
         ? {
             width: canvas.clientWidth,
@@ -172,12 +186,19 @@ async function waitForLabDiagnostics(page, expectedRequested, timeout = 90_000) 
         expectedSunSystems,
         expectedSunFlareArcs,
         expectedNebulaSystems,
-        expectedNebulaShellCount
+        expectedNebulaShellCount,
+        expectedGravitySystems,
+        expectedGravityObjectCount,
+        expectedBlackHoleCount,
+        expectedAccretionDiscCount,
+        expectedWormholeCount,
+        expectedWormholeMouthCount
       ) => {
         const diagnostics = window.__SOLAR_WEBGPU_LAB__
         const effects = window.__SOLAR_WEBGPU_LAB_EFFECTS__
         const sun = window.__SOLAR_WEBGPU_LAB_SUN__
         const nebula = window.__SOLAR_WEBGPU_LAB_NEBULA__
+        const gravity = window.__SOLAR_WEBGPU_LAB_GRAVITY__
         const metrics = diagnostics?.metrics
         return Boolean(
           diagnostics
@@ -214,6 +235,18 @@ async function waitForLabDiagnostics(page, expectedRequested, timeout = 90_000) 
           && nebula.animationMode === 'material-tsl'
           && nebula.cpuVertexUpdates === false
           && nebula.postProcessing === false
+          && gravity
+          && gravity.visualSystems.length === expectedGravitySystems.length
+          && expectedGravitySystems.every((id) => gravity.visualSystems.includes(id))
+          && gravity.objectCount === expectedGravityObjectCount
+          && gravity.blackHoleCount === expectedBlackHoleCount
+          && gravity.accretionDiscCount === expectedAccretionDiscCount
+          && gravity.wormholeCount === expectedWormholeCount
+          && gravity.wormholeMouthCount === expectedWormholeMouthCount
+          && gravity.animationMode === 'material-tsl'
+          && gravity.cpuVertexUpdates === false
+          && gravity.postProcessing === false
+          && gravity.screenSpaceDistortion === false
           && metrics
           && metrics.samples >= 30
           && Number.isFinite(metrics.fps)
@@ -235,12 +268,18 @@ async function waitForLabDiagnostics(page, expectedRequested, timeout = 90_000) 
       EXPECTED_SUN_SYSTEMS,
       EXPECTED_SUN_FLARE_ARCS,
       EXPECTED_NEBULA_SYSTEMS,
-      EXPECTED_NEBULA_SHELL_COUNT
+      EXPECTED_NEBULA_SHELL_COUNT,
+      EXPECTED_GRAVITY_SYSTEMS,
+      EXPECTED_GRAVITY_OBJECT_COUNT,
+      EXPECTED_BLACK_HOLE_COUNT,
+      EXPECTED_ACCRETION_DISC_COUNT,
+      EXPECTED_WORMHOLE_COUNT,
+      EXPECTED_WORMHOLE_MOUTH_COUNT
     )
   } catch (error) {
     const snapshot = await diagnosticSnapshot(page)
     throw new Error(
-      `Timed out waiting for ${expectedRequested} W5a diagnostics: ${JSON.stringify(snapshot)}`,
+      `Timed out waiting for ${expectedRequested} W5b diagnostics: ${JSON.stringify(snapshot)}`,
       { cause: error }
     )
   }
@@ -287,7 +326,7 @@ function assertTextureDiagnostics(diagnostics) {
 
   if (missingRequested.length || missingLoaded.length) {
     throw new Error(
-      `Incomplete W5a texture set: ${JSON.stringify({ missingRequested, missingLoaded })}`
+      `Incomplete W5b texture set: ${JSON.stringify({ missingRequested, missingLoaded })}`
     )
   }
   if (diagnostics.textureFormats.length === 0) {
@@ -297,7 +336,7 @@ function assertTextureDiagnostics(diagnostics) {
 
 async function assertEffectsDiagnostics(page) {
   const effects = await page.evaluate(() => window.__SOLAR_WEBGPU_LAB_EFFECTS__)
-  if (!effects) throw new Error('W5a TSL particle diagnostics were not published')
+  if (!effects) throw new Error('W5b TSL particle diagnostics were not published')
 
   const missingSystems = EXPECTED_VISUAL_SYSTEMS.filter(
     (id) => !effects.visualSystems.includes(id)
@@ -308,7 +347,7 @@ async function assertEffectsDiagnostics(page) {
 
   if (missingSystems.length || unexpectedSystems.length) {
     throw new Error(
-      `Unexpected W5a particle systems: ${JSON.stringify({ missingSystems, unexpectedSystems })}`
+      `Unexpected W5b particle systems: ${JSON.stringify({ missingSystems, unexpectedSystems })}`
     )
   }
   if (effects.starCount !== EXPECTED_STAR_COUNT) {
@@ -320,7 +359,7 @@ async function assertEffectsDiagnostics(page) {
     )
   }
   if (effects.animationMode !== 'vertex-tsl' || effects.cpuPositionUpdates !== false) {
-    throw new Error(`W5a particle animation contract failed: ${JSON.stringify(effects)}`)
+    throw new Error(`W5b particle animation contract failed: ${JSON.stringify(effects)}`)
   }
 
   return effects
@@ -357,7 +396,7 @@ async function assertSunDiagnostics(page) {
 
 async function assertNebulaDiagnostics(page) {
   const nebula = await page.evaluate(() => window.__SOLAR_WEBGPU_LAB_NEBULA__)
-  if (!nebula) throw new Error('W5a TSL nebula diagnostics were not published')
+  if (!nebula) throw new Error('W5b TSL nebula diagnostics were not published')
 
   const missingSystems = EXPECTED_NEBULA_SYSTEMS.filter(
     (id) => !nebula.visualSystems.includes(id)
@@ -368,7 +407,7 @@ async function assertNebulaDiagnostics(page) {
 
   if (missingSystems.length || unexpectedSystems.length) {
     throw new Error(
-      `Unexpected W5a nebula systems: ${JSON.stringify({ missingSystems, unexpectedSystems })}`
+      `Unexpected W5b nebula systems: ${JSON.stringify({ missingSystems, unexpectedSystems })}`
     )
   }
   if (nebula.shellCount !== EXPECTED_NEBULA_SHELL_COUNT) {
@@ -381,10 +420,64 @@ async function assertNebulaDiagnostics(page) {
     || nebula.cpuVertexUpdates !== false
     || nebula.postProcessing !== false
   ) {
-    throw new Error(`W5a nebula contract failed: ${JSON.stringify(nebula)}`)
+    throw new Error(`W5b nebula contract failed: ${JSON.stringify(nebula)}`)
   }
 
   return nebula
+}
+
+
+async function assertGravityDiagnostics(page) {
+  const gravity = await page.evaluate(() => window.__SOLAR_WEBGPU_LAB_GRAVITY__)
+  if (!gravity) throw new Error('W5b TSL gravity diagnostics were not published')
+
+  const missingSystems = EXPECTED_GRAVITY_SYSTEMS.filter(
+    (id) => !gravity.visualSystems.includes(id)
+  )
+  const unexpectedSystems = gravity.visualSystems.filter(
+    (id) => !EXPECTED_GRAVITY_SYSTEMS.includes(id)
+  )
+
+  if (missingSystems.length || unexpectedSystems.length) {
+    throw new Error(
+      `Unexpected W5b gravity systems: ${JSON.stringify({ missingSystems, unexpectedSystems })}`
+    )
+  }
+  if (gravity.objectCount !== EXPECTED_GRAVITY_OBJECT_COUNT) {
+    throw new Error(
+      `Expected ${EXPECTED_GRAVITY_OBJECT_COUNT} gravity objects, received ${gravity.objectCount}`
+    )
+  }
+  if (gravity.blackHoleCount !== EXPECTED_BLACK_HOLE_COUNT) {
+    throw new Error(
+      `Expected ${EXPECTED_BLACK_HOLE_COUNT} black hole, received ${gravity.blackHoleCount}`
+    )
+  }
+  if (gravity.accretionDiscCount !== EXPECTED_ACCRETION_DISC_COUNT) {
+    throw new Error(
+      `Expected ${EXPECTED_ACCRETION_DISC_COUNT} accretion discs, received ${gravity.accretionDiscCount}`
+    )
+  }
+  if (gravity.wormholeCount !== EXPECTED_WORMHOLE_COUNT) {
+    throw new Error(
+      `Expected ${EXPECTED_WORMHOLE_COUNT} wormhole, received ${gravity.wormholeCount}`
+    )
+  }
+  if (gravity.wormholeMouthCount !== EXPECTED_WORMHOLE_MOUTH_COUNT) {
+    throw new Error(
+      `Expected ${EXPECTED_WORMHOLE_MOUTH_COUNT} wormhole mouths, received ${gravity.wormholeMouthCount}`
+    )
+  }
+  if (
+    gravity.animationMode !== 'material-tsl'
+    || gravity.cpuVertexUpdates !== false
+    || gravity.postProcessing !== false
+    || gravity.screenSpaceDistortion !== false
+  ) {
+    throw new Error(`W5b gravity contract failed: ${JSON.stringify(gravity)}`)
+  }
+
+  return gravity
 }
 
 function assertDiagnostics(diagnostics, requested, actual) {
@@ -436,18 +529,20 @@ async function runForcedWebGL(browser) {
   const effects = await assertEffectsDiagnostics(page)
   const sun = await assertSunDiagnostics(page)
   const nebula = await assertNebulaDiagnostics(page)
+  const gravity = await assertGravityDiagnostics(page)
   assertDiagnostics(diagnostics, 'webgl', 'webgl2')
   await assertCanvasHealthy(page, 'forced WebGL 2')
 
   const text = await page.evaluate(() => document.body.textContent ?? '')
   if (
-    !text.includes('W5a parity scope')
+    !text.includes('W5b parity scope')
     || !text.includes('KTX2 ready')
     || !text.includes('Vertex TSL')
     || !text.includes('Material TSL')
     || !text.includes('Nebula TSL')
+    || !text.includes('Gravity TSL')
   ) {
-    throw new Error('Forced WebGL 2 lab UI did not render the W5a controls')
+    throw new Error('Forced WebGL 2 lab UI did not render the W5b controls')
   }
 
   if (failures.length > 0) {
@@ -455,7 +550,7 @@ async function runForcedWebGL(browser) {
   }
 
   console.log(
-    `[webgpu-smoke] forced WebGL 2 W5a ${JSON.stringify({ diagnostics, effects, sun, nebula })}`
+    `[webgpu-smoke] forced WebGL 2 W5b ${JSON.stringify({ diagnostics, effects, sun, nebula, gravity })}`
   )
   await page.close()
 }
@@ -472,6 +567,7 @@ async function runAutoSelection(browser) {
   const effects = await assertEffectsDiagnostics(page)
   const sun = await assertSunDiagnostics(page)
   const nebula = await assertNebulaDiagnostics(page)
+  const gravity = await assertGravityDiagnostics(page)
 
   assertDiagnostics(diagnostics, 'auto', expectedBackend)
   await assertCanvasHealthy(page, 'automatic backend selection')
@@ -494,6 +590,7 @@ async function runAutoSelection(browser) {
   await assertEffectsDiagnostics(page)
   await assertSunDiagnostics(page)
   await assertNebulaDiagnostics(page)
+  await assertGravityDiagnostics(page)
   assertDiagnostics(forcedDiagnostics, 'webgl', 'webgl2')
 
   await clickBackend(page, 'Auto WebGPU')
@@ -501,6 +598,7 @@ async function runAutoSelection(browser) {
   const restoredEffects = await assertEffectsDiagnostics(page)
   const restoredSun = await assertSunDiagnostics(page)
   const restoredNebula = await assertNebulaDiagnostics(page)
+  const restoredGravity = await assertGravityDiagnostics(page)
   assertDiagnostics(restoredDiagnostics, 'auto', expectedBackend)
   await assertCanvasHealthy(page, 'restored automatic backend selection')
 
@@ -510,10 +608,10 @@ async function runAutoSelection(browser) {
 
   console.log(`[webgpu-smoke] auto adapter probe ${JSON.stringify(adapterProbe)}`)
   console.log(
-    `[webgpu-smoke] auto W5a selected ${JSON.stringify({ diagnostics, effects, sun, nebula })}`
+    `[webgpu-smoke] auto W5b selected ${JSON.stringify({ diagnostics, effects, sun, nebula, gravity })}`
   )
   console.log(
-    `[webgpu-smoke] auto W5a restored ${JSON.stringify({ diagnostics: restoredDiagnostics, effects: restoredEffects, sun: restoredSun, nebula: restoredNebula })}`
+    `[webgpu-smoke] auto W5b restored ${JSON.stringify({ diagnostics: restoredDiagnostics, effects: restoredEffects, sun: restoredSun, nebula: restoredNebula, gravity: restoredGravity })}`
   )
   await page.close()
 }
@@ -539,6 +637,7 @@ async function runOptionalRealWebGPU(browser) {
   const effects = await assertEffectsDiagnostics(page)
   const sun = await assertSunDiagnostics(page)
   const nebula = await assertNebulaDiagnostics(page)
+  const gravity = await assertGravityDiagnostics(page)
   assertDiagnostics(diagnostics, 'auto', 'webgpu')
   await assertCanvasHealthy(page, 'real WebGPU')
 
@@ -553,7 +652,7 @@ async function runOptionalRealWebGPU(browser) {
   }
 
   console.log(
-    `[webgpu-smoke] real WebGPU W5a ${JSON.stringify({ diagnostics, effects, sun, nebula })}`
+    `[webgpu-smoke] real WebGPU W5b ${JSON.stringify({ diagnostics, effects, sun, nebula, gravity })}`
   )
   await page.close()
 }

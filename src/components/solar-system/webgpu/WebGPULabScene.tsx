@@ -25,6 +25,7 @@ import {
 } from './LabParticleFields'
 import LabTslSunEffects from './LabSunEffects'
 import LabTslNebulaHaze from './LabNebulaHaze'
+import LabTslGravitationalObjects from './LabGravitationalObjects'
 import { useLabTextureStore } from './lab-texture-store'
 import { useLabKtx2Texture } from './useLabKtx2Texture'
 
@@ -395,6 +396,7 @@ export default function WebGPULabScene({ onMetrics }: WebGPULabSceneProps) {
     <>
       <color attach="background" args={['#02030a']} />
       <LabTslNebulaHaze />
+      <LabTslGravitationalObjects />
       <ambientLight color="#8fb8ff" intensity={0.22} />
       <LabTslStarField />
       <LabOrbitField />
