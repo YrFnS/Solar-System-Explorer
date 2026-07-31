@@ -417,10 +417,12 @@ export default function WebGPULab() {
       textureFailedIds,
       textureFormats,
       textureLastError,
+      postProcessingEnabled,
       metrics,
     }
   }, [
     metrics,
+    postProcessingEnabled,
     rendererInfo,
     requestedBackend,
     textureBackend,
