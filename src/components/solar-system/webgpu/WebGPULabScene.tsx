@@ -19,6 +19,10 @@ import {
 } from 'three/tsl'
 import { planets, sunData, type PlanetData } from '../data'
 import { getMajorPlanetVisualPosition, getOrbitPoints } from '../ephemeris'
+import {
+  LabTslSolarWind,
+  LabTslStarField,
+} from './LabParticleFields'
 import { useLabTextureStore } from './lab-texture-store'
 import { useLabKtx2Texture } from './useLabKtx2Texture'
 
@@ -318,49 +322,6 @@ function LabOrbitField() {
   return <primitive object={group} />
 }
 
-function LabStars() {
-  const points = useMemo(() => {
-    let seed = 28_091
-    const random = () => {
-      seed = (seed * 16_807) % 2_147_483_647
-      return (seed - 1) / 2_147_483_646
-    }
-    const count = 1_600
-    const positions = new Float32Array(count * 3)
-
-    for (let index = 0; index < count; index += 1) {
-      const radius = 95 + random() * 75
-      const theta = random() * Math.PI * 2
-      const phi = Math.acos(2 * random() - 1)
-      positions[index * 3] = radius * Math.sin(phi) * Math.cos(theta)
-      positions[index * 3 + 1] = radius * Math.cos(phi)
-      positions[index * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta)
-    }
-
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    const material = new THREE.PointsMaterial({
-      color: '#dbeafe',
-      size: 0.24,
-      sizeAttenuation: true,
-      transparent: true,
-      opacity: 0.7,
-      depthWrite: false,
-    })
-
-    return new THREE.Points(geometry, material)
-  }, [])
-
-  useEffect(() => () => {
-    points.geometry.dispose()
-    const material = points.material
-    if (Array.isArray(material)) material.forEach((item) => item.dispose())
-    else material.dispose()
-  }, [points])
-
-  return <primitive object={points} />
-}
-
 function readRendererCounters(state: RootState) {
   const renderer = state.gl as unknown as {
     info?: {
@@ -430,9 +391,10 @@ export default function WebGPULabScene({ onMetrics }: WebGPULabSceneProps) {
     <>
       <color attach="background" args={['#02030a']} />
       <ambientLight color="#8fb8ff" intensity={0.22} />
-      <LabStars />
+      <LabTslStarField />
       <LabOrbitField />
       <LabSun />
+      <LabTslSolarWind />
       {planets.map((body) => (
         <LabPlanet key={body.id} body={body} />
       ))}
