@@ -2,31 +2,52 @@
 
 All notable changes to Solar System Explorer are documented here.
 
-The project follows a phase-based development history while the first major production release is prepared.
-
-## Unreleased — KTX2/Basis Texture Pilot
+## Unreleased — Full KTX2/Basis Texture Catalogue
 
 ### Added
 
-- Three-tier KTX2 pilot manifest for Earth, the Moon, Earth clouds, and the shared Saturn/Uranus ring texture.
-- Dedicated Khronos KTX Software 4.4.2 workflow that encodes, validates, and commits real `.ktx2` binaries.
-- Shared Three.js `KTX2Loader` runtime with renderer capability detection, per-tier caching, and Basis WebAssembly packaging.
-- Runtime texture diagnostics reporting active backend, transcode formats, successful assets, and fallbacks.
-- In-app GPU-compressed texture switch plus `?textures=ktx2` and `?textures=webp` comparison modes.
-- KTX2 file validation, per-tier artifact budgets, and browser transcode tests.
+- Manifest-driven KTX2 catalogue for all 13 active authored texture maps: Sun, eight planets, Moon, Pluto, Earth clouds, and the shared Saturn/Uranus ring map.
+- Three quality tiers per texture for 39 committed KTX2 binaries.
+- Pinned Khronos KTX Software 4.4.2 workflow that encodes, validates, and commits real `.ktx2` payloads.
+- Shared Three.js `KTX2Loader` runtime with renderer capability detection, per-tier caching, and matching Basis WebAssembly packaging.
+- Runtime diagnostics for requested, loaded, and failed IDs; active transcode formats; backend; and fallback errors.
+- Accessible GPU-compressed texture control plus `?textures=ktx2` and `?textures=webp` comparison modes.
+- Manifest-derived KTX2 file-count and artifact budgets.
+- Browser validation that requires all 13 active IDs to transcode successfully.
 
 ### Changed
 
-- Pilot planet, moon, cloud, and textured-ring surfaces render their quality-tiered WebP immediately, then upgrade asynchronously to KTX2 when supported.
-- The WebP optimizer now accepts the project-authored SVG cloud source, preserving a local fallback at every quality tier.
-- Development and production builds copy the Basis JavaScript/WASM runtime from the installed Three.js package.
+- Every active authored surface map now renders its quality-tiered WebP immediately and upgrades asynchronously to KTX2 when supported.
+- Pluto, the Sun, and near-Earth rocky objects now use the adaptive texture path in addition to the major planets, Moon, clouds, and rings.
+- BasisLZ/ETC1S is used for colour maps; UASTC with Zstandard is used for alpha-sensitive clouds and ring strips.
+- Shared WebP GPU allocations are reference-coordinated and released only after every consumer has switched to KTX2.
+- Disabling KTX2 re-uploads the cached WebP image without another network request.
+- The rendering panel reports compressed coverage as loaded/requested counts.
+- The WebP optimizer accepts the project-authored SVG cloud source and preserves a local fallback at every quality tier.
+
+### Fixed
+
+- Eliminated an early double-residency implementation that increased renderer texture count from the 15-texture baseline to 28.
+- The final full-catalogue implementation returns texture residency to 15 while keeping all 13 KTX2 maps active.
+- Shared Moon/near-Earth and Saturn/Uranus sources can no longer be disposed while another material still needs their fallback.
+- KTX2 generation now handles the pinned CLI's UASTC alias, deterministic RDO settings, source-limited dimensions, and 4 × 4 block-aligned ring strips.
+- Generation workflow writes are serialized and rebased rather than force-pushed.
+
+### Validated measurements
+
+- 512 px KTX2 catalogue: 349.2 kB across 13 files.
+- 1K KTX2 catalogue: 1.03 MB across 13 files.
+- 2K KTX2 catalogue: 3.32 MB across 13 files.
+- 39/39 files pass signature validation; generation additionally runs `ktx validate --gltf-basisu`.
+- Real WebGL 2 test loads all 13 IDs with zero failures using `RGB_ETC2` and `RGBA_ASTC_4x4` targets.
+- Desktop, explicit WebP fallback, mobile, accessibility, screenshot, orientation, and context-recovery tests pass.
 
 ### Safety and compatibility
 
-- WebGL 2 remains the stable renderer.
-- WebP remains the permanent fallback for missing KTX2 files, unsupported formats, WASM failures, network errors, and transcode errors.
+- WebGL 2 remains the stable production renderer.
+- WebP remains the permanent fallback for missing assets, unsupported formats, WASM failures, network errors, and transcode errors.
 - KTX2 files are committed as regular binary payloads rather than Git LFS pointers.
-- WebGPU/TSL remains a separate future experiment.
+- WebGPU/TSL remains a separate follow-up laboratory.
 
 ## Production Candidate — P1 through P5
 
@@ -46,13 +67,12 @@ The project follows a phase-based development history while the first major prod
 
 #### Changed
 
-- Screenshot capture now stores compressed WebP blobs instead of base64 PNG strings.
+- Screenshot capture stores compressed WebP blobs instead of base64 PNG strings.
 - The screenshot gallery retains at most 12 session captures and revokes discarded object URLs.
-- Optional search, bookmarks, comparison, settings, history, screenshot, background, phenomena, outer-system, artifact, and Sandbox code is loaded only when needed.
+- Optional search, bookmarks, comparison, settings, history, screenshot, background, phenomena, outer-system, artifact, and Sandbox code loads only when needed.
 - Production builds no longer ignore TypeScript errors.
 - The Zustand store owns its complete public action interface directly.
 - The dependency tree and Bun lockfile were reduced to packages used by the active application.
-- Near-Earth objects use an owned local texture clone with explicit cleanup.
 - Meteor pools and velocity arrows comply with React 19 render-purity rules.
 
 #### Removed
