@@ -176,21 +176,29 @@ function assertDiagnostics(diagnostics, requested, actual) {
   }
 }
 
+async function openLab(page, suffix = '') {
+  await page.goto(`${baseUrl}/lab/webgpu${suffix}`, {
+    waitUntil: 'domcontentloaded',
+    timeout: 30_000,
+  })
+  await page.waitForFunction(
+    () => document.body.textContent?.includes('WebGPU / TSL laboratory'),
+    { timeout: 30_000 }
+  )
+}
+
 async function runForcedWebGL(browser) {
   const page = await browser.newPage()
   await configurePage(page)
   const failures = collectPageFailures(page)
 
-  await page.goto(`${baseUrl}/lab/webgpu?backend=webgl`, {
-    waitUntil: 'networkidle2',
-    timeout: 75_000,
-  })
+  await openLab(page, '?backend=webgl')
   const diagnostics = await waitForLabDiagnostics(page, 'webgl')
   assertDiagnostics(diagnostics, 'webgl', 'webgl2')
   await assertCanvasHealthy(page, 'forced WebGL 2')
 
   const text = await page.evaluate(() => document.body.textContent ?? '')
-  if (!text.includes('WebGPU / TSL laboratory') || !text.includes('W1 parity scope')) {
+  if (!text.includes('W1 parity scope')) {
     throw new Error('Forced WebGL 2 lab UI did not render the expected controls')
   }
 
@@ -207,10 +215,7 @@ async function runAutoAndSwitch(browser) {
   await configurePage(page)
   const failures = collectPageFailures(page)
 
-  await page.goto(`${baseUrl}/lab/webgpu`, {
-    waitUntil: 'networkidle2',
-    timeout: 75_000,
-  })
+  await openLab(page)
   const autoDiagnostics = await waitForLabDiagnostics(page, 'auto')
   assertDiagnostics(autoDiagnostics, 'auto')
   await assertCanvasHealthy(page, 'auto backend')
