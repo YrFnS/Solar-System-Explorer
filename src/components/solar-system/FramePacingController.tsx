@@ -347,7 +347,7 @@ export default function FramePacingController({
 
           lastAdvanceAtRef.current = timestamp
           scheduledFramesRef.current += 1
-          advance(timestamp, true)
+          advance(timestamp / 1_000, true)
           schedule(false)
         })
       }, delayMs)
