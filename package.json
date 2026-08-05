@@ -17,7 +17,7 @@
     "small-bodies:smoke": "node scripts/validate-small-body-batching.mjs && node scripts/smoke-small-body-batching.mjs",
     "frame-pacing:smoke": "node scripts/validate-frame-pacing.mjs && node scripts/smoke-frame-pacing.mjs",
     "typecheck": "tsc --noEmit",
-    "ui:smoke": "node scripts/diagnose-frame-pacing-startup.mjs && node scripts/run-ui-smoke.mjs && bun run mobile:smoke && bun run small-bodies:smoke && bun run frame-pacing:smoke",
+    "ui:smoke": "node scripts/run-ui-smoke.mjs && bun run mobile:smoke && bun run small-bodies:smoke && bun run frame-pacing:smoke",
     "webgpu:smoke": "node scripts/smoke-webgpu-lab.mjs",
     "webgpu:benchmark:smoke": "node scripts/smoke-webgpu-benchmark.mjs",
     "webgpu:analysis:validate": "bun scripts/validate-webgpu-benchmark-analysis.ts",
@@ -85,7 +85,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react-dom": "^19.2.3",
     "@types/three": "^0.184.0",
     "bun-types": "^1.3.4",
     "eslint": "^9",
