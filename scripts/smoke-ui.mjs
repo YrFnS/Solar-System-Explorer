@@ -338,30 +338,38 @@ async function runMobile(browser) {
   await searchInput.type('Mars')
   await page.keyboard.press('Enter')
   await page.waitForFunction(() => {
+    const diagnostics = window.__SOLAR_MOBILE_OVERLAY__
     const text = document.body.textContent || ''
-    return text.includes('Selected object') && text.includes('Mars')
+    return diagnostics?.activeSurface === 'inspector'
+      && text.includes('Selected object')
+      && text.includes('Mars')
   }, { timeout: 20_000 })
 
   const mobileLayout = await page.evaluate(() => {
-    const inspector = [...document.querySelectorAll('aside')]
-      .find((element) => element.textContent?.includes('Selected object'))
-    const navigator = document.querySelector('[aria-label="Primary celestial navigation"]')
+    const isVisible = (element) => {
+      if (!(element instanceof HTMLElement)) return false
+      const style = getComputedStyle(element)
+      const rect = element.getBoundingClientRect()
+      return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && rect.width > 0
+        && rect.height > 0
+    }
+
+    const surfaces = [...document.querySelectorAll('[data-mobile-bottom-surface]')]
+      .filter(isVisible)
+      .map((element) => element.getAttribute('data-mobile-bottom-surface'))
+    const inspector = document.querySelector('[data-mobile-bottom-surface="inspector"]')
     const inspectorRect = inspector?.getBoundingClientRect()
-    const navigatorRect = navigator?.getBoundingClientRect()
 
     return {
       horizontalOverflow: document.documentElement.scrollWidth - window.innerWidth,
+      surfaces,
       inspectorVisible: Boolean(
         inspectorRect
         && inspectorRect.left >= -1
         && inspectorRect.right <= window.innerWidth + 1
         && inspectorRect.bottom <= window.innerHeight + 1
-      ),
-      navigatorVisible: Boolean(
-        navigatorRect
-        && navigatorRect.left >= -1
-        && navigatorRect.right <= window.innerWidth + 1
-        && navigatorRect.bottom <= window.innerHeight + 1
       ),
     }
   })
@@ -369,22 +377,25 @@ async function runMobile(browser) {
   if (
     mobileLayout.horizontalOverflow > 2
     || !mobileLayout.inspectorVisible
-    || !mobileLayout.navigatorVisible
+    || JSON.stringify(mobileLayout.surfaces) !== JSON.stringify(['inspector'])
   ) {
     throw new Error(`Mobile layout failed: ${JSON.stringify(mobileLayout)}`)
   }
 
-  const openedMissionControl = await page.evaluate(() => {
-    const button = [...document.querySelectorAll('button')].find((candidate) => (
-      candidate.hasAttribute('aria-expanded')
-      && /Explore|Scientific|Sandbox/.test(candidate.textContent ?? '')
-    ))
-    if (!(button instanceof HTMLButtonElement)) return false
-    button.click()
-    return true
-  })
-  if (!openedMissionControl) throw new Error('Mission control trigger was not found on mobile')
-  await page.waitForFunction(() => document.body.textContent?.includes('Mission control'))
+  await page.click(
+    '[data-mobile-bottom-surface="inspector"] [aria-label="Open mission control"]'
+  )
+  await page.waitForFunction(() => {
+    const diagnostics = window.__SOLAR_MOBILE_OVERLAY__
+    const panel = document.querySelector('[data-mobile-bottom-surface="mission-control"]')
+    if (!(panel instanceof HTMLElement)) return false
+    const style = getComputedStyle(panel)
+    const rect = panel.getBoundingClientRect()
+    return diagnostics?.activeSurface === 'mission-control'
+      && style.display !== 'none'
+      && rect.width > 0
+      && rect.height > 0
+  }, { timeout: 20_000 })
   await assertAccessibleSurface(page, 'mobile mission control')
 
   await page.setViewport({
@@ -397,21 +408,35 @@ async function runMobile(browser) {
   await delay(350)
   const landscapeHealthy = await page.evaluate(() => {
     const canvas = document.querySelector('canvas')
+    const isVisible = (element) => {
+      if (!(element instanceof HTMLElement)) return false
+      const style = getComputedStyle(element)
+      const rect = element.getBoundingClientRect()
+      return style.display !== 'none'
+        && style.visibility !== 'hidden'
+        && rect.width > 0
+        && rect.height > 0
+    }
+    const visibleSurfaces = [...document.querySelectorAll('[data-mobile-bottom-surface]')]
+      .filter(isVisible)
+      .map((element) => element.getAttribute('data-mobile-bottom-surface'))
     return Boolean(
       canvas
       && canvas.clientWidth > 0
       && canvas.clientHeight > 0
       && document.documentElement.scrollWidth <= window.innerWidth + 2
+      && visibleSurfaces.length === 1
+      && visibleSurfaces[0] === 'mission-control'
     )
   })
-  if (!landscapeHealthy) throw new Error('Mobile landscape resize produced an invalid layout')
+  if (!landscapeHealthy) throw new Error('Mobile landscape resize produced an invalid coordinated layout')
 
   if (pageErrors.length > 0) {
     throw new Error(`Mobile page errors:\n${pageErrors.join('\n')}`)
   }
 
   await page.close()
-  console.log('[ui-smoke] mobile touch, inspector, mission control, rotation, and accessibility passed')
+  console.log('[ui-smoke] coordinated mobile inspector, mission control, rotation, and accessibility passed')
 }
 
 async function main() {
