@@ -41,6 +41,8 @@ interface MobileSurfaceCoordinatorProps {
   onOpenSearch: () => void
 }
 
+const MOBILE_VIEWPORT_QUERY = '(max-width: 639px), (max-width: 899px) and (max-height: 639px)'
+
 export default function MobileSurfaceCoordinator({
   blockedByModal,
   missionControlOpen,
@@ -68,7 +70,7 @@ export default function MobileSurfaceCoordinator({
 
   useEffect(() => {
     const publish = () => {
-      const mobileViewport = window.matchMedia('(max-width: 639px)').matches
+      const mobileViewport = window.matchMedia(MOBILE_VIEWPORT_QUERY).matches
       window.__SOLAR_MOBILE_OVERLAY__ = {
         activeSurface,
         expectedVisibleSurfaces: mobileViewport && activeSurface !== 'none' ? 1 : 0,
@@ -106,9 +108,13 @@ export default function MobileSurfaceCoordinator({
   return (
     <>
       <style>{`
-        @media (max-width: 639px) {
+        @media (max-width: 639px), (max-width: 899px) and (max-height: 639px) {
+          [data-mobile-bottom-surface][data-mobile-surface-active="false"] {
+            display: none !important;
+          }
+
           .solar-mobile-safe-bottom {
-            bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem) !important;
           }
 
           .solar-mobile-safe-top {
@@ -136,6 +142,28 @@ export default function MobileSurfaceCoordinator({
 
           .solar-mobile-sheet .solar-mobile-icon-button {
             min-width: 44px;
+          }
+        }
+
+        @media (min-width: 640px) and (max-width: 899px) and (max-height: 639px) {
+          [data-mobile-bottom-surface="navigator"] {
+            position: fixed !important;
+            left: 50% !important;
+            right: auto !important;
+            top: auto !important;
+            width: calc(100vw - 1rem) !important;
+            transform: translateX(-50%) !important;
+          }
+
+          [data-mobile-bottom-surface="inspector"],
+          [data-mobile-bottom-surface="tour"],
+          [data-mobile-bottom-surface="mission-control"] {
+            position: fixed !important;
+            inset-inline: 0.5rem !important;
+            top: auto !important;
+            width: auto !important;
+            max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1rem) !important;
+            transform: none !important;
           }
         }
       `}</style>
