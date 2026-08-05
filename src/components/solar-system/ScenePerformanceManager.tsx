@@ -1,13 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useRef } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import {
   getEffectiveQuality,
   QUALITY_PROFILES,
   QUALITY_RANK,
   type AutoQualityStatus,
   type EffectiveQuality,
+  type FramePacingMode,
   usePerformanceStore,
 } from './performance-store'
 import {
@@ -20,7 +21,6 @@ import {
 } from './SceneLoadScheduler'
 import { useSolarSystemStore } from './store'
 
-const CAMERA_ACTIVITY_WINDOW_MS = 1800
 const AUTO_MEASUREMENT_WINDOW_SECONDS = 1.5
 const AUTO_DOWNGRADE_COOLDOWN_SECONDS = 7
 const AUTO_PROMOTION_COOLDOWN_SECONDS = 12
@@ -34,27 +34,32 @@ interface AutoThresholds {
   promotionWindows: number
 }
 
+/**
+ * Thresholds follow the paced targets rather than assuming every profile is
+ * trying to render at 60 FPS. Eco can prove a stable 30 FPS path, Balanced can
+ * earn Ultra near its 45 FPS active cap, and Ultra may idle safely around 45.
+ */
 const AUTO_THRESHOLDS: Record<EffectiveQuality, AutoThresholds> = {
   eco: {
     slowFps: 0,
     severeFps: 0,
     slowP95Ms: Number.POSITIVE_INFINITY,
-    promotionFps: 48,
-    promotionP95Ms: 30,
+    promotionFps: 27,
+    promotionP95Ms: 46,
     promotionWindows: 5,
   },
   balanced: {
-    slowFps: 34,
-    severeFps: 24,
-    slowP95Ms: 52,
-    promotionFps: 56,
-    promotionP95Ms: 23,
+    slowFps: 23,
+    severeFps: 16,
+    slowP95Ms: 72,
+    promotionFps: 40,
+    promotionP95Ms: 36,
     promotionWindows: 8,
   },
   ultra: {
-    slowFps: 48,
-    severeFps: 34,
-    slowP95Ms: 36,
+    slowFps: 34,
+    severeFps: 24,
+    slowP95Ms: 52,
     promotionFps: null,
     promotionP95Ms: null,
     promotionWindows: 0,
@@ -68,6 +73,8 @@ export interface SolarPerformancePolicyDiagnostics {
   autoCeiling: EffectiveQuality
   autoStatus: AutoQualityStatus
   autoReason: string
+  frameMode: FramePacingMode
+  frameTargetFps: number
   schedulerStage: number
   schedulerComplete: boolean
   averageFps: number | null
@@ -118,20 +125,11 @@ export default function ScenePerformanceManager() {
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const autoCeiling = usePerformanceStore((state) => state.autoCeiling)
   const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
+  const frameMode = usePerformanceStore((state) => state.frameMode)
+  const frameTargetFps = usePerformanceStore((state) => state.frameTargetFps)
   const setAutoDecision = usePerformanceStore((state) => state.setAutoDecision)
   const setFps = usePerformanceStore((state) => state.setFps)
   const sceneLoadStage = useSceneLoadStage()
-
-  const isPaused = useSolarSystemStore((state) => state.isPaused)
-  const autoRotate = useSolarSystemStore((state) => state.autoRotate)
-  const followMode = useSolarSystemStore((state) => state.followMode)
-  const isTourMode = useSolarSystemStore((state) => state.isTourMode)
-  const cameraMode = useSolarSystemStore((state) => state.cameraMode)
-  const focusTarget = useSolarSystemStore((state) => state.focusTarget)
-  const cameraPosition = useSolarSystemStore((state) => state.cameraPosition)
-
-  const setFrameloop = useThree((state) => state.setFrameloop)
-  const invalidate = useThree((state) => state.invalidate)
 
   const elapsedRef = useRef(0)
   const framesRef = useRef(0)
@@ -139,14 +137,9 @@ export default function ScenePerformanceManager() {
   const slowSamplesRef = useRef(0)
   const fastSamplesRef = useRef(0)
   const cooldownRef = useRef(0)
-  const activityUntilRef = useRef(0)
-  const hiddenRef = useRef(false)
   const stageRef = useRef(sceneLoadStage)
   const averageFpsRef = useRef<number | null>(null)
   const p95FrameMsRef = useRef<number | null>(null)
-
-  const needsContinuousFrames =
-    !isPaused || autoRotate || followMode || isTourMode || cameraMode === 'fly'
 
   const publishPolicyDiagnostics = useCallback(() => {
     if (typeof window === 'undefined') return
@@ -165,6 +158,8 @@ export default function ScenePerformanceManager() {
       autoCeiling: performanceState.autoCeiling,
       autoStatus: performanceState.autoStatus,
       autoReason: performanceState.autoReason,
+      frameMode: performanceState.frameMode,
+      frameTargetFps: performanceState.frameTargetFps,
       schedulerStage: stageRef.current,
       schedulerComplete: stageRef.current >= SCENE_LOAD_STAGES.artifacts,
       averageFps: averageFpsRef.current,
@@ -222,46 +217,14 @@ export default function ScenePerformanceManager() {
     scene.setShowTrails(false)
   }, [reducedMotion])
 
-  useEffect(() => {
-    activityUntilRef.current = performance.now() + CAMERA_ACTIVITY_WINDOW_MS
-    invalidate()
-  }, [cameraPosition, focusTarget, invalidate])
-
-  useEffect(() => {
-    if (hiddenRef.current) return
-    setFrameloop(needsContinuousFrames ? 'always' : 'demand')
-    invalidate()
-  }, [invalidate, needsContinuousFrames, setFrameloop])
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      hiddenRef.current = document.hidden
-
-      if (document.hidden) {
-        setFrameloop('never')
-        return
-      }
-
-      setFrameloop(needsContinuousFrames ? 'always' : 'demand')
-      invalidate()
-    }
-
-    document.addEventListener('visibilitychange', handleVisibility)
-    handleVisibility()
-    return () => document.removeEventListener('visibilitychange', handleVisibility)
-  }, [invalidate, needsContinuousFrames, setFrameloop])
-
   useFrame((_, delta) => {
-    if (!needsContinuousFrames) {
+    if (frameMode === 'static' || frameMode === 'suspended') {
       elapsedRef.current = 0
       framesRef.current = 0
       frameTimesRef.current = []
       slowSamplesRef.current = 0
       fastSamplesRef.current = 0
-
-      if (performance.now() < activityUntilRef.current) {
-        invalidate()
-      }
+      publishPolicyDiagnostics()
       return
     }
 
@@ -312,7 +275,7 @@ export default function ScenePerformanceManager() {
       setAutoDecision(
         lower,
         'cooldown',
-        `Auto reduced detail after ${Math.round(measuredFps)} FPS and ${Math.round(p95FrameMs)} ms P95.`
+        `Auto reduced detail after ${Math.round(measuredFps)} FPS against a ${frameTargetFps} FPS cap and ${Math.round(p95FrameMs)} ms P95.`
       )
       slowSamplesRef.current = 0
       fastSamplesRef.current = 0
@@ -350,7 +313,7 @@ export default function ScenePerformanceManager() {
         limitedByDevice ? 'limited' : 'stable',
         limitedByDevice
           ? `Auto is holding ${QUALITY_PROFILES[autoQuality].label} at this device's safe ceiling.`
-          : 'Auto has completed its benchmark and Ultra remains stable.'
+          : 'Auto has completed its paced benchmark and Ultra remains stable.'
       )
       publishPolicyDiagnostics()
       return
@@ -366,7 +329,7 @@ export default function ScenePerformanceManager() {
       setAutoDecision(
         autoQuality,
         'stable',
-        `Auto is holding ${QUALITY_PROFILES[autoQuality].label}; promotion requires steadier frame pacing.`
+        `Auto is holding ${QUALITY_PROFILES[autoQuality].label}; the ${frameTargetFps} FPS paced window was not stable enough to promote.`
       )
       publishPolicyDiagnostics()
       return
@@ -377,7 +340,7 @@ export default function ScenePerformanceManager() {
       setAutoDecision(
         autoQuality,
         'measuring',
-        `Promotion sample ${fastSamplesRef.current}/${thresholds.promotionWindows} passed at ${Math.round(measuredFps)} FPS.`
+        `Promotion sample ${fastSamplesRef.current}/${thresholds.promotionWindows} passed at ${Math.round(measuredFps)} of ${frameTargetFps} FPS.`
       )
       publishPolicyDiagnostics()
       return
@@ -386,7 +349,7 @@ export default function ScenePerformanceManager() {
     setAutoDecision(
       higher,
       'cooldown',
-      `Auto promoted to ${QUALITY_PROFILES[higher].label} after sustained post-warmup frame health.`
+      `Auto promoted to ${QUALITY_PROFILES[higher].label} after sustained post-warmup paced frame health.`
     )
     fastSamplesRef.current = 0
     slowSamplesRef.current = 0
