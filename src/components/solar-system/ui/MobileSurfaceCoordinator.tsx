@@ -141,6 +141,7 @@ export default function MobileSurfaceCoordinator({
             min-height: 44px;
           }
 
+          .solar-mobile-sheet button[aria-label],
           .solar-mobile-sheet .solar-mobile-icon-button {
             min-width: 44px;
           }
