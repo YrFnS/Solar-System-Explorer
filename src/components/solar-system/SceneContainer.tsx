@@ -9,6 +9,7 @@ import PerformanceDock from './PerformanceDock'
 import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
 import SceneLoadScheduler from './SceneLoadScheduler'
+import FramePacingController from './FramePacingController'
 import AdaptiveLodManager from './AdaptiveLodManager'
 import RendererBoundary from './RendererBoundary'
 import RenderDiagnostics from './RenderDiagnostics'
@@ -21,7 +22,11 @@ import WebGLContextMonitor, {
 import { installAssetUrlPolicy } from './asset-policy'
 import { installModelAvailabilityPolicy } from './model-policy'
 import { useSolarSystemStore } from './store'
-import { getQualityProfile, usePerformanceStore } from './performance-store'
+import {
+  getQualityProfile,
+  type RendererPowerPreference,
+  usePerformanceStore,
+} from './performance-store'
 
 installAssetUrlPolicy()
 installModelAvailabilityPolicy()
@@ -121,12 +126,29 @@ function ContextRecovery({ onRetryEco }: { onRetryEco: () => void }) {
 }
 
 export default function SceneContainer() {
-  const [rendererGeneration, setRendererGeneration] = useState(0)
-  const [contextLost, setContextLost] = useState(false)
-  const setSelectedBody = useSolarSystemStore((state) => state.setSelectedBody)
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const profile = getQualityProfile({ preset, autoQuality })
+  const initialPowerPreference: RendererPowerPreference = preset === 'ultra'
+    ? 'high-performance'
+    : 'low-power'
+
+  const [rendererGeneration, setRendererGeneration] = useState(0)
+  const [rendererPowerPreference, setRendererPowerPreference] = useState(
+    initialPowerPreference
+  )
+  const [contextLost, setContextLost] = useState(false)
+  const setSelectedBody = useSolarSystemStore((state) => state.setSelectedBody)
+
+  useEffect(() => {
+    const desiredPreference: RendererPowerPreference = preset === 'ultra'
+      ? 'high-performance'
+      : 'low-power'
+    if (desiredPreference === rendererPowerPreference) return
+
+    setRendererPowerPreference(desiredPreference)
+    setRendererGeneration((generation) => generation + 1)
+  }, [preset, rendererPowerPreference])
 
   useEffect(() => {
     const handleLost = () => setContextLost(true)
@@ -142,6 +164,7 @@ export default function SceneContainer() {
 
   const retryEco = () => {
     usePerformanceStore.getState().setPreset('eco')
+    setRendererPowerPreference('low-power')
     setContextLost(false)
     setRendererGeneration((generation) => generation + 1)
   }
@@ -158,18 +181,21 @@ export default function SceneContainer() {
             far: 10000,
           }}
           dpr={profile.dpr}
-          frameloop="always"
+          frameloop="never"
           performance={{ min: 0.45, max: 1, debounce: 250 }}
           gl={{
             antialias: false,
             alpha: false,
             depth: true,
             stencil: false,
-            powerPreference: 'high-performance',
+            powerPreference: rendererPowerPreference,
           }}
           onPointerMissed={() => setSelectedBody(null)}
         >
           <SceneLoadScheduler>
+            <FramePacingController
+              rendererPowerPreference={rendererPowerPreference}
+            />
             <SimulationController />
             <ScenePerformanceManager />
             <TextureLifecycleManager />
