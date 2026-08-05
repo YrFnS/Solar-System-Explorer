@@ -80,6 +80,7 @@ async function waitForReady(page) {
   await page.waitForFunction(() => {
     const lod = window.__SOLAR_ADAPTIVE_LOD__
     const loading = window.__SOLAR_SCENE_LOADING__
+    const renderer = window.__SOLAR_EXPLORER_DIAGNOSTICS__
     return Boolean(
       lod
       && lod.registeredMeshes >= 8
@@ -87,6 +88,8 @@ async function waitForReady(page) {
       && lod.registryEvaluations >= 1
       && !lod.dirty
       && loading?.complete
+      && renderer
+      && renderer.sceneObjects > 0
     )
   }, { timeout: 75_000 })
 }
@@ -98,6 +101,10 @@ async function readLod(page) {
 }
 
 async function readRenderer(page) {
+  await page.waitForFunction(() => (
+    Boolean(window.__SOLAR_EXPLORER_DIAGNOSTICS__?.sceneObjects)
+  ), { timeout: 20_000 })
+
   const diagnostics = await page.evaluate(() => window.__SOLAR_EXPLORER_DIAGNOSTICS__)
   if (!diagnostics) throw new Error('Renderer diagnostics were unavailable')
   return diagnostics
