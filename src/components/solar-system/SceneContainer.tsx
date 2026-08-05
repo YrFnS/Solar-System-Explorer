@@ -6,7 +6,6 @@ import { AlertTriangle, Gauge, RefreshCw } from 'lucide-react'
 import { Canvas } from '@react-three/fiber'
 import SolarSystemV3 from './SolarSystemV3'
 import PerformanceDock from './PerformanceDock'
-import ExperienceDock from './ExperienceDock'
 import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
 import SceneLoadScheduler from './SceneLoadScheduler'
@@ -184,7 +183,6 @@ export default function SceneContainer() {
       </div>
       <DeferredInterface />
       <PerformanceDock />
-      <ExperienceDock />
       {contextLost ? <ContextRecovery onRetryEco={retryEco} /> : null}
     </RendererBoundary>
   )
