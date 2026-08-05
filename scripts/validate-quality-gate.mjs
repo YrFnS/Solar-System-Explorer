@@ -1,12 +1,57 @@
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const root = process.cwd()
 const packageJsonPath = path.join(root, 'package.json')
 const workflowPath = path.join(root, '.github', 'workflows', 'quality.yml')
+const sceneContainerPath = path.join(
+  root,
+  'src',
+  'components',
+  'solar-system',
+  'SceneContainer.tsx'
+)
+const solarSystemPath = path.join(
+  root,
+  'src',
+  'components',
+  'solar-system',
+  'SolarSystemV3.tsx'
+)
+const sceneSchedulerPath = path.join(
+  root,
+  'src',
+  'components',
+  'solar-system',
+  'SceneLoadScheduler.tsx'
+)
+const removedWarmupPath = path.join(
+  root,
+  'src',
+  'components',
+  'solar-system',
+  'ProgressiveSceneWarmup.tsx'
+)
+const runtimeSmokePath = path.join(root, 'scripts', 'smoke-runtime-foundation.mjs')
 
-const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
-const workflow = (await readFile(workflowPath, 'utf8')).replace(/\r\n/g, '\n')
+const [
+  packageJsonSource,
+  workflowSource,
+  sceneContainer,
+  solarSystem,
+  sceneScheduler,
+  runtimeSmoke,
+] = await Promise.all([
+  readFile(packageJsonPath, 'utf8'),
+  readFile(workflowPath, 'utf8'),
+  readFile(sceneContainerPath, 'utf8'),
+  readFile(solarSystemPath, 'utf8'),
+  readFile(sceneSchedulerPath, 'utf8'),
+  readFile(runtimeSmokePath, 'utf8'),
+])
+
+const packageJson = JSON.parse(packageJsonSource)
+const workflow = workflowSource.replace(/\r\n/g, '\n')
 const failures = []
 
 function requireContract(condition, message) {
@@ -25,6 +70,15 @@ function requireInOrder(content, values, label) {
       failures.push(`${label} places “${value}” before an earlier required gate.`)
     }
     cursor = Math.max(cursor, index)
+  }
+}
+
+async function pathExists(filePath) {
+  try {
+    await access(filePath)
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -100,6 +154,46 @@ requireContract(
   'package.json must expose runtime:smoke through scripts/smoke-runtime-foundation.mjs.'
 )
 
+requireContract(
+  sceneContainer.includes('<SceneLoadScheduler>')
+    && sceneContainer.includes('</SceneLoadScheduler>'),
+  'SceneContainer must wrap the production scene in SceneLoadScheduler.'
+)
+requireContract(
+  !sceneContainer.includes('ProgressiveSceneWarmup')
+    && !sceneContainer.includes('prepareSceneWarmup'),
+  'SceneContainer must not restore the removed fixed-time warmup path.'
+)
+requireContract(
+  solarSystem.includes('useSceneLoadStage')
+    && solarSystem.includes('SCENE_LOAD_STAGES'),
+  'SolarSystemV3 must consume the central measured scene stages.'
+)
+requireContract(
+  !solarSystem.includes('setTimeout(')
+    && !solarSystem.includes('requestIdleCallback')
+    && !solarSystem.includes('function useSceneStage'),
+  'SolarSystemV3 must not contain an independent timer-based stage scheduler.'
+)
+requireContract(
+  sceneScheduler.includes('useFrame(')
+    && sceneScheduler.includes('requestIdleCallback')
+    && sceneScheduler.includes('__SOLAR_SCENE_LOADING__')
+    && sceneScheduler.includes("'frame-health'")
+    && sceneScheduler.includes("'interaction-idle'"),
+  'SceneLoadScheduler must retain frame-health, interaction, idle, and diagnostic contracts.'
+)
+requireContract(
+  runtimeSmoke.includes('EXPECTED_SCENE_STAGES')
+    && runtimeSmoke.includes('__SOLAR_SCENE_LOADING__')
+    && runtimeSmoke.includes('waitForMeasuredSceneLoading'),
+  'Runtime smoke coverage must validate sequential measured scene loading.'
+)
+requireContract(
+  !(await pathExists(removedWarmupPath)),
+  'ProgressiveSceneWarmup.tsx must remain removed so a second scheduler cannot return.'
+)
+
 if (failures.length > 0) {
   console.error('[quality-gate] release contract failed')
   failures.forEach((failure) => console.error(`- ${failure}`))
@@ -107,4 +201,5 @@ if (failures.length > 0) {
 } else {
   console.log(`[quality-gate] release contract passed with Bun ${packageBunVersion}`)
   console.log(`[quality-gate] protected commands: ${workflowCommands.length}`)
+  console.log('[quality-gate] measured scene loading is the only production startup scheduler')
 }
