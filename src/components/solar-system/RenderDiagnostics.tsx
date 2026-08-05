@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import {
+  getEffectiveQuality,
+  usePerformanceStore,
+} from './performance-store'
+import {
   SCENE_LOAD_STAGES,
   useSceneLoadStage,
 } from './SceneLoadScheduler'
@@ -32,12 +36,16 @@ declare global {
  * Exposes low-frequency renderer counters only for automated browsers or an
  * explicit `?diagnostics=1` session. Snapshots are withheld while a fresh
  * renderer is admitting scene stages and for a short stabilization window
- * afterward, so comparisons never mix a core frame with a settled frame.
+ * afterward, so comparisons never mix a core frame or previous quality with a
+ * settled frame from the current profile.
  */
 export default function RenderDiagnostics() {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
   const sceneLoadStage = useSceneLoadStage()
+  const preset = usePerformanceStore((state) => state.preset)
+  const autoQuality = usePerformanceStore((state) => state.autoQuality)
+  const quality = getEffectiveQuality({ preset, autoQuality })
   const elapsedRef = useRef(0)
   const enabled = useMemo(() => {
     if (typeof window === 'undefined') return false
@@ -49,7 +57,7 @@ export default function RenderDiagnostics() {
   useEffect(() => {
     elapsedRef.current = 0
     delete window.__SOLAR_EXPLORER_DIAGNOSTICS__
-  }, [sceneSettled])
+  }, [quality, sceneSettled])
 
   useFrame((_, delta) => {
     if (!enabled || !sceneSettled) return
