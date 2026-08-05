@@ -129,7 +129,7 @@ export default function MobileSurfaceCoordinator({
           }
 
           .solar-mobile-sheet button,
-          .solar-mobile-sheet input,
+          .solar-mobile-sheet input:not([type="checkbox"]),
           .solar-mobile-sheet label {
             min-height: 44px;
           }
