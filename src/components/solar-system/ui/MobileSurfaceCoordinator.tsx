@@ -110,7 +110,7 @@ export default function MobileSurfaceCoordinator({
       <style>{`
         @media (max-width: 639px), (max-width: 899px) and (max-height: 639px) {
           [data-mobile-bottom-surface][data-mobile-surface-active="false"],
-          [data-mission-control-trigger="desktop"] {
+          button[aria-label="Open mission control"][aria-expanded] {
             display: none !important;
           }
 
