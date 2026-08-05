@@ -1,60 +1,126 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useSolarSystemStore } from './store'
 import {
   getEffectiveQuality,
+  QUALITY_PROFILES,
+  QUALITY_RANK,
+  type AutoQualityStatus,
   type EffectiveQuality,
   usePerformanceStore,
 } from './performance-store'
+import {
+  getSceneWorkloadSnapshot,
+  type SceneWorkloadSystem,
+} from './scene-workload-policy'
+import {
+  SCENE_LOAD_STAGES,
+  useSceneLoadStage,
+} from './SceneLoadScheduler'
+import { useSolarSystemStore } from './store'
 
-const DEFAULTS_KEY = 'solar-explorer-performance-defaults-v1'
 const CAMERA_ACTIVITY_WINDOW_MS = 1800
+const AUTO_MEASUREMENT_WINDOW_SECONDS = 1.5
+const AUTO_DOWNGRADE_COOLDOWN_SECONDS = 7
+const AUTO_PROMOTION_COOLDOWN_SECONDS = 12
 
-function lowerQuality(quality: EffectiveQuality): EffectiveQuality {
-  if (quality === 'ultra') return 'balanced'
-  return 'eco'
+interface AutoThresholds {
+  slowFps: number
+  severeFps: number
+  slowP95Ms: number
+  promotionFps: number | null
+  promotionP95Ms: number | null
+  promotionWindows: number
 }
 
-function higherQuality(quality: EffectiveQuality): EffectiveQuality {
-  if (quality === 'eco') return 'balanced'
-  return 'ultra'
+const AUTO_THRESHOLDS: Record<EffectiveQuality, AutoThresholds> = {
+  eco: {
+    slowFps: 0,
+    severeFps: 0,
+    slowP95Ms: Number.POSITIVE_INFINITY,
+    promotionFps: 48,
+    promotionP95Ms: 30,
+    promotionWindows: 5,
+  },
+  balanced: {
+    slowFps: 34,
+    severeFps: 24,
+    slowP95Ms: 52,
+    promotionFps: 56,
+    promotionP95Ms: 23,
+    promotionWindows: 8,
+  },
+  ultra: {
+    slowFps: 48,
+    severeFps: 34,
+    slowP95Ms: 36,
+    promotionFps: null,
+    promotionP95Ms: null,
+    promotionWindows: 0,
+  },
 }
 
-function applyFirstRunDefaults() {
-  if (typeof window === 'undefined' || window.localStorage.getItem(DEFAULTS_KEY)) return
+export interface SolarPerformancePolicyDiagnostics {
+  preset: 'auto' | EffectiveQuality
+  effectiveQuality: EffectiveQuality
+  autoBaseline: EffectiveQuality
+  autoCeiling: EffectiveQuality
+  autoStatus: AutoQualityStatus
+  autoReason: string
+  schedulerStage: number
+  schedulerComplete: boolean
+  averageFps: number | null
+  p95FrameMs: number | null
+  requestedSystems: SceneWorkloadSystem[]
+  activeSystems: SceneWorkloadSystem[]
+  suppressedSystems: SceneWorkloadSystem[]
+}
 
-  const quality = getEffectiveQuality(usePerformanceStore.getState())
-  const scene = useSolarSystemStore.getState()
-
-  if (quality === 'eco') {
-    scene.setShowKuiperBelt(false)
-    scene.setShowNebula(false)
-    scene.setShowTrojans(false)
-    scene.setShowBlackHole(false)
-    scene.setShowWormhole(false)
-    scene.setShowCentaurs(false)
-    scene.setShowScatteredDisc(false)
-    scene.setShowPhenomena(false)
-    scene.setShowSolarWind(false)
-    scene.setShowZodiacalLight(false)
-  } else if (quality === 'balanced') {
-    scene.setShowBlackHole(false)
-    scene.setShowWormhole(false)
-    scene.setShowScatteredDisc(false)
-    scene.setShowZodiacalLight(false)
+declare global {
+  interface Window {
+    __SOLAR_PERFORMANCE_POLICY__?: SolarPerformancePolicyDiagnostics
   }
+}
 
-  window.localStorage.setItem(DEFAULTS_KEY, quality)
+function lowerQuality(quality: EffectiveQuality): EffectiveQuality | null {
+  if (quality === 'ultra') return 'balanced'
+  if (quality === 'balanced') return 'eco'
+  return null
+}
+
+function higherQuality(
+  quality: EffectiveQuality,
+  ceiling: EffectiveQuality
+): EffectiveQuality | null {
+  const candidate = quality === 'eco'
+    ? 'balanced'
+    : quality === 'balanced'
+      ? 'ultra'
+      : null
+
+  if (!candidate || QUALITY_RANK[candidate] > QUALITY_RANK[ceiling]) return null
+  return candidate
+}
+
+function percentile95(samples: number[]) {
+  if (samples.length === 0) return null
+  const sorted = [...samples].sort((left, right) => left - right)
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.ceil(sorted.length * 0.95) - 1)
+  )
+  return sorted[index]
 }
 
 export default function ScenePerformanceManager() {
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
+  const autoCeiling = usePerformanceStore((state) => state.autoCeiling)
   const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
-  const setAutoQuality = usePerformanceStore((state) => state.setAutoQuality)
+  const setAutoDecision = usePerformanceStore((state) => state.setAutoDecision)
   const setFps = usePerformanceStore((state) => state.setFps)
+  const sceneLoadStage = useSceneLoadStage()
 
   const isPaused = useSolarSystemStore((state) => state.isPaused)
   const autoRotate = useSolarSystemStore((state) => state.autoRotate)
@@ -69,18 +135,81 @@ export default function ScenePerformanceManager() {
 
   const elapsedRef = useRef(0)
   const framesRef = useRef(0)
+  const frameTimesRef = useRef<number[]>([])
   const slowSamplesRef = useRef(0)
   const fastSamplesRef = useRef(0)
   const cooldownRef = useRef(0)
   const activityUntilRef = useRef(0)
   const hiddenRef = useRef(false)
+  const stageRef = useRef(sceneLoadStage)
+  const averageFpsRef = useRef<number | null>(null)
+  const p95FrameMsRef = useRef<number | null>(null)
 
   const needsContinuousFrames =
     !isPaused || autoRotate || followMode || isTourMode || cameraMode === 'fly'
 
-  useEffect(() => {
-    applyFirstRunDefaults()
+  const publishPolicyDiagnostics = useCallback(() => {
+    if (typeof window === 'undefined') return
+
+    const performanceState = usePerformanceStore.getState()
+    const effectiveQuality = getEffectiveQuality(performanceState)
+    const workload = getSceneWorkloadSnapshot(
+      effectiveQuality,
+      useSolarSystemStore.getState()
+    )
+
+    window.__SOLAR_PERFORMANCE_POLICY__ = {
+      preset: performanceState.preset,
+      effectiveQuality,
+      autoBaseline: performanceState.autoBaseline,
+      autoCeiling: performanceState.autoCeiling,
+      autoStatus: performanceState.autoStatus,
+      autoReason: performanceState.autoReason,
+      schedulerStage: stageRef.current,
+      schedulerComplete: stageRef.current >= SCENE_LOAD_STAGES.artifacts,
+      averageFps: averageFpsRef.current,
+      p95FrameMs: p95FrameMsRef.current,
+      requestedSystems: workload.requestedSystems,
+      activeSystems: workload.activeSystems,
+      suppressedSystems: workload.suppressedSystems,
+    }
   }, [])
+
+  useEffect(() => {
+    const unsubscribePerformance = usePerformanceStore.subscribe(publishPolicyDiagnostics)
+    const unsubscribeScene = useSolarSystemStore.subscribe(publishPolicyDiagnostics)
+    publishPolicyDiagnostics()
+
+    return () => {
+      unsubscribePerformance()
+      unsubscribeScene()
+      delete window.__SOLAR_PERFORMANCE_POLICY__
+    }
+  }, [publishPolicyDiagnostics])
+
+  useEffect(() => {
+    stageRef.current = sceneLoadStage
+    if (preset === 'auto' && sceneLoadStage < SCENE_LOAD_STAGES.artifacts) {
+      setAutoDecision(
+        autoQuality,
+        'warming',
+        'Auto is holding its conservative baseline until measured scene loading completes.'
+      )
+    }
+    publishPolicyDiagnostics()
+  }, [autoQuality, preset, publishPolicyDiagnostics, sceneLoadStage, setAutoDecision])
+
+  useEffect(() => {
+    elapsedRef.current = 0
+    framesRef.current = 0
+    frameTimesRef.current = []
+    slowSamplesRef.current = 0
+    fastSamplesRef.current = 0
+    cooldownRef.current = 0
+    averageFpsRef.current = null
+    p95FrameMsRef.current = null
+    publishPolicyDiagnostics()
+  }, [autoQuality, preset, publishPolicyDiagnostics])
 
   useEffect(() => {
     if (!reducedMotion) return
@@ -123,6 +252,7 @@ export default function ScenePerformanceManager() {
     if (!needsContinuousFrames) {
       elapsedRef.current = 0
       framesRef.current = 0
+      frameTimesRef.current = []
       slowSamplesRef.current = 0
       fastSamplesRef.current = 0
 
@@ -136,45 +266,129 @@ export default function ScenePerformanceManager() {
 
     elapsedRef.current += delta
     framesRef.current += 1
+    frameTimesRef.current.push(Math.min(250, delta * 1_000))
     cooldownRef.current = Math.max(0, cooldownRef.current - delta)
 
-    if (elapsedRef.current < 2) return
+    if (elapsedRef.current < AUTO_MEASUREMENT_WINDOW_SECONDS) return
 
     const measuredFps = framesRef.current / elapsedRef.current
     const roundedFps = Math.max(1, Math.min(120, Math.round(measuredFps)))
+    const p95FrameMs = percentile95(frameTimesRef.current)
+    averageFpsRef.current = measuredFps
+    p95FrameMsRef.current = p95FrameMs
     setFps(roundedFps)
 
     elapsedRef.current = 0
     framesRef.current = 0
+    frameTimesRef.current = []
 
-    if (preset !== 'auto' || cooldownRef.current > 0) return
-
-    const slowThreshold = autoQuality === 'ultra' ? 46 : 36
-    const fastThreshold = autoQuality === 'eco' ? 56 : 58
-
-    if (measuredFps < slowThreshold) {
-      slowSamplesRef.current += 1
-      fastSamplesRef.current = 0
-    } else if (measuredFps > fastThreshold) {
-      fastSamplesRef.current += 1
-      slowSamplesRef.current = 0
-    } else {
-      slowSamplesRef.current = 0
-      fastSamplesRef.current = 0
-    }
-
-    if (slowSamplesRef.current >= 2 && autoQuality !== 'eco') {
-      setAutoQuality(lowerQuality(autoQuality))
-      slowSamplesRef.current = 0
-      cooldownRef.current = 8
+    if (preset !== 'auto' || p95FrameMs === null) {
+      publishPolicyDiagnostics()
       return
     }
 
-    if (fastSamplesRef.current >= 5 && autoQuality !== 'ultra') {
-      setAutoQuality(higherQuality(autoQuality))
+    const thresholds = AUTO_THRESHOLDS[autoQuality]
+    const lower = lowerQuality(autoQuality)
+    const severeRegression = lower !== null && (
+      measuredFps < thresholds.severeFps
+      || p95FrameMs > thresholds.slowP95Ms * 1.45
+    )
+    const slowRegression = lower !== null && (
+      measuredFps < thresholds.slowFps
+      || p95FrameMs > thresholds.slowP95Ms
+    )
+
+    if (slowRegression) {
+      slowSamplesRef.current += 1
       fastSamplesRef.current = 0
-      cooldownRef.current = 12
+    } else {
+      slowSamplesRef.current = 0
     }
+
+    if (lower && (severeRegression || slowSamplesRef.current >= 2)) {
+      setAutoDecision(
+        lower,
+        'cooldown',
+        `Auto reduced detail after ${Math.round(measuredFps)} FPS and ${Math.round(p95FrameMs)} ms P95.`
+      )
+      slowSamplesRef.current = 0
+      fastSamplesRef.current = 0
+      cooldownRef.current = AUTO_DOWNGRADE_COOLDOWN_SECONDS
+      publishPolicyDiagnostics()
+      return
+    }
+
+    if (cooldownRef.current > 0) {
+      setAutoDecision(
+        autoQuality,
+        'cooldown',
+        `Auto is observing the ${QUALITY_PROFILES[autoQuality].label} profile after a recent change.`
+      )
+      publishPolicyDiagnostics()
+      return
+    }
+
+    if (stageRef.current < SCENE_LOAD_STAGES.artifacts) {
+      fastSamplesRef.current = 0
+      setAutoDecision(
+        autoQuality,
+        'warming',
+        'Auto promotion is locked until every measured scene stage has completed.'
+      )
+      publishPolicyDiagnostics()
+      return
+    }
+
+    const higher = higherQuality(autoQuality, autoCeiling)
+    if (!higher) {
+      const limitedByDevice = QUALITY_RANK[autoCeiling] < QUALITY_RANK.ultra
+      setAutoDecision(
+        autoQuality,
+        limitedByDevice ? 'limited' : 'stable',
+        limitedByDevice
+          ? `Auto is holding ${QUALITY_PROFILES[autoQuality].label} at this device's safe ceiling.`
+          : 'Auto has completed its benchmark and Ultra remains stable.'
+      )
+      publishPolicyDiagnostics()
+      return
+    }
+
+    const promotionHealthy = thresholds.promotionFps !== null
+      && thresholds.promotionP95Ms !== null
+      && measuredFps >= thresholds.promotionFps
+      && p95FrameMs <= thresholds.promotionP95Ms
+
+    if (!promotionHealthy) {
+      fastSamplesRef.current = 0
+      setAutoDecision(
+        autoQuality,
+        'stable',
+        `Auto is holding ${QUALITY_PROFILES[autoQuality].label}; promotion requires steadier frame pacing.`
+      )
+      publishPolicyDiagnostics()
+      return
+    }
+
+    fastSamplesRef.current += 1
+    if (fastSamplesRef.current < thresholds.promotionWindows) {
+      setAutoDecision(
+        autoQuality,
+        'measuring',
+        `Promotion sample ${fastSamplesRef.current}/${thresholds.promotionWindows} passed at ${Math.round(measuredFps)} FPS.`
+      )
+      publishPolicyDiagnostics()
+      return
+    }
+
+    setAutoDecision(
+      higher,
+      'cooldown',
+      `Auto promoted to ${QUALITY_PROFILES[higher].label} after sustained post-warmup frame health.`
+    )
+    fastSamplesRef.current = 0
+    slowSamplesRef.current = 0
+    cooldownRef.current = AUTO_PROMOTION_COOLDOWN_SECONDS
+    publishPolicyDiagnostics()
   })
 
   return null
