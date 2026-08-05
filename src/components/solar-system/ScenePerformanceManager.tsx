@@ -205,11 +205,14 @@ export default function ScenePerformanceManager() {
     frameTimesRef.current = []
     slowSamplesRef.current = 0
     fastSamplesRef.current = 0
-    cooldownRef.current = 0
     averageFpsRef.current = null
     p95FrameMsRef.current = null
     publishPolicyDiagnostics()
   }, [autoQuality, preset, publishPolicyDiagnostics])
+
+  useEffect(() => {
+    cooldownRef.current = 0
+  }, [preset])
 
   useEffect(() => {
     if (!reducedMotion) return
