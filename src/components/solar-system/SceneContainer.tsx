@@ -9,6 +9,7 @@ import PerformanceDock from './PerformanceDock'
 import ExperienceDock from './ExperienceDock'
 import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
+import SceneLoadScheduler from './SceneLoadScheduler'
 import AdaptiveLodManager from './AdaptiveLodManager'
 import RendererBoundary from './RendererBoundary'
 import RenderDiagnostics from './RenderDiagnostics'
@@ -17,9 +18,6 @@ import WebGLContextMonitor, {
   WEBGL_CONTEXT_LOST_EVENT,
   WEBGL_CONTEXT_RESTORED_EVENT,
 } from './WebGLContextMonitor'
-import ProgressiveSceneWarmup, {
-  prepareSceneWarmup,
-} from './ProgressiveSceneWarmup'
 import { installAssetUrlPolicy } from './asset-policy'
 import { installModelAvailabilityPolicy } from './model-policy'
 import { useSolarSystemStore } from './store'
@@ -27,7 +25,6 @@ import { getQualityProfile, usePerformanceStore } from './performance-store'
 
 installAssetUrlPolicy()
 installModelAvailabilityPolicy()
-const INITIAL_SCENE_WARMUP = prepareSceneWarmup()
 
 const UIOverlay = dynamic(() => import('./UIOverlayV4'), {
   ssr: false,
@@ -172,14 +169,15 @@ export default function SceneContainer() {
           }}
           onPointerMissed={() => setSelectedBody(null)}
         >
-          <SimulationController />
-          <ScenePerformanceManager />
-          <ProgressiveSceneWarmup plan={INITIAL_SCENE_WARMUP} />
-          <AdaptiveLodManager />
-          <ScreenshotCaptureBridge />
-          <WebGLContextMonitor />
-          <RenderDiagnostics />
-          <SolarSystemV3 />
+          <SceneLoadScheduler>
+            <SimulationController />
+            <ScenePerformanceManager />
+            <AdaptiveLodManager />
+            <ScreenshotCaptureBridge />
+            <WebGLContextMonitor />
+            <RenderDiagnostics />
+            <SolarSystemV3 />
+          </SceneLoadScheduler>
         </Canvas>
       </div>
       <DeferredInterface />
