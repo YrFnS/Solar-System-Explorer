@@ -45,14 +45,14 @@ requireContract(
   'Renderer creation must request low power outside a manually selected Ultra profile.'
 )
 requireContract(
-  pacingController.includes('advance(timestamp, true)')
+  pacingController.includes('advance(timestamp / 1_000, true)')
     && pacingController.includes('FRAME_PACING_ACTIVITY_EVENT')
     && pacingController.includes('visibilitychange')
     && pacingController.includes('__SOLAR_FRAME_PACING__')
     && pacingController.includes('renderedWhileHidden')
     && pacingController.includes("return 'static'")
     && pacingController.includes("return 'idle'"),
-  'FramePacingController must manually advance, coordinate activity, suspend visibility, and publish evidence.'
+  'FramePacingController must pass seconds to R3F, coordinate activity, suspend visibility, and publish evidence.'
 )
 requireContract(
   pacingPolicy.includes('activeFps: 30')
@@ -116,5 +116,5 @@ if (failures.length > 0) {
   failures.forEach((failure) => console.error(`- ${failure}`))
   process.exitCode = 1
 } else {
-  console.log('[frame-pacing-contract] manual loop ownership, cadence policy, wall-time simulation, and browser evidence passed')
+  console.log('[frame-pacing-contract] manual loop ownership, second-based R3F time, cadence policy, wall-time simulation, and browser evidence passed')
 }
