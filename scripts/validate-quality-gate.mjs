@@ -4,35 +4,44 @@ import path from 'node:path'
 const root = process.cwd()
 const packageJsonPath = path.join(root, 'package.json')
 const workflowPath = path.join(root, '.github', 'workflows', 'quality.yml')
-const sceneContainerPath = path.join(
-  root,
-  'src',
-  'components',
-  'solar-system',
-  'SceneContainer.tsx'
+const solarSystemRoot = path.join(root, 'src', 'components', 'solar-system')
+const sceneContainerPath = path.join(solarSystemRoot, 'SceneContainer.tsx')
+const solarSystemPath = path.join(solarSystemRoot, 'SolarSystemV3.tsx')
+const sceneSchedulerPath = path.join(solarSystemRoot, 'SceneLoadScheduler.tsx')
+const performanceStorePath = path.join(solarSystemRoot, 'performance-store.ts')
+const scenePerformanceManagerPath = path.join(
+  solarSystemRoot,
+  'ScenePerformanceManager.tsx'
 )
-const solarSystemPath = path.join(
-  root,
-  'src',
-  'components',
-  'solar-system',
-  'SolarSystemV3.tsx'
+const workloadPolicyPath = path.join(solarSystemRoot, 'scene-workload-policy.ts')
+const displaySettingsPath = path.join(
+  solarSystemRoot,
+  'ui',
+  'DisplaySettingsPanel.tsx'
 )
-const sceneSchedulerPath = path.join(
-  root,
-  'src',
-  'components',
-  'solar-system',
-  'SceneLoadScheduler.tsx'
-)
-const removedWarmupPath = path.join(
-  root,
-  'src',
-  'components',
-  'solar-system',
-  'ProgressiveSceneWarmup.tsx'
-)
+const removedWarmupPath = path.join(solarSystemRoot, 'ProgressiveSceneWarmup.tsx')
 const runtimeSmokePath = path.join(root, 'scripts', 'smoke-runtime-foundation.mjs')
+const workloadScenePaths = [
+  path.join(solarSystemRoot, 'scene', 'BackgroundScene.tsx'),
+  path.join(solarSystemRoot, 'scene', 'PhenomenaScene.tsx'),
+  path.join(solarSystemRoot, 'scene', 'SmallBodiesScene.tsx'),
+  path.join(solarSystemRoot, 'scene', 'OuterFieldsScene.tsx'),
+  path.join(solarSystemRoot, 'scene', 'SandboxScene.tsx'),
+]
+
+const sources = await Promise.all([
+  readFile(packageJsonPath, 'utf8'),
+  readFile(workflowPath, 'utf8'),
+  readFile(sceneContainerPath, 'utf8'),
+  readFile(solarSystemPath, 'utf8'),
+  readFile(sceneSchedulerPath, 'utf8'),
+  readFile(runtimeSmokePath, 'utf8'),
+  readFile(performanceStorePath, 'utf8'),
+  readFile(scenePerformanceManagerPath, 'utf8'),
+  readFile(workloadPolicyPath, 'utf8'),
+  readFile(displaySettingsPath, 'utf8'),
+  ...workloadScenePaths.map((filePath) => readFile(filePath, 'utf8')),
+])
 
 const [
   packageJsonSource,
@@ -41,14 +50,12 @@ const [
   solarSystem,
   sceneScheduler,
   runtimeSmoke,
-] = await Promise.all([
-  readFile(packageJsonPath, 'utf8'),
-  readFile(workflowPath, 'utf8'),
-  readFile(sceneContainerPath, 'utf8'),
-  readFile(solarSystemPath, 'utf8'),
-  readFile(sceneSchedulerPath, 'utf8'),
-  readFile(runtimeSmokePath, 'utf8'),
-])
+  performanceStore,
+  scenePerformanceManager,
+  workloadPolicy,
+  displaySettings,
+  ...workloadScenes
+] = sources
 
 const packageJson = JSON.parse(packageJsonSource)
 const workflow = workflowSource.replace(/\r\n/g, '\n')
@@ -194,6 +201,78 @@ requireContract(
   'ProgressiveSceneWarmup.tsx must remain removed so a second scheduler cannot return.'
 )
 
+requireContract(
+  performanceStore.includes('detectAutoDevicePolicy')
+    && performanceStore.includes("baseline: 'eco'")
+    && performanceStore.includes("baseline: 'balanced'")
+    && !performanceStore.includes("baseline: 'ultra'"),
+  'Auto quality must start from Eco or Balanced and never use Ultra as its initial baseline.'
+)
+requireContract(
+  performanceStore.includes('autoBaseline')
+    && performanceStore.includes('autoCeiling')
+    && performanceStore.includes('setAutoDecision')
+    && performanceStore.includes('sustained measured performance'),
+  'Performance state must retain a conservative baseline, device ceiling, and measured Auto decisions.'
+)
+requireContract(
+  scenePerformanceManager.includes('useSceneLoadStage')
+    && scenePerformanceManager.includes('SCENE_LOAD_STAGES.artifacts')
+    && scenePerformanceManager.includes('AUTO_THRESHOLDS')
+    && scenePerformanceManager.includes('promotionWindows')
+    && scenePerformanceManager.includes('percentile95')
+    && scenePerformanceManager.includes('__SOLAR_PERFORMANCE_POLICY__'),
+  'ScenePerformanceManager must gate promotion on completed warmup and sustained FPS/P95 evidence.'
+)
+requireContract(
+  !scenePerformanceManager.includes('applyFirstRunDefaults')
+    && !scenePerformanceManager.includes('DEFAULTS_KEY'),
+  'ScenePerformanceManager must not mutate one-time layer defaults; workload policy owns active limits.'
+)
+
+const requiredWorkloadSystems = [
+  'nebula',
+  'near-earth-objects',
+  'kuiper-belt',
+  'oort-cloud',
+  'trojans',
+  'centaurs',
+  'scattered-disc',
+  'phenomena',
+  'solar-wind',
+  'meteor-shower',
+  'zodiacal-light',
+  'gravity-wells',
+  'black-hole',
+  'wormhole',
+]
+requireContract(
+  workloadPolicy.includes('SCENE_WORKLOAD_SYSTEMS')
+    && workloadPolicy.includes('getSceneWorkloadSnapshot')
+    && workloadPolicy.includes('useSceneSystemActive')
+    && workloadPolicy.includes('minimumQuality')
+    && requiredWorkloadSystems.every((system) => workloadPolicy.includes(`'${system}'`)),
+  'The central workload policy must cover all expensive optional scene systems.'
+)
+requireContract(
+  workloadScenes.every((source) => source.includes('useSceneSystemActive')),
+  'Every optional scene group must consume the central quality-aware workload policy.'
+)
+requireContract(
+  displaySettings.includes('Paused by quality')
+    && displaySettings.includes('getSceneSystemLimitNote')
+    && displaySettings.includes('switches stay saved'),
+  'Display settings must distinguish saved preferences from quality-limited active workload.'
+)
+requireContract(
+  runtimeSmoke.includes('__SOLAR_PERFORMANCE_POLICY__')
+    && runtimeSmoke.includes('assertDesktopAutoBaseline')
+    && runtimeSmoke.includes('assertEcoWorkloadPolicy')
+    && runtimeSmoke.includes('PRESERVED_EXPLORE_SYSTEMS')
+    && runtimeSmoke.includes('ECO_SUPPRESSED_SYSTEMS'),
+  'Runtime smoke coverage must prove conservative Auto and Eco workload suppression with preference restoration.'
+)
+
 if (failures.length > 0) {
   console.error('[quality-gate] release contract failed')
   failures.forEach((failure) => console.error(`- ${failure}`))
@@ -202,4 +281,5 @@ if (failures.length > 0) {
   console.log(`[quality-gate] release contract passed with Bun ${packageBunVersion}`)
   console.log(`[quality-gate] protected commands: ${workflowCommands.length}`)
   console.log('[quality-gate] measured scene loading is the only production startup scheduler')
+  console.log('[quality-gate] Auto quality and optional scene workload remain independently governed')
 }
