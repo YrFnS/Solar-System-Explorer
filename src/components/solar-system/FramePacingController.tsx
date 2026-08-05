@@ -9,9 +9,7 @@ import {
   type RendererPowerPreference,
   usePerformanceStore,
 } from './performance-store'
-import {
-  getFramePacingTarget,
-} from './frame-pacing-policy'
+import { getFramePacingTarget } from './frame-pacing-policy'
 import {
   SCENE_LOAD_STAGES,
   useSceneLoadStage,
@@ -79,6 +77,20 @@ function isTypingTarget(target: EventTarget | null) {
     || Boolean(element?.isContentEditable)
 }
 
+interface RuntimeState {
+  quality: EffectiveQuality
+  preset: 'auto' | EffectiveQuality
+  autoStatus: string
+  reducedMotion: boolean
+  sceneLoadStage: number
+  isPaused: boolean
+  autoRotate: boolean
+  followMode: boolean
+  isTourMode: boolean
+  cameraMode: string
+  rendererPowerPreference: RendererPowerPreference
+}
+
 interface FramePacingControllerProps {
   rendererPowerPreference: RendererPowerPreference
 }
@@ -111,7 +123,7 @@ export default function FramePacingController({
   const cameraPosition = useSolarSystemStore((state) => state.cameraPosition)
 
   const quality = getEffectiveQuality({ preset, autoQuality })
-  const stateRef = useRef({
+  const stateRef = useRef<RuntimeState>({
     quality,
     preset,
     autoStatus,
@@ -124,19 +136,6 @@ export default function FramePacingController({
     cameraMode,
     rendererPowerPreference,
   })
-  stateRef.current = {
-    quality,
-    preset,
-    autoStatus,
-    reducedMotion,
-    sceneLoadStage,
-    isPaused,
-    autoRotate,
-    followMode,
-    isTourMode,
-    cameraMode,
-    rendererPowerPreference,
-  }
 
   const hiddenRef = useRef(false)
   const activityUntilRef = useRef(0)
@@ -150,8 +149,6 @@ export default function FramePacingController({
   const renderedWhileHiddenRef = useRef(0)
   const suspensionsRef = useRef(0)
   const timerWakeupsRef = useRef(0)
-  const modeRef = useRef<FramePacingMode>('active')
-  const targetFpsRef = useRef(30)
   const actualFpsRef = useRef<number | null>(null)
   const p95FrameIntervalRef = useRef<number | null>(null)
   const lastReasonRef = useRef('startup')
@@ -199,8 +196,6 @@ export default function FramePacingController({
       && now < autoBenchmarkUntilRef.current
     const interactionActive = now < activityUntilRef.current
 
-    modeRef.current = mode
-    targetFpsRef.current = targetFps
     setFramePacingStatus(
       mode,
       targetFps,
@@ -231,26 +226,51 @@ export default function FramePacingController({
   }, [resolveMode, setFramePacingStatus])
 
   useEffect(() => {
+    stateRef.current = {
+      quality,
+      preset,
+      autoStatus,
+      reducedMotion,
+      sceneLoadStage,
+      isPaused,
+      autoRotate,
+      followMode,
+      isTourMode,
+      cameraMode,
+      rendererPowerPreference,
+    }
+    requestPacedFrame('runtime-state', 1_800)
+  }, [
+    autoRotate,
+    autoStatus,
+    cameraMode,
+    followMode,
+    isPaused,
+    isTourMode,
+    preset,
+    quality,
+    reducedMotion,
+    rendererPowerPreference,
+    sceneLoadStage,
+  ])
+
+  useEffect(() => {
     if (
       preset === 'auto'
       && sceneLoadStage >= SCENE_LOAD_STAGES.artifacts
       && autoStatus !== 'limited'
     ) {
       autoBenchmarkUntilRef.current = performance.now() + 20_000
+      requestPacedFrame('auto-benchmark', 20_000)
     }
   }, [autoQuality, autoStatus, preset, sceneLoadStage])
 
   useEffect(() => {
-    activityUntilRef.current = Math.max(
-      activityUntilRef.current,
-      performance.now() + 1_800
+    requestPacedFrame(
+      focusTarget ? 'camera-focus' : cameraPosition ? 'camera-reset' : 'camera-state',
+      1_800
     )
-    lastReasonRef.current = focusTarget
-      ? 'camera-focus'
-      : cameraPosition
-        ? 'camera-reset'
-        : 'runtime-state'
-  }, [cameraPosition, focusTarget, quality, reducedMotion])
+  }, [cameraPosition, focusTarget])
 
   useEffect(() => {
     let cancelled = false
@@ -282,8 +302,6 @@ export default function FramePacingController({
         mode,
         stateRef.current.reducedMotion
       )
-      modeRef.current = mode
-      targetFpsRef.current = targetFps
 
       if (targetFps <= 0) {
         publishDiagnostics(now)
@@ -406,23 +424,7 @@ export default function FramePacingController({
       window.removeEventListener('keydown', handleKeyDown)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [
-    advance,
-    autoQuality,
-    autoRotate,
-    autoStatus,
-    cameraMode,
-    followMode,
-    isPaused,
-    isTourMode,
-    preset,
-    publishDiagnostics,
-    quality,
-    reducedMotion,
-    rendererPowerPreference,
-    resolveMode,
-    sceneLoadStage,
-  ])
+  }, [advance, publishDiagnostics, resolveMode])
 
   useFrame(() => {
     const now = performance.now()
