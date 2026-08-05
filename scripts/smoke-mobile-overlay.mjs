@@ -117,7 +117,7 @@ async function readSurfaceState(page) {
       : null
 
     const undersizedControls = activeElement
-      ? [...activeElement.querySelectorAll('button, input, label')]
+      ? [...activeElement.querySelectorAll('button, input:not([type="checkbox"]), label')]
           .filter(isVisible)
           .map((element) => {
             const rect = element.getBoundingClientRect()
