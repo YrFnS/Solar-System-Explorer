@@ -10,6 +10,40 @@ const standaloneRoot = path.resolve('.next', 'standalone')
 const standaloneNextRoot = path.join(standaloneRoot, '.next')
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 const EXPECTED_SCENE_STAGES = [1, 2, 3, 4, 5, 6]
+const PRESERVED_EXPLORE_SYSTEMS = [
+  'nebula',
+  'near-earth-objects',
+  'kuiper-belt',
+  'oort-cloud',
+  'trojans',
+  'centaurs',
+  'scattered-disc',
+  'phenomena',
+  'solar-wind',
+  'meteor-shower',
+  'zodiacal-light',
+]
+const BALANCED_ACTIVE_SYSTEMS = [
+  'nebula',
+  'asteroid-belt',
+  'near-earth-objects',
+  'kuiper-belt',
+  'trojans',
+  'centaurs',
+  'phenomena',
+  'solar-wind',
+  'meteor-shower',
+]
+const BALANCED_SUPPRESSED_SYSTEMS = [
+  'oort-cloud',
+  'scattered-disc',
+  'zodiacal-light',
+]
+const ECO_SUPPRESSED_SYSTEMS = [...PRESERVED_EXPLORE_SYSTEMS]
+const ULTRA_ACTIVE_SYSTEMS = [
+  'asteroid-belt',
+  ...PRESERVED_EXPLORE_SYSTEMS,
+]
 
 async function prepareStandaloneAssets() {
   await rm(path.join(standaloneRoot, 'public'), { recursive: true, force: true })
@@ -52,6 +86,21 @@ function collectPageErrors(page) {
   return errors
 }
 
+async function configureDesktopAutoPage(page) {
+  await page.setViewport({
+    width: 1280,
+    height: 720,
+    deviceScaleFactor: 1,
+  })
+  await page.evaluateOnNewDocument(() => {
+    window.localStorage.setItem('solar-explorer-interface-guide-v4', 'complete')
+    window.localStorage.setItem('solar-explorer-experience-mode-v1', 'explore')
+    window.localStorage.removeItem('solar-explorer-quality-preset-v1')
+    window.localStorage.removeItem('solar-explorer-performance-defaults-v1')
+    window.localStorage.setItem('solar-explorer-ktx2-enabled-v1', 'false')
+  })
+}
+
 async function configureDesktopPage(page) {
   await page.setViewport({
     width: 1280,
@@ -63,7 +112,7 @@ async function configureDesktopPage(page) {
       window.localStorage.setItem('solar-explorer-interface-guide-v4', 'complete')
       window.localStorage.setItem('solar-explorer-experience-mode-v1', 'explore')
       window.localStorage.setItem('solar-explorer-quality-preset-v1', 'ultra')
-      window.localStorage.setItem('solar-explorer-performance-defaults-v1', 'ultra')
+      window.localStorage.removeItem('solar-explorer-performance-defaults-v1')
       window.localStorage.setItem('solar-explorer-ktx2-enabled-v1', 'false')
       window.sessionStorage.setItem('runtime-smoke-desktop-initialized', 'true')
     }
@@ -99,6 +148,9 @@ async function waitForCore(page) {
   }, { timeout: 30_000 })
   await page.waitForSelector('[aria-label="Open rendering quality controls"]', {
     timeout: 45_000,
+  })
+  await page.waitForFunction(() => Boolean(window.__SOLAR_PERFORMANCE_POLICY__), {
+    timeout: 20_000,
   })
 }
 
@@ -151,6 +203,68 @@ async function waitForMeasuredSceneLoading(page, minimumRunId = 0) {
   return diagnostics
 }
 
+async function getPerformancePolicy(page) {
+  await page.waitForFunction(() => Boolean(window.__SOLAR_PERFORMANCE_POLICY__), {
+    timeout: 15_000,
+  })
+  const policy = await page.evaluate(() => window.__SOLAR_PERFORMANCE_POLICY__)
+  if (!policy) throw new Error('Performance policy diagnostics were unavailable')
+  return policy
+}
+
+async function waitForQualityPolicy(page, quality) {
+  await page.waitForFunction((expectedQuality) => {
+    const policy = window.__SOLAR_PERFORMANCE_POLICY__
+    return policy?.effectiveQuality === expectedQuality
+  }, { timeout: 15_000 }, quality)
+  return getPerformancePolicy(page)
+}
+
+async function waitForFreshRendererDiagnostics(page, previousTimestamp = 0) {
+  await page.waitForFunction((timestamp) => (
+    Boolean(
+      window.__SOLAR_EXPLORER_DIAGNOSTICS__?.timestamp
+      && window.__SOLAR_EXPLORER_DIAGNOSTICS__.timestamp > timestamp
+    )
+  ), { timeout: 20_000 }, previousTimestamp)
+
+  const diagnostics = await page.evaluate(() => window.__SOLAR_EXPLORER_DIAGNOSTICS__)
+  if (!diagnostics) throw new Error('Renderer diagnostics were unavailable')
+  return diagnostics
+}
+
+function assertContainsAll(actual, expected, label) {
+  const missing = expected.filter((entry) => !actual.includes(entry))
+  if (missing.length > 0) {
+    throw new Error(`${label} is missing: ${missing.join(', ')}`)
+  }
+}
+
+function assertContainsNone(actual, blocked, label) {
+  const present = blocked.filter((entry) => actual.includes(entry))
+  if (present.length > 0) {
+    throw new Error(`${label} unexpectedly contains: ${present.join(', ')}`)
+  }
+}
+
+async function assertDesktopAutoBaseline(page) {
+  const policy = await getPerformancePolicy(page)
+  if (policy.preset !== 'auto') {
+    throw new Error(`Desktop baseline did not start in Auto; received ${policy.preset}`)
+  }
+  if (policy.autoBaseline !== 'balanced') {
+    throw new Error(`Desktop Auto baseline was ${policy.autoBaseline}; expected balanced`)
+  }
+  if (policy.autoCeiling !== 'ultra') {
+    throw new Error(`Desktop Auto ceiling was ${policy.autoCeiling}; expected ultra`)
+  }
+  if (!policy.schedulerComplete && policy.effectiveQuality === 'ultra') {
+    throw new Error('Auto promoted to Ultra before measured scene loading completed')
+  }
+
+  console.log(`[runtime-smoke] conservative desktop Auto policy ${JSON.stringify(policy)}`)
+}
+
 async function clickButtonByText(page, text) {
   const clicked = await page.evaluate((buttonText) => {
     const button = [...document.querySelectorAll('button')].find((candidate) => {
@@ -188,9 +302,73 @@ async function selectQuality(page, label) {
 
 async function assertQualityTransitions(page) {
   await page.click('[aria-label="Open rendering quality controls"]')
+
   await selectQuality(page, 'Balanced')
+  const balancedPolicy = await waitForQualityPolicy(page, 'balanced')
+  assertContainsAll(
+    balancedPolicy.activeSystems,
+    BALANCED_ACTIVE_SYSTEMS,
+    'Balanced active systems'
+  )
+  assertContainsAll(
+    balancedPolicy.suppressedSystems,
+    BALANCED_SUPPRESSED_SYSTEMS,
+    'Balanced suppressed systems'
+  )
+  assertContainsAll(
+    balancedPolicy.requestedSystems,
+    PRESERVED_EXPLORE_SYSTEMS,
+    'Balanced requested preferences'
+  )
+
+  const beforeUltra = await waitForFreshRendererDiagnostics(page)
   await selectQuality(page, 'Ultra')
+  const ultraPolicy = await waitForQualityPolicy(page, 'ultra')
+  assertContainsAll(ultraPolicy.activeSystems, ULTRA_ACTIVE_SYSTEMS, 'Ultra active systems')
+  assertContainsNone(
+    ultraPolicy.suppressedSystems,
+    PRESERVED_EXPLORE_SYSTEMS,
+    'Ultra suppressed systems'
+  )
+  const ultraDiagnostics = await waitForFreshRendererDiagnostics(
+    page,
+    beforeUltra.timestamp
+  )
+
   await selectQuality(page, 'Eco')
+  const ecoPolicy = await waitForQualityPolicy(page, 'eco')
+  assertContainsAll(
+    ecoPolicy.requestedSystems,
+    PRESERVED_EXPLORE_SYSTEMS,
+    'Eco preserved requested preferences'
+  )
+  assertContainsAll(
+    ecoPolicy.suppressedSystems,
+    ECO_SUPPRESSED_SYSTEMS,
+    'Eco suppressed systems'
+  )
+  assertContainsNone(
+    ecoPolicy.activeSystems,
+    ECO_SUPPRESSED_SYSTEMS,
+    'Eco active systems'
+  )
+  assertContainsAll(ecoPolicy.activeSystems, ['asteroid-belt'], 'Eco safe systems')
+  const ecoDiagnostics = await waitForFreshRendererDiagnostics(
+    page,
+    ultraDiagnostics.timestamp
+  )
+
+  if (ecoDiagnostics.sceneObjects >= ultraDiagnostics.sceneObjects) {
+    throw new Error(
+      `Eco retained ${ecoDiagnostics.sceneObjects} scene objects; Ultra had ${ultraDiagnostics.sceneObjects}`
+    )
+  }
+  if (ecoDiagnostics.drawCalls >= ultraDiagnostics.drawCalls) {
+    throw new Error(
+      `Eco retained ${ecoDiagnostics.drawCalls} draw calls; Ultra had ${ultraDiagnostics.drawCalls}`
+    )
+  }
+
   await page.click('[aria-label="Close rendering quality controls"]')
 
   const preset = await page.evaluate(() => (
@@ -199,6 +377,29 @@ async function assertQualityTransitions(page) {
   if (preset !== 'eco') {
     throw new Error(`Explicit quality transition did not persist Eco; received ${preset}`)
   }
+
+  console.log(
+    `[runtime-smoke] workload ceiling Ultra ${ultraDiagnostics.sceneObjects}/${ultraDiagnostics.drawCalls} → Eco ${ecoDiagnostics.sceneObjects}/${ecoDiagnostics.drawCalls}`
+  )
+}
+
+async function assertEcoWorkloadPolicy(page) {
+  const policy = await waitForQualityPolicy(page, 'eco')
+  assertContainsAll(
+    policy.requestedSystems,
+    PRESERVED_EXPLORE_SYSTEMS,
+    'Eco requested preferences after recovery'
+  )
+  assertContainsAll(
+    policy.suppressedSystems,
+    ECO_SUPPRESSED_SYSTEMS,
+    'Eco suppression after recovery'
+  )
+  assertContainsNone(
+    policy.activeSystems,
+    ECO_SUPPRESSED_SYSTEMS,
+    'Eco active workload after recovery'
+  )
 }
 
 async function assertEcoRecovery(page, previousSchedulerRunId) {
@@ -220,12 +421,9 @@ async function assertEcoRecovery(page, previousSchedulerRunId) {
   }, { timeout: 30_000 }, previousSchedulerRunId)
 
   const recoveryLoading = await waitForMeasuredSceneLoading(page, previousSchedulerRunId)
+  await assertEcoWorkloadPolicy(page)
 
-  await page.waitForFunction(() => Boolean(window.__SOLAR_EXPLORER_DIAGNOSTICS__?.timestamp), {
-    timeout: 20_000,
-  })
-  const diagnostics = await page.evaluate(() => window.__SOLAR_EXPLORER_DIAGNOSTICS__)
-  if (!diagnostics) throw new Error('Renderer diagnostics were unavailable after Eco recovery')
+  const diagnostics = await waitForFreshRendererDiagnostics(page)
   if (diagnostics.textures > 22) {
     throw new Error(`Eco recovery retained ${diagnostics.textures} textures; expected no more than 22`)
   }
@@ -247,6 +445,22 @@ async function assertEcoPersistsAcrossReload(page) {
       && trigger?.textContent?.includes('ECO')
   }, { timeout: 15_000 })
   await waitForMeasuredSceneLoading(page)
+  await assertEcoWorkloadPolicy(page)
+}
+
+async function runDesktopAutoBaseline(browser) {
+  const page = await browser.newPage()
+  await configureDesktopAutoPage(page)
+  const pageErrors = collectPageErrors(page)
+
+  await waitForCore(page)
+  await assertDesktopAutoBaseline(page)
+
+  if (pageErrors.length > 0) {
+    throw new Error(`Desktop Auto baseline page errors:\n${pageErrors.join('\n')}`)
+  }
+
+  await page.close()
 }
 
 async function runDesktopTransitions(browser) {
@@ -265,7 +479,7 @@ async function runDesktopTransitions(browser) {
   }
 
   await page.close()
-  console.log('[runtime-smoke] measured loading, quality transitions, Eco recovery, and reload persistence passed')
+  console.log('[runtime-smoke] measured loading, workload ceilings, Eco recovery, and reload persistence passed')
 }
 
 async function runPhoneAutoBaseline(browser) {
@@ -276,10 +490,15 @@ async function runPhoneAutoBaseline(browser) {
   await waitForCore(page)
   await page.waitForFunction(() => {
     const trigger = document.querySelector('[aria-label="Open rendering quality controls"]')
+    const policy = window.__SOLAR_PERFORMANCE_POLICY__
     const label = trigger?.textContent?.replace(/\s+/g, ' ').trim() ?? ''
-    return label.includes('AUTO') && label.includes('ECO')
+    return label.includes('AUTO')
+      && label.includes('ECO')
+      && policy?.autoBaseline === 'eco'
+      && policy.autoCeiling === 'balanced'
   }, { timeout: 15_000 })
   await waitForMeasuredSceneLoading(page)
+  await assertEcoWorkloadPolicy(page)
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
   if (overflow > 2) {
@@ -291,7 +510,7 @@ async function runPhoneAutoBaseline(browser) {
   }
 
   await page.close()
-  console.log('[runtime-smoke] phone Auto baseline used measured loading and selected Eco without overflow')
+  console.log('[runtime-smoke] phone Auto began in Eco, respected its ceiling, and suppressed heavy workload')
 }
 
 async function main() {
@@ -334,6 +553,7 @@ async function main() {
       ],
     })
 
+    await runDesktopAutoBaseline(browser)
     await runDesktopTransitions(browser)
     await runPhoneAutoBaseline(browser)
   } catch (error) {
