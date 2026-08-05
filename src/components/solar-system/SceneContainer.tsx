@@ -14,6 +14,7 @@ import AdaptiveLodManager from './AdaptiveLodManager'
 import RendererBoundary from './RendererBoundary'
 import RenderDiagnostics from './RenderDiagnostics'
 import ScreenshotCaptureBridge from './ScreenshotCaptureBridge'
+import TextureLifecycleManager from './textures/TextureLifecycleManager'
 import WebGLContextMonitor, {
   WEBGL_CONTEXT_LOST_EVENT,
   WEBGL_CONTEXT_RESTORED_EVENT,
@@ -172,6 +173,7 @@ export default function SceneContainer() {
           <SceneLoadScheduler>
             <SimulationController />
             <ScenePerformanceManager />
+            <TextureLifecycleManager />
             <AdaptiveLodManager />
             <ScreenshotCaptureBridge />
             <WebGLContextMonitor />
