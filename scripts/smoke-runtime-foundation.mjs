@@ -169,22 +169,33 @@ async function waitForCore(page) {
   })
 }
 
-async function waitForMeasuredSceneLoading(page, minimumRunId = 0) {
-  await page.waitForFunction((previousRunId) => {
+async function waitForMeasuredSceneLoading(
+  page,
+  minimumRunId = 0,
+  expectedQuality = null
+) {
+  const handle = await page.waitForFunction((previousRunId, quality) => {
     const diagnostics = window.__SOLAR_SCENE_LOADING__
     return Boolean(
       diagnostics
       && diagnostics.runId > previousRunId
+      && (!quality || diagnostics.quality === quality)
       && diagnostics.firstFrameMs !== null
       && diagnostics.complete
       && diagnostics.stage === 6
       && diagnostics.waitingFor === 'complete'
       && diagnostics.transitions.length === 6
-    )
-  }, { timeout: 45_000 }, minimumRunId)
+    ) ? diagnostics : false
+  }, { timeout: 60_000 }, minimumRunId, expectedQuality)
 
-  const diagnostics = await page.evaluate(() => window.__SOLAR_SCENE_LOADING__)
+  const diagnostics = await handle.jsonValue()
+  await handle.dispose()
   if (!diagnostics) throw new Error('Measured scene-loading diagnostics were unavailable')
+  if (expectedQuality && diagnostics.quality !== expectedQuality) {
+    throw new Error(
+      `Scene scheduler completed ${diagnostics.quality}; expected ${expectedQuality}`
+    )
+  }
 
   const stages = diagnostics.transitions.map((transition) => transition.stage)
   if (JSON.stringify(stages) !== JSON.stringify(EXPECTED_SCENE_STAGES)) {
@@ -236,14 +247,15 @@ async function waitForQualityPolicy(page, quality) {
 }
 
 async function waitForFreshRendererDiagnostics(page, previousTimestamp = 0) {
-  await page.waitForFunction((timestamp) => (
-    Boolean(
-      window.__SOLAR_EXPLORER_DIAGNOSTICS__?.timestamp
-      && window.__SOLAR_EXPLORER_DIAGNOSTICS__.timestamp > timestamp
-    )
-  ), { timeout: 20_000 }, previousTimestamp)
+  const handle = await page.waitForFunction((timestamp) => {
+    const diagnostics = window.__SOLAR_EXPLORER_DIAGNOSTICS__
+    return diagnostics?.timestamp && diagnostics.timestamp > timestamp
+      ? diagnostics
+      : false
+  }, { timeout: 45_000 }, previousTimestamp)
 
-  const diagnostics = await page.evaluate(() => window.__SOLAR_EXPLORER_DIAGNOSTICS__)
+  const diagnostics = await handle.jsonValue()
+  await handle.dispose()
   if (!diagnostics) throw new Error('Renderer diagnostics were unavailable')
   return diagnostics
 }
@@ -336,7 +348,9 @@ async function assertQualityTransitions(page) {
     'Balanced requested preferences'
   )
 
-  const beforeUltra = await waitForFreshRendererDiagnostics(page)
+  const balancedLoading = await waitForMeasuredSceneLoading(page, 0, 'balanced')
+  const balancedDiagnostics = await waitForFreshRendererDiagnostics(page)
+
   await selectQuality(page, 'Ultra')
   const ultraPolicy = await waitForQualityPolicy(page, 'ultra')
   assertContainsAll(ultraPolicy.activeSystems, ULTRA_ACTIVE_SYSTEMS, 'Ultra active systems')
@@ -345,9 +359,14 @@ async function assertQualityTransitions(page) {
     PRESERVED_EXPLORE_SYSTEMS,
     'Ultra suppressed systems'
   )
+  const ultraLoading = await waitForMeasuredSceneLoading(
+    page,
+    balancedLoading.runId,
+    'ultra'
+  )
   const ultraDiagnostics = await waitForFreshRendererDiagnostics(
     page,
-    beforeUltra.timestamp
+    balancedDiagnostics.timestamp
   )
 
   await selectQuality(page, 'Eco')
@@ -368,6 +387,11 @@ async function assertQualityTransitions(page) {
     'Eco active systems'
   )
   assertContainsAll(ecoPolicy.activeSystems, ['asteroid-belt'], 'Eco safe systems')
+  const ecoLoading = await waitForMeasuredSceneLoading(
+    page,
+    ultraLoading.runId,
+    'eco'
+  )
   const ecoDiagnostics = await waitForFreshRendererDiagnostics(
     page,
     ultraDiagnostics.timestamp
@@ -396,6 +420,7 @@ async function assertQualityTransitions(page) {
   console.log(
     `[runtime-smoke] workload ceiling Ultra ${ultraDiagnostics.sceneObjects}/${ultraDiagnostics.drawCalls} → Eco ${ecoDiagnostics.sceneObjects}/${ecoDiagnostics.drawCalls}`
   )
+  return ecoLoading
 }
 
 async function assertEcoWorkloadPolicy(page) {
@@ -418,6 +443,10 @@ async function assertEcoWorkloadPolicy(page) {
 }
 
 async function assertEcoRecovery(page, previousSchedulerRunId) {
+  const previousRendererTimestamp = await page.evaluate(() => (
+    window.__SOLAR_EXPLORER_DIAGNOSTICS__?.timestamp ?? 0
+  ))
+
   await page.evaluate(() => {
     window.dispatchEvent(new Event('solar-explorer:webgl-context-lost'))
   })
@@ -435,10 +464,17 @@ async function assertEcoRecovery(page, previousSchedulerRunId) {
       && Boolean(loading && loading.runId > previousRunId)
   }, { timeout: 30_000 }, previousSchedulerRunId)
 
-  const recoveryLoading = await waitForMeasuredSceneLoading(page, previousSchedulerRunId)
+  const recoveryLoading = await waitForMeasuredSceneLoading(
+    page,
+    previousSchedulerRunId,
+    'eco'
+  )
   await assertEcoWorkloadPolicy(page)
 
-  const diagnostics = await waitForFreshRendererDiagnostics(page)
+  const diagnostics = await waitForFreshRendererDiagnostics(
+    page,
+    previousRendererTimestamp
+  )
   if (diagnostics.textures > 22) {
     throw new Error(`Eco recovery retained ${diagnostics.textures} textures; expected no more than 22`)
   }
@@ -459,7 +495,7 @@ async function assertEcoPersistsAcrossReload(page) {
     return window.localStorage.getItem('solar-explorer-quality-preset-v1') === 'eco'
       && trigger?.textContent?.includes('ECO')
   }, { timeout: 15_000 })
-  await waitForMeasuredSceneLoading(page)
+  await waitForMeasuredSceneLoading(page, 0, 'eco')
   await assertEcoWorkloadPolicy(page)
 }
 
@@ -484,9 +520,9 @@ async function runDesktopTransitions(browser) {
   const pageErrors = collectPageErrors(page)
 
   await waitForCore(page)
-  const initialLoading = await waitForMeasuredSceneLoading(page)
-  await assertQualityTransitions(page)
-  await assertEcoRecovery(page, initialLoading.runId)
+  await waitForMeasuredSceneLoading(page, 0, 'ultra')
+  const transitionLoading = await assertQualityTransitions(page)
+  await assertEcoRecovery(page, transitionLoading.runId)
   await assertEcoPersistsAcrossReload(page)
 
   if (pageErrors.length > 0) {
@@ -512,7 +548,7 @@ async function runPhoneAutoBaseline(browser) {
       && policy?.autoBaseline === 'eco'
       && policy.autoCeiling === 'balanced'
   }, { timeout: 15_000 })
-  await waitForMeasuredSceneLoading(page)
+  await waitForMeasuredSceneLoading(page, 0, 'eco')
   await assertEcoWorkloadPolicy(page)
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
