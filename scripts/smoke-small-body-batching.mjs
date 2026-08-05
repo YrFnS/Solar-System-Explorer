@@ -72,7 +72,7 @@ async function configurePage(page) {
   })
 }
 
-async function waitForCore(page) {
+async function waitForSmallBodyOverview(page) {
   await page.goto(`${baseUrl}/?diagnostics=1&textures=webp`, {
     waitUntil: 'networkidle2',
     timeout: 75_000,
@@ -85,11 +85,22 @@ async function waitForCore(page) {
     const loading = window.__SOLAR_SCENE_LOADING__
     const runtime = window.__SOLAR_SMALL_BODY_RUNTIME__
     return Boolean(
-      loading?.complete
-      && loading.stage === 6
+      loading
+      && loading.stage >= 3
       && runtime
       && runtime.frameSamples >= 8
       && runtime.totalBodies >= 15
+    )
+  }, { timeout: 45_000 })
+}
+
+async function waitForCompleteScene(page) {
+  await page.waitForFunction(() => {
+    const loading = window.__SOLAR_SCENE_LOADING__
+    return Boolean(
+      loading?.complete
+      && loading.stage === 6
+      && loading.waitingFor === 'complete'
     )
   }, { timeout: 60_000 })
 }
@@ -326,24 +337,31 @@ async function main() {
     const page = await browser.newPage()
     await configurePage(page)
     const pageErrors = collectPageErrors(page)
-    await waitForCore(page)
+    await waitForSmallBodyOverview(page)
 
+    await delay(1_700)
     const overviewRuntime = await readRuntime(page)
-    const overviewRenderer = await waitForSettledRenderer(page)
+    const overviewRenderer = await waitForFreshRenderer(page)
     assertOverviewBatching(overviewRuntime, overviewRenderer)
+
+    await waitForCompleteScene(page)
+    const settledOverviewRenderer = await waitForSettledRenderer(
+      page,
+      overviewRenderer.timestamp
+    )
 
     await selectBodyThroughSearch(page, 'Halley')
     await delay(2_200)
     const selectedRuntime = await readRuntime(page)
     const selectedRenderer = await waitForSettledRenderer(
       page,
-      overviewRenderer.timestamp
+      settledOverviewRenderer.timestamp
     )
     assertSelectedDetail(
       selectedRuntime,
       overviewRuntime,
       selectedRenderer,
-      overviewRenderer
+      settledOverviewRenderer
     )
 
     await clearSelection(page)
@@ -371,7 +389,7 @@ async function main() {
       `[small-body-smoke] geometry reduction ${P0_ECO_BASELINE.geometries} → ${overviewRenderer.geometries}`
     )
     console.log(
-      `[small-body-smoke] selected-detail delta draws=${selectedRenderer.drawCalls - overviewRenderer.drawCalls} objects=${selectedRenderer.sceneObjects - overviewRenderer.sceneObjects}`
+      `[small-body-smoke] settled selected-detail delta draws=${selectedRenderer.drawCalls - settledOverviewRenderer.drawCalls} objects=${selectedRenderer.sceneObjects - settledOverviewRenderer.sceneObjects}`
     )
     console.log(
       `[small-body-smoke] ${overviewRuntime.totalBodies} overview bodies use ${overviewRuntime.bodyBatchDraws} body draws, ${overviewRuntime.orbitBatchDraws} orbit draw, and one ${overviewRuntime.averageUpdateMs.toFixed(2)}ms manager`
