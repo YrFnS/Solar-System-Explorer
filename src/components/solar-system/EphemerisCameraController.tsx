@@ -13,6 +13,7 @@ import {
   activateExperienceMode,
   useExperienceStore,
 } from './experience-store'
+import { requestPacedFrame } from './FramePacingController'
 import {
   DAY_MS,
   getSimulationDateMs,
@@ -60,6 +61,7 @@ export function SimulationKeyboardControls() {
       setClockDateMs(dateMs)
       publishDate(dateMs)
       setCustomDate(new Date(dateMs))
+      requestPacedFrame('keyboard-date-step', 650)
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -202,7 +204,7 @@ export default function EphemerisCameraController() {
   const spawnedObjects = useSolarSystemStore((state) => state.spawnedObjects)
   const isPaused = useSolarSystemStore((state) => state.isPaused)
   const mode = useExperienceStore((state) => state.mode)
-  const { camera, invalidate } = useThree()
+  const { camera } = useThree()
 
   const animatingRef = useRef(false)
   const progressRef = useRef(0)
@@ -259,11 +261,10 @@ export default function EphemerisCameraController() {
     progressRef.current = 0
     animatingRef.current = true
     setSelectedBody(focusTarget)
-    invalidate()
+    requestPacedFrame('camera-focus', 1_800)
   }, [
     camera,
     focusTarget,
-    invalidate,
     resolveBodyPosition,
     resolveBodyRadius,
     setSelectedBody,
@@ -277,8 +278,8 @@ export default function EphemerisCameraController() {
     progressRef.current = 0
     animatingRef.current = true
     setCameraPosition(null)
-    invalidate()
-  }, [camera, cameraPosition, invalidate, setCameraPosition])
+    requestPacedFrame('camera-reset', 1_800)
+  }, [camera, cameraPosition, setCameraPosition])
 
   useFrame((_, delta) => {
     if (animatingRef.current) {
@@ -296,7 +297,6 @@ export default function EphemerisCameraController() {
       }
 
       if (progress >= 1) animatingRef.current = false
-      else invalidate()
       return
     }
 
@@ -334,7 +334,7 @@ export default function EphemerisCameraController() {
       dampingFactor={0.05}
       autoRotate={autoRotate}
       autoRotateSpeed={0.5}
-      onChange={() => invalidate()}
+      onChange={() => requestPacedFrame('orbit-controls', 750)}
     />
   )
 }
