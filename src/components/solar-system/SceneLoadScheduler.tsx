@@ -64,6 +64,7 @@ export interface SceneLoadDiagnostics {
   phase: SceneLoadPhase
   complete: boolean
   quality: EffectiveQuality
+  warmRebuild: boolean
   waitingFor: SceneLoadWaitReason
   firstFrameMs: number | null
   averageFrameMs: number | null
@@ -95,6 +96,11 @@ const FINAL_STAGE = SCENE_LOAD_STAGES.artifacts
 const FRAME_WINDOW_SIZE = 48
 const DIAGNOSTIC_INTERVAL_MS = 250
 const IDLE_TIMEOUT_MS = 1_200
+const WARM_IDLE_TIMEOUT_MS = 500
+const WARM_MAX_DEFERRAL_MS = 1_200
+const WARM_INTERACTION_QUIET_MS = 350
+const WARM_SAMPLE_SCALE = 0.6
+const SETTLED_SESSION_KEY = 'solar-explorer-scene-settled-v1'
 
 const PHASE_BY_STAGE: Record<SceneLoadStage, SceneLoadPhase> = {
   [SCENE_LOAD_STAGES.core]: 'core',
@@ -148,12 +154,30 @@ const HEALTH_LIMITS: Record<
 
 const SceneLoadStageContext = createContext<SceneLoadStage>(SCENE_LOAD_STAGES.core)
 
-function getPolicy(quality: EffectiveQuality, nextStage: SceneLoadStage): LoadPolicy {
+function getPolicy(
+  quality: EffectiveQuality,
+  nextStage: SceneLoadStage,
+  warmRebuild: boolean
+): LoadPolicy {
+  const health = HEALTH_LIMITS[quality]
+  const sampleScale = warmRebuild ? WARM_SAMPLE_SCALE : 1
+
   return {
-    ...HEALTH_LIMITS[quality],
+    maxAverageFrameMs: health.maxAverageFrameMs,
+    maxP95FrameMs: health.maxP95FrameMs,
+    maxDeferralMs: warmRebuild
+      ? Math.min(health.maxDeferralMs, WARM_MAX_DEFERRAL_MS)
+      : health.maxDeferralMs,
+    interactionQuietMs: warmRebuild
+      ? Math.min(health.interactionQuietMs, WARM_INTERACTION_QUIET_MS)
+      : health.interactionQuietMs,
     requiredSamples: Math.max(
       6,
-      Math.ceil(BASE_SAMPLES[nextStage] * SAMPLE_MULTIPLIER[quality])
+      Math.ceil(
+        BASE_SAMPLES[nextStage]
+        * SAMPLE_MULTIPLIER[quality]
+        * sampleScale
+      )
     ),
   }
 }
@@ -185,7 +209,9 @@ export function useSceneLoadStage() {
  * Admits optional scene groups one at a time. Each transition requires fresh
  * rendered frames, a quiet interaction window, acceptable frame health, and a
  * browser-idle callback. A bounded deadline prevents permanently missing scene
- * features on unusually slow but functional devices.
+ * features on unusually slow but functional devices. After one complete load,
+ * renderer-only rebuilds retain the same safeguards with shorter cached-work
+ * deadlines instead of replaying the cold-start wait.
  */
 export default function SceneLoadScheduler({ children }: { children: ReactNode }) {
   const [stage, setStage] = useState<SceneLoadStage>(SCENE_LOAD_STAGES.core)
@@ -197,6 +223,7 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
   const runIdRef = useRef(0)
   const mountedAtRef = useRef(0)
   const mountedRef = useRef(false)
+  const warmRebuildRef = useRef(false)
   const stageRef = useRef<SceneLoadStage>(SCENE_LOAD_STAGES.core)
   const qualityRef = useRef<EffectiveQuality>(quality)
   const stageStartedAtRef = useRef(0)
@@ -222,6 +249,7 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
       phase: PHASE_BY_STAGE[currentStage],
       complete: currentStage >= FINAL_STAGE,
       quality: qualityRef.current,
+      warmRebuild: warmRebuildRef.current,
       waitingFor,
       firstFrameMs: firstFrameMsRef.current,
       averageFrameMs,
@@ -252,7 +280,11 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
         return
       }
 
-      const policy = getPolicy(qualityRef.current, nextStage)
+      const policy = getPolicy(
+        qualityRef.current,
+        nextStage,
+        warmRebuildRef.current
+      )
       if (performance.now() - lastInteractionAtRef.current < policy.interactionQuietMs) {
         transitionPendingRef.current = false
         publish('interaction-idle', averageFrameMs, p95FrameMs)
@@ -274,6 +306,16 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
       samplesRef.current = []
       transitionPendingRef.current = false
       setStage(nextStage)
+
+      if (nextStage >= FINAL_STAGE) {
+        warmRebuildRef.current = true
+        try {
+          window.sessionStorage.setItem(SETTLED_SESSION_KEY, 'complete')
+        } catch {
+          // Session storage is an optimization hint, not a runtime dependency.
+        }
+      }
+
       publish(nextStage >= FINAL_STAGE ? 'complete' : 'frame-samples')
       invalidate()
     }
@@ -281,7 +323,9 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
     const idleWindow = window as IdleWindow
     if (idleWindow.requestIdleCallback) {
       idleHandleRef.current = idleWindow.requestIdleCallback(commit, {
-        timeout: IDLE_TIMEOUT_MS,
+        timeout: warmRebuildRef.current
+          ? WARM_IDLE_TIMEOUT_MS
+          : IDLE_TIMEOUT_MS,
       })
     } else {
       queueMicrotask(commit)
@@ -290,6 +334,12 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
 
   useEffect(() => {
     const now = performance.now()
+    try {
+      warmRebuildRef.current = window.sessionStorage.getItem(SETTLED_SESSION_KEY)
+        === 'complete'
+    } catch {
+      warmRebuildRef.current = false
+    }
     runIdRef.current = performance.timeOrigin + now
     mountedAtRef.current = now
     stageStartedAtRef.current = now
@@ -369,7 +419,11 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
     if (samples.length > FRAME_WINDOW_SIZE) samples.shift()
 
     const nextStage = (stageRef.current + 1) as SceneLoadStage
-    const policy = getPolicy(qualityRef.current, nextStage)
+    const policy = getPolicy(
+      qualityRef.current,
+      nextStage,
+      warmRebuildRef.current
+    )
     const { averageFrameMs, p95FrameMs } = summarize(samples)
 
     if (samples.length < policy.requiredSamples) {
