@@ -1,11 +1,9 @@
 'use client'
 
-import { lazy, Suspense, useEffect, useState } from 'react'
-import BodyInspector from './ui/BodyInspector'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import ExplorerHeader from './ui/ExplorerHeader'
 import FirstRunGuide from './ui/FirstRunGuide'
-import NavigatorBar from './ui/NavigatorBar'
-import TourOverlayV4 from './ui/TourOverlayV4'
+import MobileSurfaceCoordinator from './ui/MobileSurfaceCoordinator'
 import { useSolarSystemStore } from './store'
 
 const SearchPalette = lazy(() => import('./ui/SearchPalette'))
@@ -29,11 +27,27 @@ export default function UIOverlayV4() {
   const [searchOpen, setSearchOpen] = useState(false)
   const [bookmarksOpen, setBookmarksOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [missionControlOpen, setMissionControlOpen] = useState(false)
   const screenshotMode = useSolarSystemStore((state) => state.screenshotMode)
   const screenshotCount = useSolarSystemStore((state) => state.screenshotGallery.length)
   const comparisonMode = useSolarSystemStore((state) => state.comparisonMode)
   const showTimeline = useSolarSystemStore((state) => state.showTimeline)
   const setShowTimeline = useSolarSystemStore((state) => state.setShowTimeline)
+
+  const openSearch = useCallback(() => {
+    setMissionControlOpen(false)
+    setSearchOpen(true)
+  }, [])
+
+  const openBookmarks = useCallback(() => {
+    setMissionControlOpen(false)
+    setBookmarksOpen(true)
+  }, [])
+
+  const openSettings = useCallback(() => {
+    setMissionControlOpen(false)
+    setSettingsOpen(true)
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -44,7 +58,7 @@ export default function UIOverlayV4() {
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
-        setSearchOpen(true)
+        openSearch()
         return
       }
 
@@ -52,23 +66,31 @@ export default function UIOverlayV4() {
 
       if (event.key === '/') {
         event.preventDefault()
-        setSearchOpen(true)
+        openSearch()
       } else if (event.key.toLowerCase() === 'b') {
-        setBookmarksOpen(true)
+        openBookmarks()
       } else if (event.key.toLowerCase() === 'h') {
+        setMissionControlOpen(false)
         setShowTimeline(true)
       } else if (event.key === ',') {
-        setSettingsOpen(true)
+        openSettings()
       } else if (event.key === 'Escape') {
         setSearchOpen(false)
         setBookmarksOpen(false)
         setSettingsOpen(false)
+        setMissionControlOpen(false)
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [setShowTimeline])
+  }, [openBookmarks, openSearch, openSettings, setShowTimeline])
+
+  useEffect(() => {
+    if (comparisonMode || showTimeline || screenshotMode) {
+      setMissionControlOpen(false)
+    }
+  }, [comparisonMode, screenshotMode, showTimeline])
 
   useEffect(() => {
     const idleWindow = window as IdleWindow
@@ -101,17 +123,28 @@ export default function UIOverlayV4() {
     )
   }
 
+  const modalOpen = searchOpen
+    || bookmarksOpen
+    || settingsOpen
+    || comparisonMode
+    || showTimeline
+
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
       <ExplorerHeader
-        onOpenSearch={() => setSearchOpen(true)}
-        onOpenBookmarks={() => setBookmarksOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSearch={openSearch}
+        onOpenBookmarks={openBookmarks}
+        onOpenSettings={openSettings}
       />
-      <NavigatorBar onOpenSearch={() => setSearchOpen(true)} />
-      <BodyInspector />
-      <TourOverlayV4 />
-      <FirstRunGuide onOpenSearch={() => setSearchOpen(true)} />
+
+      <MobileSurfaceCoordinator
+        blockedByModal={modalOpen}
+        missionControlOpen={missionControlOpen}
+        onMissionControlOpenChange={setMissionControlOpen}
+        onOpenSearch={openSearch}
+      />
+
+      <FirstRunGuide onOpenSearch={openSearch} />
 
       {searchOpen ? (
         <OptionalInterface>
@@ -133,7 +166,7 @@ export default function UIOverlayV4() {
 
       {comparisonMode ? (
         <OptionalInterface>
-          <ComparisonPanel onOpenSearch={() => setSearchOpen(true)} />
+          <ComparisonPanel onOpenSearch={openSearch} />
         </OptionalInterface>
       ) : null}
 
