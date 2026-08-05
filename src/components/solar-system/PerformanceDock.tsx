@@ -12,7 +12,11 @@ import { KTX2_MANIFEST } from './textures/texture-manifest'
 import { useTextureRuntimeStore } from './textures/texture-runtime-store'
 
 const OPTIONS: Array<{ id: QualityPreset; label: string; note: string }> = [
-  { id: 'auto', label: 'Auto', note: 'Adapts to this device and live frame rate.' },
+  {
+    id: 'auto',
+    label: 'Auto',
+    note: 'Starts conservatively and promotes only after a complete stable scene benchmark.',
+  },
   { id: 'eco', label: 'Eco', note: 'Best for phones, battery life, and cool operation.' },
   { id: 'balanced', label: 'Balanced', note: 'Smooth exploration with strong visual detail.' },
   { id: 'ultra', label: 'Ultra', note: 'Highest density and resolution for powerful GPUs.' },
@@ -28,6 +32,10 @@ export default function PerformanceDock() {
   const cameraMode = useSolarSystemStore((state) => state.cameraMode)
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
+  const autoBaseline = usePerformanceStore((state) => state.autoBaseline)
+  const autoCeiling = usePerformanceStore((state) => state.autoCeiling)
+  const autoStatus = usePerformanceStore((state) => state.autoStatus)
+  const autoReason = usePerformanceStore((state) => state.autoReason)
   const fps = usePerformanceStore((state) => state.fps)
   const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
   const setPreset = usePerformanceStore((state) => state.setPreset)
@@ -84,6 +92,7 @@ export default function PerformanceDock() {
     <div
       className="absolute right-3 top-14 z-40 pointer-events-auto sm:right-5 sm:top-16"
       data-texture-backend={textureBackendLabel.toLowerCase()}
+      data-auto-quality-status={autoStatus}
     >
       <button
         type="button"
@@ -126,8 +135,24 @@ export default function PerformanceDock() {
               </button>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-white/45">
-              Resolution, texture size, and object density scale independently, while a paused scene sleeps until it needs another frame.
+              Resolution, texture size, object density, and optional scene workload scale independently.
             </p>
+
+            {preset === 'auto' ? (
+              <div className="mt-3 rounded-xl border border-sky-300/12 bg-sky-300/[0.055] px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-sky-200/65">
+                    Auto · {autoStatus}
+                  </span>
+                  <span className="font-mono text-[8px] text-white/35">
+                    {QUALITY_PROFILES[autoBaseline].label} → {QUALITY_PROFILES[autoCeiling].label}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[9px] leading-relaxed text-white/42">
+                  {autoReason}
+                </p>
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-2 p-3">
