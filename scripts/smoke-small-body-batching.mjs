@@ -10,10 +10,12 @@ const standaloneRoot = path.resolve('.next', 'standalone')
 const standaloneNextRoot = path.join(standaloneRoot, '.next')
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
+// Fully settled P0.5 Eco scene. The geometry value combines the recorded P0
+// small-body snapshot with the unchanged optional-stage geometry delta.
 const P0_ECO_BASELINE = {
-  drawCalls: 208,
-  sceneObjects: 373,
-  geometries: 186,
+  drawCalls: 302,
+  sceneObjects: 517,
+  geometries: 276,
 }
 
 async function prepareStandaloneAssets() {
