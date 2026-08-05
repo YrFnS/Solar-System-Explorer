@@ -3,14 +3,12 @@
 import Nebula from '../Nebula'
 import Constellations from '../Constellations'
 import GalacticNeighborhood from '../GalacticNeighborhood'
-import { useSolarSystemStore } from '../store'
+import { useSceneSystemActive } from '../scene-workload-policy'
 
 export default function BackgroundScene() {
-  const showNebula = useSolarSystemStore((state) => state.showNebula)
-  const showConstellations = useSolarSystemStore((state) => state.showConstellations)
-  const showGalacticNeighborhood = useSolarSystemStore(
-    (state) => state.showGalacticNeighborhood
-  )
+  const showNebula = useSceneSystemActive('nebula')
+  const showConstellations = useSceneSystemActive('constellations')
+  const showGalacticNeighborhood = useSceneSystemActive('galactic-neighborhood')
 
   return (
     <>
