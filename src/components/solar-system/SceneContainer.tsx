@@ -129,26 +129,13 @@ export default function SceneContainer() {
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const profile = getQualityProfile({ preset, autoQuality })
-  const initialPowerPreference: RendererPowerPreference = preset === 'ultra'
+  const rendererPowerPreference: RendererPowerPreference = preset === 'ultra'
     ? 'high-performance'
     : 'low-power'
 
   const [rendererGeneration, setRendererGeneration] = useState(0)
-  const [rendererPowerPreference, setRendererPowerPreference] = useState(
-    initialPowerPreference
-  )
   const [contextLost, setContextLost] = useState(false)
   const setSelectedBody = useSolarSystemStore((state) => state.setSelectedBody)
-
-  useEffect(() => {
-    const desiredPreference: RendererPowerPreference = preset === 'ultra'
-      ? 'high-performance'
-      : 'low-power'
-    if (desiredPreference === rendererPowerPreference) return
-
-    setRendererPowerPreference(desiredPreference)
-    setRendererGeneration((generation) => generation + 1)
-  }, [preset, rendererPowerPreference])
 
   useEffect(() => {
     const handleLost = () => setContextLost(true)
@@ -164,7 +151,6 @@ export default function SceneContainer() {
 
   const retryEco = () => {
     usePerformanceStore.getState().setPreset('eco')
-    setRendererPowerPreference('low-power')
     setContextLost(false)
     setRendererGeneration((generation) => generation + 1)
   }
@@ -173,7 +159,7 @@ export default function SceneContainer() {
     <RendererBoundary>
       <div className="absolute inset-0 z-0">
         <Canvas
-          key={rendererGeneration}
+          key={`${rendererGeneration}:${rendererPowerPreference}`}
           camera={{
             position: [80, 60, 80],
             fov: 45,
