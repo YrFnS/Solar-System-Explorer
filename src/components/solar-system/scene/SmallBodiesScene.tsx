@@ -10,8 +10,11 @@ import {
   interstellarObjects,
   scatteredDiscObjects,
 } from '../data'
+import { useSceneSystemActive } from '../scene-workload-policy'
 
 export default function SmallBodiesScene() {
+  const showCentaurs = useSceneSystemActive('centaurs')
+  const showScatteredDisc = useSceneSystemActive('scattered-disc')
   const dwarfIds = useMemo(
     () => new Set(dwarfPlanets.map((body) => body.id)),
     []
@@ -59,29 +62,29 @@ export default function SmallBodiesScene() {
         <EphemerisSmallBody key={body.id} body={body} />
       ))}
 
-      {centaurs.map((body) => (
+      {showCentaurs ? centaurs.map((body) => (
         <EphemerisOrbitLine
           key={`orbit-${body.id}`}
           bodyId={body.id}
           color={body.color}
           opacity={0.035}
         />
-      ))}
-      {centaurs.map((body) => (
+      )) : null}
+      {showCentaurs ? centaurs.map((body) => (
         <EphemerisSmallBody key={body.id} body={body} />
-      ))}
+      )) : null}
 
-      {uniqueScatteredObjects.map((body) => (
+      {showScatteredDisc ? uniqueScatteredObjects.map((body) => (
         <EphemerisOrbitLine
           key={`orbit-${body.id}`}
           bodyId={body.id}
           color={body.color}
           opacity={0.03}
         />
-      ))}
-      {uniqueScatteredObjects.map((body) => (
+      )) : null}
+      {showScatteredDisc ? uniqueScatteredObjects.map((body) => (
         <EphemerisSmallBody key={body.id} body={body} />
-      ))}
+      )) : null}
     </>
   )
 }
