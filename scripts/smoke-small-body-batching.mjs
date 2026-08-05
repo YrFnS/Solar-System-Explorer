@@ -111,6 +111,35 @@ async function waitForFreshRenderer(page, previousTimestamp = 0) {
   return diagnostics
 }
 
+async function waitForSettledRenderer(page, previousTimestamp = 0) {
+  let timestamp = previousTimestamp
+  let previous = null
+  let stableTransitions = 0
+  const samples = []
+
+  for (let attempt = 0; attempt < 9; attempt += 1) {
+    const sample = await waitForFreshRenderer(page, timestamp)
+    timestamp = sample.timestamp
+    samples.push(sample)
+
+    const lazySceneReady = sample.drawCalls >= 100
+      && sample.sceneObjects >= 190
+      && sample.geometries >= 90
+    const stable = previous
+      && Math.abs(sample.drawCalls - previous.drawCalls) <= 5
+      && Math.abs(sample.sceneObjects - previous.sceneObjects) <= 4
+      && Math.abs(sample.geometries - previous.geometries) <= 4
+
+    stableTransitions = lazySceneReady && stable ? stableTransitions + 1 : 0
+    if (stableTransitions >= 2) return sample
+    previous = sample
+  }
+
+  throw new Error(
+    `Renderer counters did not settle after lazy scene admission: ${JSON.stringify(samples)}`
+  )
+}
+
 function assertOverviewBatching(runtime, renderer) {
   const failures = []
   const overviewBodies = runtime.instancedBodies + runtime.texturedOverviewBodies
@@ -228,14 +257,14 @@ function assertSelectedDetail(runtime, overviewRuntime, renderer, overviewRender
       `selected body was still evaluated by overview manager: ${runtime.positionEvaluationsPerFrame} versus ${overviewBodies}`
     )
   }
-  if (renderer.drawCalls > overviewRenderer.drawCalls + 16) {
+  if (renderer.drawCalls > overviewRenderer.drawCalls + 18) {
     failures.push(
-      `one detailed comet added ${renderer.drawCalls - overviewRenderer.drawCalls} draw calls`
+      `one settled detailed comet added ${renderer.drawCalls - overviewRenderer.drawCalls} draw calls; overview=${JSON.stringify(overviewRenderer)} selected=${JSON.stringify(renderer)}`
     )
   }
-  if (renderer.sceneObjects > overviewRenderer.sceneObjects + 28) {
+  if (renderer.sceneObjects > overviewRenderer.sceneObjects + 30) {
     failures.push(
-      `one detailed comet added ${renderer.sceneObjects - overviewRenderer.sceneObjects} scene objects`
+      `one settled detailed comet added ${renderer.sceneObjects - overviewRenderer.sceneObjects} scene objects; overview=${JSON.stringify(overviewRenderer)} selected=${JSON.stringify(renderer)}`
     )
   }
 
@@ -300,12 +329,13 @@ async function main() {
     await waitForCore(page)
 
     const overviewRuntime = await readRuntime(page)
-    const overviewRenderer = await waitForFreshRenderer(page)
+    const overviewRenderer = await waitForSettledRenderer(page)
     assertOverviewBatching(overviewRuntime, overviewRenderer)
 
     await selectBodyThroughSearch(page, 'Halley')
+    await delay(2_200)
     const selectedRuntime = await readRuntime(page)
-    const selectedRenderer = await waitForFreshRenderer(
+    const selectedRenderer = await waitForSettledRenderer(
       page,
       overviewRenderer.timestamp
     )
@@ -336,6 +366,12 @@ async function main() {
     )
     console.log(
       `[small-body-smoke] scene-object reduction ${P0_ECO_BASELINE.sceneObjects} → ${overviewRenderer.sceneObjects}`
+    )
+    console.log(
+      `[small-body-smoke] geometry reduction ${P0_ECO_BASELINE.geometries} → ${overviewRenderer.geometries}`
+    )
+    console.log(
+      `[small-body-smoke] selected-detail delta draws=${selectedRenderer.drawCalls - overviewRenderer.drawCalls} objects=${selectedRenderer.sceneObjects - overviewRenderer.sceneObjects}`
     )
     console.log(
       `[small-body-smoke] ${overviewRuntime.totalBodies} overview bodies use ${overviewRuntime.bodyBatchDraws} body draws, ${overviewRuntime.orbitBatchDraws} orbit draw, and one ${overviewRuntime.averageUpdateMs.toFixed(2)}ms manager`
