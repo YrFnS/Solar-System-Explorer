@@ -7,6 +7,8 @@ import {
   useSceneLoadStage,
 } from './SceneLoadScheduler'
 
+const SETTLED_MEASUREMENT_DELAY_SECONDS = 1.5
+
 export interface SolarExplorerDiagnostics {
   drawCalls: number
   triangles: number
@@ -29,14 +31,14 @@ declare global {
 /**
  * Exposes low-frequency renderer counters only for automated browsers or an
  * explicit `?diagnostics=1` session. Snapshots are withheld while a fresh
- * renderer is still admitting scene stages so comparisons never mix a core
- * frame from one profile with a settled frame from another.
+ * renderer is admitting scene stages and for a short stabilization window
+ * afterward, so comparisons never mix a core frame with a settled frame.
  */
 export default function RenderDiagnostics() {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
   const sceneLoadStage = useSceneLoadStage()
-  const elapsedRef = useRef(Number.POSITIVE_INFINITY)
+  const elapsedRef = useRef(0)
   const enabled = useMemo(() => {
     if (typeof window === 'undefined') return false
     return navigator.webdriver
@@ -45,17 +47,15 @@ export default function RenderDiagnostics() {
   const sceneSettled = sceneLoadStage >= SCENE_LOAD_STAGES.artifacts
 
   useEffect(() => {
-    if (!sceneSettled) {
-      delete window.__SOLAR_EXPLORER_DIAGNOSTICS__
-      elapsedRef.current = Number.POSITIVE_INFINITY
-    }
+    elapsedRef.current = 0
+    delete window.__SOLAR_EXPLORER_DIAGNOSTICS__
   }, [sceneSettled])
 
   useFrame((_, delta) => {
     if (!enabled || !sceneSettled) return
 
     elapsedRef.current += delta
-    if (elapsedRef.current < 1) return
+    if (elapsedRef.current < SETTLED_MEASUREMENT_DELAY_SECONDS) return
     elapsedRef.current = 0
 
     let sceneObjects = 0
