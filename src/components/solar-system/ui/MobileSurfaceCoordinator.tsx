@@ -161,6 +161,7 @@ export default function MobileSurfaceCoordinator({
             position: fixed !important;
             inset-inline: 0.5rem !important;
             top: auto !important;
+            bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem) !important;
             width: auto !important;
             max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 1rem) !important;
             transform: none !important;
