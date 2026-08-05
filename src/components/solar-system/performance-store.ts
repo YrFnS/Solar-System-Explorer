@@ -11,6 +11,8 @@ export type AutoQualityStatus =
   | 'stable'
   | 'limited'
   | 'cooldown'
+export type FramePacingMode = 'active' | 'idle' | 'static' | 'suspended'
+export type RendererPowerPreference = 'low-power' | 'high-performance'
 
 export interface QualityProfile {
   label: string
@@ -72,6 +74,9 @@ interface PerformanceState {
   autoStatus: AutoQualityStatus
   autoReason: string
   fps: number
+  frameMode: FramePacingMode
+  frameTargetFps: number
+  rendererPowerPreference: RendererPowerPreference
   reducedMotion: boolean
   setPreset: (preset: QualityPreset) => void
   setAutoDecision: (
@@ -80,6 +85,11 @@ interface PerformanceState {
     reason: string
   ) => void
   setFps: (fps: number) => void
+  setFramePacingStatus: (
+    mode: FramePacingMode,
+    targetFps: number,
+    rendererPowerPreference: RendererPowerPreference
+  ) => void
   setReducedMotion: (reduced: boolean) => void
 }
 
@@ -169,8 +179,17 @@ export function isQualityAtLeast(
   return QUALITY_RANK[quality] >= QUALITY_RANK[minimum]
 }
 
+function initialFrameTarget(quality: EffectiveQuality) {
+  if (quality === 'eco') return 30
+  if (quality === 'balanced') return 45
+  return 60
+}
+
 const initialPreset = readStoredPreset()
 const initialAutoPolicy = detectAutoDevicePolicy()
+const initialQuality = initialPreset === 'auto'
+  ? initialAutoPolicy.baseline
+  : initialPreset
 
 export const usePerformanceStore = create<PerformanceState>((set) => ({
   preset: initialPreset,
@@ -181,7 +200,12 @@ export const usePerformanceStore = create<PerformanceState>((set) => ({
   autoReason: initialPreset === 'auto'
     ? initialAutoPolicy.reason
     : `${QUALITY_PROFILES[initialPreset].label} was selected manually.`,
-  fps: 60,
+  fps: initialFrameTarget(initialQuality),
+  frameMode: 'active',
+  frameTargetFps: initialFrameTarget(initialQuality),
+  rendererPowerPreference: initialQuality === 'ultra'
+    ? 'high-performance'
+    : 'low-power',
   reducedMotion: readReducedMotion(),
 
   setPreset: (preset) => {
@@ -222,6 +246,26 @@ export const usePerformanceStore = create<PerformanceState>((set) => ({
   setFps: (fps) => set((state) => (
     state.fps === fps ? state : { fps }
   )),
+
+  setFramePacingStatus: (
+    frameMode,
+    frameTargetFps,
+    rendererPowerPreference
+  ) => set((state) => {
+    if (
+      state.frameMode === frameMode
+      && state.frameTargetFps === frameTargetFps
+      && state.rendererPowerPreference === rendererPowerPreference
+    ) {
+      return state
+    }
+
+    return {
+      frameMode,
+      frameTargetFps,
+      rendererPowerPreference,
+    }
+  }),
 
   setReducedMotion: (reducedMotion) => {
     if (typeof window !== 'undefined') {
