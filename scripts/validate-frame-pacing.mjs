@@ -50,9 +50,8 @@ requireContract(
     && pacingController.includes('visibilitychange')
     && pacingController.includes('__SOLAR_FRAME_PACING__')
     && pacingController.includes('renderedWhileHidden')
-    && pacingController.includes("return 'static'")
-    && pacingController.includes("return 'idle'"),
-  'FramePacingController must pass seconds to R3F, coordinate activity, suspend visibility, and publish evidence.'
+    && pacingController.includes("current.isPaused ? 'static' : 'idle'"),
+  'FramePacingController must pass seconds to R3F, coordinate activity, suspend visibility, resolve static/idle modes, and publish evidence.'
 )
 requireContract(
   pacingPolicy.includes('activeFps: 30')
