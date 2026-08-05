@@ -78,16 +78,8 @@ declare global {
   }
 }
 
-interface IdleDeadlineLike {
-  didTimeout: boolean
-  timeRemaining: () => number
-}
-
 type IdleWindow = Window & {
-  requestIdleCallback?: (
-    callback: (deadline: IdleDeadlineLike) => void,
-    options?: { timeout: number }
-  ) => number
+  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
   cancelIdleCallback?: (handle: number) => void
 }
 
@@ -101,8 +93,8 @@ interface LoadPolicy {
 
 const FINAL_STAGE = SCENE_LOAD_STAGES.artifacts
 const FRAME_WINDOW_SIZE = 48
-const DIAGNOSTIC_PUBLISH_INTERVAL_MS = 250
-const IDLE_CALLBACK_TIMEOUT_MS = 1_200
+const DIAGNOSTIC_INTERVAL_MS = 250
+const IDLE_TIMEOUT_MS = 1_200
 
 const PHASE_BY_STAGE: Record<SceneLoadStage, SceneLoadPhase> = {
   [SCENE_LOAD_STAGES.core]: 'core',
@@ -114,7 +106,7 @@ const PHASE_BY_STAGE: Record<SceneLoadStage, SceneLoadPhase> = {
   [SCENE_LOAD_STAGES.artifacts]: 'artifacts',
 }
 
-const BASE_SAMPLES_BY_STAGE: Record<SceneLoadStage, number> = {
+const BASE_SAMPLES: Record<SceneLoadStage, number> = {
   [SCENE_LOAD_STAGES.core]: 0,
   [SCENE_LOAD_STAGES.background]: 8,
   [SCENE_LOAD_STAGES.phenomena]: 10,
@@ -155,27 +147,20 @@ const HEALTH_LIMITS: Record<
 }
 
 const SceneLoadStageContext = createContext<SceneLoadStage>(SCENE_LOAD_STAGES.core)
-let nextRunId = 1
 
-function getLoadPolicy(
-  quality: EffectiveQuality,
-  nextStage: SceneLoadStage
-): LoadPolicy {
+function getPolicy(quality: EffectiveQuality, nextStage: SceneLoadStage): LoadPolicy {
   return {
     ...HEALTH_LIMITS[quality],
     requiredSamples: Math.max(
       6,
-      Math.ceil(BASE_SAMPLES_BY_STAGE[nextStage] * SAMPLE_MULTIPLIER[quality])
+      Math.ceil(BASE_SAMPLES[nextStage] * SAMPLE_MULTIPLIER[quality])
     ),
   }
 }
 
-function summarizeFrameWindow(samples: number[]) {
+function summarize(samples: number[]) {
   if (samples.length === 0) {
-    return {
-      averageFrameMs: null,
-      p95FrameMs: null,
-    }
+    return { averageFrameMs: null, p95FrameMs: null }
   }
 
   const averageFrameMs = samples.reduce((total, sample) => total + sample, 0)
@@ -197,10 +182,10 @@ export function useSceneLoadStage() {
 }
 
 /**
- * Advances optional scene groups from one measured stage to the next. Every
- * transition requires fresh rendered frames, a quiet interaction window, and
- * browser idle time. Poor frame health defers the next group rather than
- * allowing independent timers to mount several expensive systems together.
+ * Admits optional scene groups one at a time. Each transition requires fresh
+ * rendered frames, a quiet interaction window, acceptable frame health, and a
+ * browser-idle callback. A bounded deadline prevents permanently missing scene
+ * features on unusually slow but functional devices.
  */
 export default function SceneLoadScheduler({ children }: { children: ReactNode }) {
   const [stage, setStage] = useState<SceneLoadStage>(SCENE_LOAD_STAGES.core)
@@ -209,27 +194,21 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
   const quality = getEffectiveQuality({ preset, autoQuality })
   const invalidate = useThree((state) => state.invalidate)
 
-  const runIdRef = useRef<number | null>(null)
-  if (runIdRef.current === null) {
-    runIdRef.current = nextRunId
-    nextRunId += 1
-  }
-  const runId = runIdRef.current
-
-  const mountedAtRef = useRef(performance.now())
+  const runIdRef = useRef(0)
+  const mountedAtRef = useRef(0)
   const mountedRef = useRef(false)
   const stageRef = useRef<SceneLoadStage>(SCENE_LOAD_STAGES.core)
   const qualityRef = useRef<EffectiveQuality>(quality)
-  const stageStartedAtRef = useRef(mountedAtRef.current)
+  const stageStartedAtRef = useRef(0)
   const firstFrameMsRef = useRef<number | null>(null)
-  const frameSamplesRef = useRef<number[]>([])
+  const samplesRef = useRef<number[]>([])
   const transitionsRef = useRef<SceneLoadTransition[]>([])
   const lastInteractionAtRef = useRef(Number.NEGATIVE_INFINITY)
-  const lastDiagnosticPublishAtRef = useRef(Number.NEGATIVE_INFINITY)
+  const lastPublishAtRef = useRef(Number.NEGATIVE_INFINITY)
   const transitionPendingRef = useRef(false)
   const idleHandleRef = useRef<number | null>(null)
 
-  const publishDiagnostics = useCallback((
+  const publish = useCallback((
     waitingFor: SceneLoadWaitReason,
     averageFrameMs: number | null = null,
     p95FrameMs: number | null = null
@@ -238,7 +217,7 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
 
     const currentStage = stageRef.current
     window.__SOLAR_SCENE_LOADING__ = {
-      runId,
+      runId: runIdRef.current,
       stage: currentStage,
       phase: PHASE_BY_STAGE[currentStage],
       complete: currentStage >= FINAL_STAGE,
@@ -247,11 +226,11 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
       firstFrameMs: firstFrameMsRef.current,
       averageFrameMs,
       p95FrameMs,
-      sampleCount: frameSamplesRef.current.length,
+      sampleCount: samplesRef.current.length,
       transitions: [...transitionsRef.current],
     }
-    lastDiagnosticPublishAtRef.current = performance.now()
-  }, [runId])
+    lastPublishAtRef.current = performance.now()
+  }, [])
 
   const requestTransition = useCallback((
     nextStage: SceneLoadStage,
@@ -263,7 +242,7 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
     if (transitionPendingRef.current || nextStage > FINAL_STAGE) return
 
     transitionPendingRef.current = true
-    publishDiagnostics('browser-idle', averageFrameMs, p95FrameMs)
+    publish('browser-idle', averageFrameMs, p95FrameMs)
 
     const commit = () => {
       idleHandleRef.current = null
@@ -273,10 +252,10 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
         return
       }
 
-      const policy = getLoadPolicy(qualityRef.current, nextStage)
+      const policy = getPolicy(qualityRef.current, nextStage)
       if (performance.now() - lastInteractionAtRef.current < policy.interactionQuietMs) {
         transitionPendingRef.current = false
-        publishDiagnostics('interaction-idle', averageFrameMs, p95FrameMs)
+        publish('interaction-idle', averageFrameMs, p95FrameMs)
         return
       }
 
@@ -292,28 +271,30 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
       })
       stageRef.current = nextStage
       stageStartedAtRef.current = now
-      frameSamplesRef.current = []
+      samplesRef.current = []
       transitionPendingRef.current = false
       setStage(nextStage)
-      publishDiagnostics(nextStage >= FINAL_STAGE ? 'complete' : 'frame-samples')
+      publish(nextStage >= FINAL_STAGE ? 'complete' : 'frame-samples')
       invalidate()
     }
 
     const idleWindow = window as IdleWindow
     if (idleWindow.requestIdleCallback) {
-      idleHandleRef.current = idleWindow.requestIdleCallback(
-        () => commit(),
-        { timeout: IDLE_CALLBACK_TIMEOUT_MS }
-      )
-      return
+      idleHandleRef.current = idleWindow.requestIdleCallback(commit, {
+        timeout: IDLE_TIMEOUT_MS,
+      })
+    } else {
+      queueMicrotask(commit)
     }
-
-    queueMicrotask(commit)
-  }, [invalidate, publishDiagnostics])
+  }, [invalidate, publish])
 
   useEffect(() => {
+    const now = performance.now()
+    runIdRef.current = performance.timeOrigin + now
+    mountedAtRef.current = now
+    stageStartedAtRef.current = now
     mountedRef.current = true
-    publishDiagnostics('first-frame')
+    publish('first-frame')
 
     return () => {
       mountedRef.current = false
@@ -321,26 +302,24 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
       if (idleHandleRef.current !== null) {
         idleWindow.cancelIdleCallback?.(idleHandleRef.current)
       }
-      if (window.__SOLAR_SCENE_LOADING__?.runId === runId) {
+      if (window.__SOLAR_SCENE_LOADING__?.runId === runIdRef.current) {
         delete window.__SOLAR_SCENE_LOADING__
       }
     }
-  }, [publishDiagnostics, runId])
+  }, [publish])
 
   useEffect(() => {
     qualityRef.current = quality
-    frameSamplesRef.current = []
+    samplesRef.current = []
     stageStartedAtRef.current = performance.now()
-    publishDiagnostics(stageRef.current >= FINAL_STAGE ? 'complete' : 'frame-samples')
+    publish(stageRef.current >= FINAL_STAGE ? 'complete' : 'frame-samples')
     invalidate()
-  }, [invalidate, publishDiagnostics, quality])
+  }, [invalidate, publish, quality])
 
   useEffect(() => {
     const markInteraction = () => {
       lastInteractionAtRef.current = performance.now()
-      if (stageRef.current < FINAL_STAGE) {
-        publishDiagnostics('interaction-idle')
-      }
+      if (stageRef.current < FINAL_STAGE) publish('interaction-idle')
     }
     const markPointerMove = (event: PointerEvent) => {
       if (event.buttons > 0) markInteraction()
@@ -359,7 +338,7 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
       window.removeEventListener('touchstart', markInteraction)
       window.removeEventListener('keydown', markInteraction)
     }
-  }, [publishDiagnostics])
+  }, [publish])
 
   useEffect(() => {
     if (stage >= FINAL_STAGE) return
@@ -385,24 +364,24 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
       firstFrameMsRef.current = now - mountedAtRef.current
     }
 
-    const samples = frameSamplesRef.current
+    const samples = samplesRef.current
     samples.push(Math.min(250, delta * 1_000))
     if (samples.length > FRAME_WINDOW_SIZE) samples.shift()
 
     const nextStage = (stageRef.current + 1) as SceneLoadStage
-    const policy = getLoadPolicy(qualityRef.current, nextStage)
-    const { averageFrameMs, p95FrameMs } = summarizeFrameWindow(samples)
+    const policy = getPolicy(qualityRef.current, nextStage)
+    const { averageFrameMs, p95FrameMs } = summarize(samples)
 
     if (samples.length < policy.requiredSamples) {
-      if (now - lastDiagnosticPublishAtRef.current >= DIAGNOSTIC_PUBLISH_INTERVAL_MS) {
-        publishDiagnostics('frame-samples', averageFrameMs, p95FrameMs)
+      if (now - lastPublishAtRef.current >= DIAGNOSTIC_INTERVAL_MS) {
+        publish('frame-samples', averageFrameMs, p95FrameMs)
       }
       return
     }
 
     if (now - lastInteractionAtRef.current < policy.interactionQuietMs) {
-      if (now - lastDiagnosticPublishAtRef.current >= DIAGNOSTIC_PUBLISH_INTERVAL_MS) {
-        publishDiagnostics('interaction-idle', averageFrameMs, p95FrameMs)
+      if (now - lastPublishAtRef.current >= DIAGNOSTIC_INTERVAL_MS) {
+        publish('interaction-idle', averageFrameMs, p95FrameMs)
       }
       return
     }
@@ -414,8 +393,8 @@ export default function SceneLoadScheduler({ children }: { children: ReactNode }
     const deadlineReached = now - stageStartedAtRef.current >= policy.maxDeferralMs
 
     if (!healthy && !deadlineReached) {
-      if (now - lastDiagnosticPublishAtRef.current >= DIAGNOSTIC_PUBLISH_INTERVAL_MS) {
-        publishDiagnostics('frame-health', averageFrameMs, p95FrameMs)
+      if (now - lastPublishAtRef.current >= DIAGNOSTIC_INTERVAL_MS) {
+        publish('frame-health', averageFrameMs, p95FrameMs)
       }
       return
     }
