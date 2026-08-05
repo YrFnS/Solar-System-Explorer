@@ -19,8 +19,21 @@ const displaySettingsPath = path.join(
   'ui',
   'DisplaySettingsPanel.tsx'
 )
+const textureRoot = path.join(solarSystemRoot, 'textures')
+const textureManifestPath = path.join(textureRoot, 'texture-manifest.ts')
+const adaptiveTexturePath = path.join(textureRoot, 'useAdaptiveTexture.ts')
+const textureResourceManagerPath = path.join(
+  textureRoot,
+  'texture-resource-manager.ts'
+)
+const textureLifecycleManagerPath = path.join(
+  textureRoot,
+  'TextureLifecycleManager.tsx'
+)
+const textureRuntimeStorePath = path.join(textureRoot, 'texture-runtime-store.ts')
 const removedWarmupPath = path.join(solarSystemRoot, 'ProgressiveSceneWarmup.tsx')
 const runtimeSmokePath = path.join(root, 'scripts', 'smoke-runtime-foundation.mjs')
+const textureSmokePath = path.join(root, 'scripts', 'smoke-texture-lifecycle.mjs')
 const workloadScenePaths = [
   path.join(solarSystemRoot, 'scene', 'BackgroundScene.tsx'),
   path.join(solarSystemRoot, 'scene', 'PhenomenaScene.tsx'),
@@ -40,6 +53,12 @@ const sources = await Promise.all([
   readFile(scenePerformanceManagerPath, 'utf8'),
   readFile(workloadPolicyPath, 'utf8'),
   readFile(displaySettingsPath, 'utf8'),
+  readFile(textureManifestPath, 'utf8'),
+  readFile(adaptiveTexturePath, 'utf8'),
+  readFile(textureResourceManagerPath, 'utf8'),
+  readFile(textureLifecycleManagerPath, 'utf8'),
+  readFile(textureRuntimeStorePath, 'utf8'),
+  readFile(textureSmokePath, 'utf8'),
   ...workloadScenePaths.map((filePath) => readFile(filePath, 'utf8')),
 ])
 
@@ -54,6 +73,12 @@ const [
   scenePerformanceManager,
   workloadPolicy,
   displaySettings,
+  textureManifest,
+  adaptiveTexture,
+  textureResourceManager,
+  textureLifecycleManager,
+  textureRuntimeStore,
+  textureSmoke,
   ...workloadScenes
 ] = sources
 
@@ -157,8 +182,9 @@ requireContract(
   'package.json must expose quality:gate through scripts/validate-quality-gate.mjs.'
 )
 requireContract(
-  packageJson.scripts?.['runtime:smoke'] === 'node scripts/smoke-runtime-foundation.mjs',
-  'package.json must expose runtime:smoke through scripts/smoke-runtime-foundation.mjs.'
+  packageJson.scripts?.['runtime:smoke']
+    === 'node scripts/smoke-runtime-foundation.mjs && node scripts/smoke-texture-lifecycle.mjs',
+  'runtime:smoke must run both the runtime-foundation and texture-lifecycle browser gates.'
 )
 
 requireContract(
@@ -273,6 +299,57 @@ requireContract(
   'Runtime smoke coverage must prove conservative Auto and Eco workload suppression with preference restoration.'
 )
 
+requireContract(
+  textureManifest.includes('getTextureFallbackUrl')
+    && textureManifest.includes('getTextureTierWidth(quality)')
+    && textureManifest.includes('/textures/optimized/')
+    && textureManifest.includes('quality: EffectiveQuality'),
+  'Texture fallback URLs must contain an explicit 512/1024/2048 quality tier.'
+)
+requireContract(
+  adaptiveTexture.includes('useTexture(fallbackUrl)')
+    && adaptiveTexture.includes('retainFallbackTexture')
+    && adaptiveTexture.includes('retainKtx2Texture')
+    && adaptiveTexture.includes('lease.release()')
+    && !adaptiveTexture.includes('CACHE_BY_RENDERER'),
+  'useAdaptiveTexture must use explicit cache keys and reference-count both fallback and KTX2 leases.'
+)
+requireContract(
+  textureResourceManager.includes('useTexture.clear')
+    && textureResourceManager.includes('fallbackCacheEvictions')
+    && textureResourceManager.includes('disposeRendererTextureResources')
+    && textureResourceManager.includes('resources.loader.dispose()')
+    && textureResourceManager.includes('__SOLAR_TEXTURE_LIFECYCLE__')
+    && textureResourceManager.includes('consumers: Set<symbol>'),
+  'The texture resource manager must evict old WebP tiers, dispose KTX2 records, terminate loaders, and publish lifecycle diagnostics.'
+)
+requireContract(
+  textureLifecycleManager.includes('beginTier')
+    && textureLifecycleManager.includes('setActiveTextureTier')
+    && textureLifecycleManager.includes('disposeRendererTextureResources'),
+  'TextureLifecycleManager must bind active tiers and KTX2 teardown to the Canvas lifecycle.'
+)
+requireContract(
+  sceneContainer.includes('<TextureLifecycleManager />'),
+  'SceneContainer must mount TextureLifecycleManager inside the production Canvas.'
+)
+requireContract(
+  textureRuntimeStore.includes('quality: EffectiveQuality')
+    && textureRuntimeStore.includes('tierWidth')
+    && textureRuntimeStore.includes('beginTier')
+    && textureRuntimeStore.includes('state.quality !== quality'),
+  'Texture runtime diagnostics must reset per quality tier and reject stale asynchronous results.'
+)
+requireContract(
+  textureSmoke.includes('Eco → Balanced → Ultra → Eco')
+    && textureSmoke.includes('__SOLAR_TEXTURE_LIFECYCLE__')
+    && textureSmoke.includes('fallbackCacheEvictions')
+    && textureSmoke.includes('ktx2Disposals')
+    && textureSmoke.includes('loaderDisposals')
+    && textureSmoke.includes('Texture residency did not return to baseline'),
+  'Texture lifecycle smoke coverage must cycle all tiers, prove eviction, and verify renderer-rebuild teardown.'
+)
+
 if (failures.length > 0) {
   console.error('[quality-gate] release contract failed')
   failures.forEach((failure) => console.error(`- ${failure}`))
@@ -282,4 +359,5 @@ if (failures.length > 0) {
   console.log(`[quality-gate] protected commands: ${workflowCommands.length}`)
   console.log('[quality-gate] measured scene loading is the only production startup scheduler')
   console.log('[quality-gate] Auto quality and optional scene workload remain independently governed')
+  console.log('[quality-gate] adaptive textures use explicit tiers with bounded renderer-owned residency')
 }
