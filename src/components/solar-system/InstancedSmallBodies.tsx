@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
+import type { DwarfPlanetData } from './data'
 import type { EphemerisSmallBodyData } from './EphemerisSmallBody'
 import { getBodyVisualPosition } from './ephemeris'
 import { useExperienceStore } from './experience-store'
@@ -13,8 +14,10 @@ import {
 } from './performance-store'
 import { DAY_MS, getSimulationDateMs, J2000_UNIX_MS } from './simulation-clock'
 import { useSolarSystemStore } from './store'
+import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 
-type SmallBodyShape = 'sphere' | 'rocky'
+type TexturedSmallBody = DwarfPlanetData & { textureUrl: string }
+type SmallBodyShape = 'sphere' | 'rocky' | 'textured'
 
 interface SmallBodyInstanceEntry {
   body: EphemerisSmallBodyData
@@ -29,12 +32,19 @@ interface InstancedSmallBodiesProps {
   orbitBatchDraws: number
 }
 
+interface TexturedOverviewBodyProps {
+  body: TexturedSmallBody
+  registerMesh: (bodyId: string, mesh: THREE.Mesh | null) => void
+  onSelect: (event: ThreeEvent<MouseEvent>, body: EphemerisSmallBodyData) => void
+}
+
 export interface SmallBodyRuntimeDiagnostics {
   quality: EffectiveQuality
   mode: 'explore' | 'scientific' | 'sandbox'
   selectedBody: string | null
   totalBodies: number
   instancedBodies: number
+  texturedOverviewBodies: number
   detailedBodies: number
   sphereInstances: number
   rockyInstances: number
@@ -59,7 +69,15 @@ declare global {
   }
 }
 
+function hasAuthoredTexture(
+  body: EphemerisSmallBodyData
+): body is TexturedSmallBody {
+  return 'textureUrl' in body && typeof body.textureUrl === 'string'
+}
+
 function getShape(body: EphemerisSmallBodyData): SmallBodyShape {
+  if (hasAuthoredTexture(body)) return 'textured'
+
   return body.type.includes('Asteroid')
     || body.type === 'Centaur'
     || body.type === 'Interstellar Object'
@@ -75,6 +93,26 @@ function getBodyScale(body: EphemerisSmallBodyData, target: THREE.Vector3) {
   return target.setScalar(body.radius)
 }
 
+function TexturedOverviewBody({
+  body,
+  registerMesh,
+  onSelect,
+}: TexturedOverviewBodyProps) {
+  const texture = useAdaptiveTexture(body.textureUrl, { anisotropy: 4 })
+
+  return (
+    <mesh
+      ref={(mesh) => registerMesh(body.id, mesh)}
+      matrixAutoUpdate={false}
+      frustumCulled={false}
+      onClick={(event) => onSelect(event, body)}
+    >
+      <sphereGeometry args={[1, 24, 18]} />
+      <meshStandardMaterial map={texture} roughness={0.9} metalness={0.02} />
+    </mesh>
+  )
+}
+
 export default function InstancedSmallBodies({
   bodies,
   batchedOrbitPaths,
@@ -84,6 +122,7 @@ export default function InstancedSmallBodies({
   const sphereRef = useRef<THREE.InstancedMesh>(null)
   const rockyRef = useRef<THREE.InstancedMesh>(null)
   const hitRef = useRef<THREE.InstancedMesh>(null)
+  const texturedMeshesRef = useRef(new Map<string, THREE.Mesh>())
   const dummyRef = useRef(new THREE.Object3D())
   const positionRef = useRef(new THREE.Vector3())
   const scaleRef = useRef(new THREE.Vector3())
@@ -100,12 +139,27 @@ export default function InstancedSmallBodies({
   const setFocusTarget = useSolarSystemStore((state) => state.setFocusTarget)
   const quality = usePerformanceStore((state) => getEffectiveQuality(state))
 
-  const { entries, sphereCount, rockyCount, bodyIds } = useMemo(() => {
+  const {
+    entries,
+    sphereCount,
+    rockyCount,
+    texturedBodies,
+    bodyIds,
+  } = useMemo(() => {
     let nextSphereIndex = 0
     let nextRockyIndex = 0
+    const nextTexturedBodies: TexturedSmallBody[] = []
     const nextEntries = bodies.map((body): SmallBodyInstanceEntry => {
       const shape = getShape(body)
-      const shapeIndex = shape === 'sphere' ? nextSphereIndex++ : nextRockyIndex++
+      let shapeIndex = 0
+
+      if (shape === 'sphere') shapeIndex = nextSphereIndex++
+      if (shape === 'rocky') shapeIndex = nextRockyIndex++
+      if (shape === 'textured') {
+        shapeIndex = nextTexturedBodies.length
+        nextTexturedBodies.push(body as TexturedSmallBody)
+      }
+
       return { body, shape, shapeIndex }
     })
 
@@ -113,14 +167,23 @@ export default function InstancedSmallBodies({
       entries: nextEntries,
       sphereCount: nextSphereIndex,
       rockyCount: nextRockyIndex,
+      texturedBodies: nextTexturedBodies,
       bodyIds: new Set(bodies.map((body) => body.id)),
     }
   }, [bodies])
 
-  const detailedBodies = selectedBody && bodyIds.has(selectedBody) ? 1 : 0
-  const instancedBodies = bodies.length - detailedBodies
+  const selectedEntry = selectedBody
+    ? entries.find((entry) => entry.body.id === selectedBody) ?? null
+    : null
+  const detailedBodies = selectedEntry ? 1 : 0
+  const selectedInstanced = selectedEntry && selectedEntry.shape !== 'textured' ? 1 : 0
+  const selectedTextured = selectedEntry?.shape === 'textured' ? 1 : 0
+  const instancedBodies = sphereCount + rockyCount - selectedInstanced
+  const texturedOverviewBodies = texturedBodies.length - selectedTextured
+  const overviewBodies = instancedBodies + texturedOverviewBodies
   const bodyBatchDraws = (sphereCount > 0 ? 1 : 0)
     + (rockyCount > 0 ? 1 : 0)
+    + texturedOverviewBodies
     + (bodies.length > 0 ? 1 : 0)
 
   const publishDiagnostics = useCallback(() => {
@@ -132,21 +195,18 @@ export default function InstancedSmallBodies({
       selectedBody,
       totalBodies: bodies.length,
       instancedBodies,
+      texturedOverviewBodies,
       detailedBodies,
       sphereInstances: sphereCount - (
-        selectedBody && entries.some((entry) => (
-          entry.body.id === selectedBody && entry.shape === 'sphere'
-        )) ? 1 : 0
+        selectedEntry?.shape === 'sphere' ? 1 : 0
       ),
       rockyInstances: rockyCount - (
-        selectedBody && entries.some((entry) => (
-          entry.body.id === selectedBody && entry.shape === 'rocky'
-        )) ? 1 : 0
+        selectedEntry?.shape === 'rocky' ? 1 : 0
       ),
-      hitInstances: instancedBodies,
+      hitInstances: overviewBodies,
       overviewFrameManagers: 1,
-      positionEvaluationsPerFrame: instancedBodies,
-      matrixWritesPerFrame: instancedBodies * 2,
+      positionEvaluationsPerFrame: overviewBodies,
+      matrixWritesPerFrame: overviewBodies * 2,
       bodyBatchDraws,
       orbitBatchDraws,
       batchedOrbitPaths,
@@ -162,21 +222,42 @@ export default function InstancedSmallBodies({
     bodies.length,
     bodyBatchDraws,
     detailedBodies,
-    entries,
     individualOrbitPaths,
     instancedBodies,
     mode,
     orbitBatchDraws,
+    overviewBodies,
     quality,
     rockyCount,
     selectedBody,
+    selectedEntry?.shape,
     sphereCount,
+    texturedOverviewBodies,
   ])
+
+  const registerTexturedMesh = useCallback((bodyId: string, mesh: THREE.Mesh | null) => {
+    if (mesh) {
+      mesh.matrixAutoUpdate = false
+      texturedMeshesRef.current.set(bodyId, mesh)
+      return
+    }
+
+    texturedMeshesRef.current.delete(bodyId)
+  }, [])
+
+  const selectBody = useCallback((
+    event: ThreeEvent<MouseEvent>,
+    body: EphemerisSmallBodyData
+  ) => {
+    event.stopPropagation()
+    setSelectedBody(body.id)
+    setFocusTarget(body.id)
+  }, [setFocusTarget, setSelectedBody])
 
   useLayoutEffect(() => {
     const configureMesh = (
       mesh: THREE.InstancedMesh | null,
-      shape: SmallBodyShape
+      shape: Exclude<SmallBodyShape, 'textured'>
     ) => {
       if (!mesh) return
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
@@ -205,7 +286,7 @@ export default function InstancedSmallBodies({
     const sphereMesh = sphereRef.current
     const rockyMesh = rockyRef.current
     const hitMesh = hitRef.current
-    if (!hitMesh || (!sphereMesh && !rockyMesh)) return
+    if (!hitMesh) return
 
     const startedAt = performance.now()
     const dateMs = getSimulationDateMs()
@@ -215,15 +296,23 @@ export default function InstancedSmallBodies({
 
     entries.forEach((entry, bodyIndex) => {
       const { body, shape, shapeIndex } = entry
-      const visibleMesh = shape === 'sphere' ? sphereMesh : rockyMesh
       const hidden = body.id === selectedBody
+      const texturedMesh = shape === 'textured'
+        ? texturedMeshesRef.current.get(body.id) ?? null
+        : null
+      const instancedMesh = shape === 'sphere'
+        ? sphereMesh
+        : shape === 'rocky'
+          ? rockyMesh
+          : null
 
       if (hidden) {
+        if (texturedMesh) texturedMesh.visible = false
         dummy.position.set(0, 0, 0)
         dummy.rotation.set(0, 0, 0)
         dummy.scale.setScalar(0)
         dummy.updateMatrix()
-        visibleMesh?.setMatrixAt(shapeIndex, dummy.matrix)
+        instancedMesh?.setMatrixAt(shapeIndex, dummy.matrix)
         hitMesh.setMatrixAt(bodyIndex, dummy.matrix)
         return
       }
@@ -239,7 +328,14 @@ export default function InstancedSmallBodies({
       )
       dummy.scale.copy(getBodyScale(body, scaleRef.current))
       dummy.updateMatrix()
-      visibleMesh?.setMatrixAt(shapeIndex, dummy.matrix)
+
+      if (texturedMesh) {
+        texturedMesh.visible = true
+        texturedMesh.matrix.copy(dummy.matrix)
+        texturedMesh.matrixWorldNeedsUpdate = true
+      } else {
+        instancedMesh?.setMatrixAt(shapeIndex, dummy.matrix)
+      }
 
       dummy.rotation.set(0, 0, 0)
       dummy.scale.setScalar(Math.max(body.radius * 2.2, 0.14))
@@ -259,9 +355,9 @@ export default function InstancedSmallBodies({
     ) / frameSamplesRef.current
     maxUpdateMsRef.current = Math.max(maxUpdateMsRef.current, updateMs)
 
-    if (positionEvaluations !== instancedBodies) {
+    if (positionEvaluations !== overviewBodies) {
       console.warn(
-        `[small-bodies] expected ${instancedBodies} position evaluations, received ${positionEvaluations}`
+        `[small-bodies] expected ${overviewBodies} position evaluations, received ${positionEvaluations}`
       )
     }
 
@@ -282,10 +378,7 @@ export default function InstancedSmallBodies({
     if (instanceId === undefined) return
     const body = bodyList[instanceId]
     if (!body) return
-
-    event.stopPropagation()
-    setSelectedBody(body.id)
-    setFocusTarget(body.id)
+    selectBody(event, body)
   }
 
   const sphereBodies = useMemo(
@@ -322,6 +415,15 @@ export default function InstancedSmallBodies({
           <meshStandardMaterial vertexColors roughness={0.92} metalness={0.04} />
         </instancedMesh>
       ) : null}
+
+      {texturedBodies.map((body) => (
+        <TexturedOverviewBody
+          key={body.id}
+          body={body}
+          registerMesh={registerTexturedMesh}
+          onSelect={selectBody}
+        />
+      ))}
 
       {bodies.length > 0 ? (
         <instancedMesh
