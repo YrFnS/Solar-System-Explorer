@@ -93,6 +93,21 @@ async function configureDesktopAutoPage(page) {
     deviceScaleFactor: 1,
   })
   await page.evaluateOnNewDocument(() => {
+    Object.defineProperties(Navigator.prototype, {
+      hardwareConcurrency: {
+        configurable: true,
+        get: () => 8,
+      },
+      deviceMemory: {
+        configurable: true,
+        get: () => 8,
+      },
+      connection: {
+        configurable: true,
+        get: () => ({ saveData: false, effectiveType: '4g' }),
+      },
+    })
+
     window.localStorage.setItem('solar-explorer-interface-guide-v4', 'complete')
     window.localStorage.setItem('solar-explorer-experience-mode-v1', 'explore')
     window.localStorage.removeItem('solar-explorer-quality-preset-v1')
