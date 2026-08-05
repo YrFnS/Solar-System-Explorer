@@ -4,14 +4,18 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useTexture } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import { getEffectiveQuality, usePerformanceStore } from '../performance-store'
 import {
   getKtx2TextureEntry,
   getKtx2TextureUrl,
   getTextureFallbackUrl,
-  type Ktx2TextureEntry,
+  getTextureTierWidth,
 } from './texture-manifest'
+import {
+  retainFallbackTexture,
+  retainKtx2Texture,
+  type FallbackTextureLease,
+} from './texture-resource-manager'
 import { useTextureRuntimeStore } from './texture-runtime-store'
 
 interface AdaptiveTextureOptions {
@@ -23,156 +27,11 @@ interface LoadedTextureState {
   texture: THREE.Texture
 }
 
-interface FallbackUsage {
-  consumers: Set<symbol>
-  ktx2Consumers: Set<symbol>
-  released: boolean
-}
-
-const LOADER_BY_RENDERER = new WeakMap<THREE.WebGLRenderer, KTX2Loader>()
-const CACHE_BY_RENDERER = new WeakMap<
-  THREE.WebGLRenderer,
-  Map<string, Promise<THREE.Texture>>
->()
-const FALLBACK_USAGE = new WeakMap<THREE.Texture, FallbackUsage>()
-
-function describeTextureFormat(texture: THREE.Texture) {
-  const match = Object.entries(THREE).find(
-    ([name, value]) => name.endsWith('_Format') && value === texture.format
-  )
-  return match?.[0].replace(/_Format$/, '') ?? `format-${texture.format}`
-}
-
-function getLoader(renderer: THREE.WebGLRenderer) {
-  const existing = LOADER_BY_RENDERER.get(renderer)
-  if (existing) return existing
-
-  const workerLimit = typeof navigator === 'undefined'
-    ? 2
-    : Math.max(1, Math.min(2, (navigator.hardwareConcurrency || 4) - 1))
-  const loader = new KTX2Loader()
-    .setTranscoderPath('/basis/')
-    .setWorkerLimit(workerLimit)
-    .detectSupport(renderer)
-
-  LOADER_BY_RENDERER.set(renderer, loader)
-  CACHE_BY_RENDERER.set(renderer, new Map())
-  return loader
-}
-
-function loadKtx2Texture(
-  renderer: THREE.WebGLRenderer,
-  url: string,
-  entry: Ktx2TextureEntry,
-  anisotropy: number
-) {
-  const cache = CACHE_BY_RENDERER.get(renderer) ?? new Map<string, Promise<THREE.Texture>>()
-  if (!CACHE_BY_RENDERER.has(renderer)) CACHE_BY_RENDERER.set(renderer, cache)
-
-  const cached = cache.get(url)
-  if (cached) return cached
-
-  const promise = getLoader(renderer)
-    .loadAsync(url)
-    .then((texture) => {
-      texture.anisotropy = Math.min(
-        Math.max(1, anisotropy),
-        renderer.capabilities.getMaxAnisotropy()
-      )
-      texture.colorSpace = entry.colorSpace === 'srgb'
-        ? THREE.SRGBColorSpace
-        : THREE.NoColorSpace
-      texture.userData.solarTexture = {
-        backend: 'ktx2',
-        codec: entry.codec,
-        id: entry.id,
-        source: entry.input,
-        format: describeTextureFormat(texture),
-      }
-      texture.needsUpdate = true
-      return texture
-    })
-    .catch((error) => {
-      cache.delete(url)
-      throw error
-    })
-
-  cache.set(url, promise)
-  return promise
-}
-
-function getFallbackUsage(texture: THREE.Texture) {
-  const existing = FALLBACK_USAGE.get(texture)
-  if (existing) return existing
-
-  const usage: FallbackUsage = {
-    consumers: new Set(),
-    ktx2Consumers: new Set(),
-    released: false,
-  }
-  FALLBACK_USAGE.set(texture, usage)
-  return usage
-}
-
-function synchronizeFallback(texture: THREE.Texture, usage: FallbackUsage) {
-  const allConsumersCompressed = usage.consumers.size > 0
-    && usage.ktx2Consumers.size === usage.consumers.size
-
-  if (allConsumersCompressed && !usage.released) {
-    // Texture.dispose() releases only the GPU allocation. TextureLoader keeps
-    // the decoded image object cached, so WebP can be re-uploaded immediately
-    // when the user disables KTX2 or Auto moves to another quality tier.
-    texture.dispose()
-    usage.released = true
-    return
-  }
-
-  if (!allConsumersCompressed && usage.released) {
-    texture.needsUpdate = true
-    usage.released = false
-  }
-}
-
-function registerFallback(texture: THREE.Texture, consumerId: symbol) {
-  const usage = getFallbackUsage(texture)
-  usage.consumers.add(consumerId)
-  usage.ktx2Consumers.delete(consumerId)
-  synchronizeFallback(texture, usage)
-}
-
-function setFallbackCompressed(
-  texture: THREE.Texture,
-  consumerId: symbol,
-  compressed: boolean
-) {
-  const usage = getFallbackUsage(texture)
-  usage.consumers.add(consumerId)
-  if (compressed) usage.ktx2Consumers.add(consumerId)
-  else usage.ktx2Consumers.delete(consumerId)
-  synchronizeFallback(texture, usage)
-}
-
-function unregisterFallback(texture: THREE.Texture, consumerId: symbol) {
-  const usage = FALLBACK_USAGE.get(texture)
-  if (!usage) return
-
-  usage.consumers.delete(consumerId)
-  usage.ktx2Consumers.delete(consumerId)
-  if (usage.consumers.size === 0) {
-    if (!usage.released) texture.dispose()
-    FALLBACK_USAGE.delete(texture)
-    return
-  }
-
-  synchronizeFallback(texture, usage)
-}
-
 /**
- * Renders immediately with the quality-tiered WebP source, then releases that
- * source's GPU allocation only when every material using it has switched to
- * KTX2. The decoded image remains cached, so disabling KTX2 restores WebP
- * without another network request. Any missing file, WASM, capability, network,
- * or transcode failure stays safely on WebP.
+ * Uses an explicit quality-tier WebP URL as the React loader cache key, then
+ * upgrades to a renderer-owned KTX2 lease. Both paths are reference counted so
+ * superseded tiers and abandoned transcodes are disposed after their final
+ * material consumer leaves.
  */
 export function useAdaptiveTexture(
   sourceUrl: string,
@@ -185,12 +44,14 @@ export function useAdaptiveTexture(
   const recordSuccess = useTextureRuntimeStore((state) => state.recordSuccess)
   const recordFailure = useTextureRuntimeStore((state) => state.recordFailure)
   const entry = getKtx2TextureEntry(sourceUrl)
-  const fallbackUrl = getTextureFallbackUrl(sourceUrl)
+  const tierWidth = getTextureTierWidth(quality)
+  const fallbackUrl = getTextureFallbackUrl(sourceUrl, quality)
   const fallbackTexture = useTexture(fallbackUrl)
   const ktx2Url = entry ? getKtx2TextureUrl(entry, quality) : null
   const textureKey = entry && ktx2Url ? `${entry.id}:${quality}` : ''
   const anisotropy = options.anisotropy ?? 4
   const consumerId = useRef(Symbol(sourceUrl))
+  const fallbackLeaseRef = useRef<FallbackTextureLease | null>(null)
   const [loaded, setLoaded] = useState<LoadedTextureState | null>(null)
   const ktx2Active = Boolean(
     enabled
@@ -203,67 +64,109 @@ export function useAdaptiveTexture(
       Math.max(1, anisotropy),
       renderer.capabilities.getMaxAnisotropy()
     )
+    fallbackTexture.colorSpace = entry?.colorSpace === 'linear'
+      ? THREE.NoColorSpace
+      : THREE.SRGBColorSpace
     fallbackTexture.userData = {
       ...fallbackTexture.userData,
       solarTexture: {
         backend: 'webp',
+        id: entry?.id ?? null,
+        quality,
+        tierWidth,
         source: fallbackUrl,
       },
     }
     fallbackTexture.needsUpdate = true
-    registerFallback(fallbackTexture, consumerId.current)
+
+    const lease = retainFallbackTexture(
+      fallbackUrl,
+      fallbackTexture,
+      consumerId.current
+    )
+    fallbackLeaseRef.current = lease
 
     return () => {
-      unregisterFallback(fallbackTexture, consumerId.current)
+      if (fallbackLeaseRef.current === lease) fallbackLeaseRef.current = null
+      lease.release()
     }
-  }, [anisotropy, fallbackTexture, fallbackUrl, renderer])
+  }, [
+    anisotropy,
+    entry,
+    fallbackTexture,
+    fallbackUrl,
+    quality,
+    renderer,
+    tierWidth,
+  ])
 
   useLayoutEffect(() => {
-    setFallbackCompressed(
-      fallbackTexture,
-      consumerId.current,
-      ktx2Active
-    )
+    fallbackLeaseRef.current?.setCompressed(ktx2Active)
   }, [fallbackTexture, ktx2Active])
 
   useEffect(() => {
-    if (!enabled || !entry || !ktx2Url) return
+    if (!enabled || !entry || !ktx2Url) {
+      let cancelled = false
+      queueMicrotask(() => {
+        if (!cancelled) setLoaded(null)
+      })
+      return () => {
+        cancelled = true
+      }
+    }
 
-    recordRequested(entry.id)
+    recordRequested(entry.id, quality, tierWidth)
+    const lease = retainKtx2Texture(
+      renderer,
+      ktx2Url,
+      entry,
+      anisotropy,
+      consumerId.current
+    )
     let cancelled = false
 
-    loadKtx2Texture(renderer, ktx2Url, entry, anisotropy)
+    queueMicrotask(() => {
+      if (cancelled) return
+      setLoaded((current) => (
+        current?.key === textureKey ? current : null
+      ))
+    })
+
+    lease.promise
       .then((texture) => {
         if (cancelled) return
         const format = String(
           (texture.userData.solarTexture as { format?: string } | undefined)?.format
-            ?? describeTextureFormat(texture)
+            ?? `format-${texture.format}`
         )
         setLoaded({ key: textureKey, texture })
-        recordSuccess(entry.id, format)
+        recordSuccess(entry.id, format, quality, tierWidth)
       })
       .catch((error: unknown) => {
         if (cancelled) return
         const message = error instanceof Error
           ? error.message
           : `Unable to load ${entry.id} as KTX2.`
-        recordFailure(entry.id, message)
+        recordFailure(entry.id, message, quality, tierWidth)
         console.warn(`[textures] KTX2 fallback for ${entry.id}: ${message}`)
       })
 
     return () => {
       cancelled = true
+      lease.release()
     }
   }, [
     anisotropy,
     enabled,
     entry,
     ktx2Url,
+    quality,
     recordFailure,
     recordRequested,
     recordSuccess,
     renderer,
     textureKey,
+    tierWidth,
   ])
 
   if (ktx2Active && loaded) return loaded.texture
