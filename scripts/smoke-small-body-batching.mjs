@@ -113,20 +113,24 @@ async function waitForFreshRenderer(page, previousTimestamp = 0) {
 
 function assertOverviewBatching(runtime, renderer) {
   const failures = []
+  const overviewBodies = runtime.instancedBodies + runtime.texturedOverviewBodies
 
   if (runtime.totalBodies < 15) {
     failures.push(`totalBodies=${runtime.totalBodies}; expected the complete Eco catalogue`)
   }
-  if (runtime.instancedBodies !== runtime.totalBodies || runtime.detailedBodies !== 0) {
+  if (runtime.detailedBodies !== 0 || overviewBodies !== runtime.totalBodies) {
     failures.push(
-      `overview promotion mismatch instanced=${runtime.instancedBodies} detailed=${runtime.detailedBodies} total=${runtime.totalBodies}`
+      `overview promotion mismatch instanced=${runtime.instancedBodies} textured=${runtime.texturedOverviewBodies} detailed=${runtime.detailedBodies} total=${runtime.totalBodies}`
     )
+  }
+  if (runtime.texturedOverviewBodies < 1) {
+    failures.push('authored Pluto texture was not retained in the lightweight overview')
   }
   if (runtime.overviewFrameManagers !== 1) {
     failures.push(`overviewFrameManagers=${runtime.overviewFrameManagers}; expected exactly 1`)
   }
-  if (runtime.bodyBatchDraws > 3 || runtime.bodyBatchDraws < 2) {
-    failures.push(`bodyBatchDraws=${runtime.bodyBatchDraws}; expected 2-3 shared batches`)
+  if (runtime.bodyBatchDraws > 4 || runtime.bodyBatchDraws < 3) {
+    failures.push(`bodyBatchDraws=${runtime.bodyBatchDraws}; expected 3-4 bounded overview draws`)
   }
   if (runtime.orbitBatchDraws !== 1 || runtime.individualOrbitPaths !== 0) {
     failures.push(
@@ -138,14 +142,14 @@ function assertOverviewBatching(runtime, renderer) {
       `batchedOrbitPaths=${runtime.batchedOrbitPaths}; expected ${runtime.totalBodies}`
     )
   }
-  if (runtime.positionEvaluationsPerFrame !== runtime.instancedBodies) {
+  if (runtime.positionEvaluationsPerFrame !== overviewBodies) {
     failures.push(
-      `position evaluations=${runtime.positionEvaluationsPerFrame}; expected ${runtime.instancedBodies}`
+      `position evaluations=${runtime.positionEvaluationsPerFrame}; expected ${overviewBodies}`
     )
   }
-  if (runtime.matrixWritesPerFrame !== runtime.instancedBodies * 2) {
+  if (runtime.matrixWritesPerFrame !== overviewBodies * 2) {
     failures.push(
-      `matrix writes=${runtime.matrixWritesPerFrame}; expected ${runtime.instancedBodies * 2}`
+      `matrix writes=${runtime.matrixWritesPerFrame}; expected ${overviewBodies * 2}`
     )
   }
   if (!Number.isFinite(runtime.averageUpdateMs) || runtime.averageUpdateMs <= 0) {
@@ -191,13 +195,14 @@ async function selectBodyThroughSearch(page, query) {
 
 function assertSelectedDetail(runtime, overviewRuntime, renderer, overviewRenderer) {
   const failures = []
+  const overviewBodies = runtime.instancedBodies + runtime.texturedOverviewBodies
 
   if (runtime.selectedBody !== 'halley') {
     failures.push(`selectedBody=${runtime.selectedBody}; expected halley`)
   }
-  if (runtime.detailedBodies !== 1 || runtime.instancedBodies !== runtime.totalBodies - 1) {
+  if (runtime.detailedBodies !== 1 || overviewBodies + 1 !== runtime.totalBodies) {
     failures.push(
-      `detail promotion mismatch detailed=${runtime.detailedBodies} instanced=${runtime.instancedBodies} total=${runtime.totalBodies}`
+      `detail promotion mismatch detailed=${runtime.detailedBodies} instanced=${runtime.instancedBodies} textured=${runtime.texturedOverviewBodies} total=${runtime.totalBodies}`
     )
   }
   if (runtime.overviewFrameManagers !== 1) {
@@ -218,9 +223,9 @@ function assertSelectedDetail(runtime, overviewRuntime, renderer, overviewRender
       `selected orbit promotion batch=${runtime.orbitBatchDraws} individual=${runtime.individualOrbitPaths}`
     )
   }
-  if (runtime.positionEvaluationsPerFrame !== runtime.instancedBodies) {
+  if (runtime.positionEvaluationsPerFrame !== overviewBodies) {
     failures.push(
-      `selected body was still evaluated by overview manager: ${runtime.positionEvaluationsPerFrame} versus ${runtime.instancedBodies}`
+      `selected body was still evaluated by overview manager: ${runtime.positionEvaluationsPerFrame} versus ${overviewBodies}`
     )
   }
   if (renderer.drawCalls > overviewRenderer.drawCalls + 16) {
@@ -245,7 +250,7 @@ async function clearSelection(page) {
     const runtime = window.__SOLAR_SMALL_BODY_RUNTIME__
     return runtime?.selectedBody === null
       && runtime.detailedBodies === 0
-      && runtime.instancedBodies === runtime.totalBodies
+      && runtime.instancedBodies + runtime.texturedOverviewBodies === runtime.totalBodies
   }, { timeout: 15_000 })
 }
 
