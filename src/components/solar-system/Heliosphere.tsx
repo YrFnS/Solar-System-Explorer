@@ -1,8 +1,8 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useRef } from 'react'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 
 function HeliosphereShell({
@@ -20,10 +20,13 @@ function HeliosphereShell({
 }) {
   const meshRef = useRef<THREE.Mesh>(null!)
 
-  useFrame(({ clock }) => {
+  useFrameLane({
+    id: `heliosphere:${radius}:${wireframe ? 'wire' : 'shell'}`,
+    lane: 'decorative',
+    priority: 88,
+  }, ({ nowMs }) => {
     if (meshRef.current) {
-      // Very slow subtle rotation
-      meshRef.current.rotation.y = clock.getElapsedTime() * 0.002
+      meshRef.current.rotation.y = (nowMs / 1_000) * 0.002
     }
   })
 
@@ -49,7 +52,6 @@ export default function Heliosphere() {
 
   return (
     <group>
-      {/* Inner shell - Termination Shock */}
       <HeliosphereShell
         radius={55}
         color="#E8A060"
@@ -57,7 +59,6 @@ export default function Heliosphere() {
         scaleX={1.1}
         wireframe={false}
       />
-      {/* Wireframe overlay on termination shock */}
       <HeliosphereShell
         radius={55}
         color="#E8A060"
@@ -65,7 +66,6 @@ export default function Heliosphere() {
         scaleX={1.1}
         wireframe={true}
       />
-      {/* Outer shell - Heliopause */}
       <HeliosphereShell
         radius={65}
         color="#6090C8"
@@ -73,7 +73,6 @@ export default function Heliosphere() {
         scaleX={1.1}
         wireframe={false}
       />
-      {/* Wireframe overlay on heliopause */}
       <HeliosphereShell
         radius={65}
         color="#6090C8"
