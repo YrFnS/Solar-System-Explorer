@@ -86,7 +86,9 @@ async function waitForReady(page) {
       && lanes.lanes.critical.labels.includes('camera-controller')
       && lanes.lanes.ephemeris.labels.includes('planet:earth')
       && lanes.lanes.ephemeris.labels.includes('small-body-overview')
+      && lanes.lanes.ephemeris.labels.includes('human-artifacts')
       && lanes.lanes.decorative.labels.includes('star-field')
+      && lanes.lanes.decorative.labels.includes('sun-corona')
       && loading?.complete
     )
   }, { timeout: 75_000 })
