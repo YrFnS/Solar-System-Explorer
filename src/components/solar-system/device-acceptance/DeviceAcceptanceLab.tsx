@@ -57,7 +57,6 @@ import {
   type AcceptanceDeviceClass,
   type AcceptanceDeviceProfile,
   type AcceptanceDiagnosticsSnapshot,
-  type AcceptanceEvent,
   type AcceptanceEventType,
   type AcceptanceEvidenceBundle,
   type AcceptanceManualChecks,
@@ -87,32 +86,13 @@ interface BatteryManagerLike extends EventTarget {
 interface NavigatorAcceptance extends Navigator {
   deviceMemory?: number
   getBattery?: () => Promise<BatteryManagerLike>
-  connection?: {
-    effectiveType?: string
-    saveData?: boolean
-  }
+  connection?: { effectiveType?: string; saveData?: boolean }
   standalone?: boolean
   gpu?: unknown
 }
 
 interface PerformanceWithMemory extends Performance {
-  memory?: {
-    usedJSHeapSize: number
-  }
-}
-
-interface AcceptanceWindow extends Window {
-  __SOLAR_EXPLORER_DIAGNOSTICS__?: unknown
-  __SOLAR_FRAME_PACING__?: unknown
-  __SOLAR_FRAME_LANES__?: unknown
-  __SOLAR_SCENE_LOADING__?: unknown
-  __SOLAR_PERFORMANCE_POLICY__?: unknown
-  __SOLAR_TEXTURE_DIAGNOSTICS__?: unknown
-  __SOLAR_TEXTURE_LIFECYCLE__?: unknown
-  __SOLAR_ADAPTIVE_LOD__?: unknown
-  __SOLAR_SIMULATION_TIMING__?: unknown
-  __SOLAR_SMALL_BODY_RUNTIME__?: unknown
-  __SOLAR_DEVICE_ACCEPTANCE__?: AcceptanceLabDiagnostics
+  memory?: { usedJSHeapSize: number }
 }
 
 interface StoredWorkspace {
@@ -132,7 +112,7 @@ interface ActiveCapture {
   startedPerformanceMs: number
   device: AcceptanceDeviceProfile
   samples: AcceptanceSample[]
-  events: AcceptanceEvent[]
+  events: AcceptanceSession['events']
 }
 
 interface ActiveStatus {
@@ -161,6 +141,12 @@ interface AcceptanceLabDiagnostics {
 interface ScreenshotResultDetail {
   ok: boolean
   message?: string
+}
+
+declare global {
+  interface Window {
+    __SOLAR_DEVICE_ACCEPTANCE__?: AcceptanceLabDiagnostics
+  }
 }
 
 const DEFAULT_WORKSPACE: StoredWorkspace = {
@@ -213,12 +199,16 @@ function createId(prefix: string) {
 
 function cloneJson(value: unknown): JsonValue {
   if (value === undefined) return null
-
   try {
     return JSON.parse(JSON.stringify(value)) as JsonValue
   } catch {
     return null
   }
+}
+
+function readWindowValue(key: string): JsonValue {
+  const values = window as unknown as Record<string, unknown>
+  return cloneJson(values[key])
 }
 
 function orientationLabel() {
@@ -228,15 +218,13 @@ function orientationLabel() {
 
 function readWorkspace(): StoredWorkspace {
   if (typeof window === 'undefined') return DEFAULT_WORKSPACE
-
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return DEFAULT_WORKSPACE
     const parsed = JSON.parse(raw) as Partial<StoredWorkspace>
-    const deviceClass = DEVICE_OPTIONS.some((option) => option.id === parsed.deviceClass)
+    const deviceClass = DEVICE_OPTIONS.some(({ id }) => id === parsed.deviceClass)
       ? parsed.deviceClass as AcceptanceDeviceClass
       : 'other'
-
     return {
       deviceClass,
       deviceLabel: typeof parsed.deviceLabel === 'string' ? parsed.deviceLabel : '',
@@ -252,30 +240,26 @@ function readWorkspace(): StoredWorkspace {
   }
 }
 
-function normalizeTimer(value: number) {
-  return Number.isFinite(value) ? value : null
-}
-
-function getBatterySnapshot(
+function batterySnapshot(
   battery: BatteryManagerLike | null
 ): AcceptanceBatterySnapshot | null {
   if (!battery) return null
+  const normalize = (value: number) => Number.isFinite(value) ? value : null
   return {
     level: battery.level,
     charging: battery.charging,
-    chargingTimeSeconds: normalizeTimer(battery.chargingTime),
-    dischargingTimeSeconds: normalizeTimer(battery.dischargingTime),
+    chargingTimeSeconds: normalize(battery.chargingTime),
+    dischargingTimeSeconds: normalize(battery.dischargingTime),
   }
 }
 
-function readGraphicsProfile() {
+function graphicsProfile(): AcceptanceDeviceProfile['graphics'] {
   const canvas = document.querySelector('canvas')
   const webgl2 = canvas?.getContext('webgl2') ?? null
   const webgl = webgl2 ?? canvas?.getContext('webgl') ?? null
-
   if (!webgl) {
     return {
-      api: 'unavailable' as const,
+      api: 'unavailable',
       vendor: null,
       renderer: null,
       version: null,
@@ -287,15 +271,14 @@ function readGraphicsProfile() {
     UNMASKED_VENDOR_WEBGL: number
     UNMASKED_RENDERER_WEBGL: number
   } | null
-
   return {
-    api: webgl2 ? 'webgl2' as const : 'webgl' as const,
-    vendor: debug
-      ? String(webgl.getParameter(debug.UNMASKED_VENDOR_WEBGL))
-      : String(webgl.getParameter(webgl.VENDOR)),
-    renderer: debug
-      ? String(webgl.getParameter(debug.UNMASKED_RENDERER_WEBGL))
-      : String(webgl.getParameter(webgl.RENDERER)),
+    api: webgl2 ? 'webgl2' : 'webgl',
+    vendor: String(webgl.getParameter(
+      debug?.UNMASKED_VENDOR_WEBGL ?? webgl.VENDOR
+    )),
+    renderer: String(webgl.getParameter(
+      debug?.UNMASKED_RENDERER_WEBGL ?? webgl.RENDERER
+    )),
     version: String(webgl.getParameter(webgl.VERSION)),
     shadingLanguageVersion: String(
       webgl.getParameter(webgl.SHADING_LANGUAGE_VERSION)
@@ -303,17 +286,14 @@ function readGraphicsProfile() {
   }
 }
 
-function buildDeviceProfile(
+function deviceProfile(
   deviceClass: AcceptanceDeviceClass,
   label: string
 ): AcceptanceDeviceProfile {
   const nav = navigator as NavigatorAcceptance
-  const connection = nav.connection
-  const cleanLabel = label.trim()
-
   return {
     id: createId('device'),
-    label: cleanLabel || `${DEVICE_OPTIONS.find((option) => option.id === deviceClass)?.label ?? 'Device'} · ${navigator.platform || 'unknown platform'}`,
+    label: label.trim() || `${DEVICE_OPTIONS.find(({ id }) => id === deviceClass)?.label ?? 'Device'} · ${navigator.platform || 'unknown'}`,
     deviceClass,
     capturedAt: new Date().toISOString(),
     userAgent: navigator.userAgent,
@@ -335,8 +315,8 @@ function buildDeviceProfile(
       deviceMemoryGb: nav.deviceMemory ?? null,
       maxTouchPoints: navigator.maxTouchPoints,
       coarsePointer: window.matchMedia('(pointer: coarse)').matches,
-      saveData: connection?.saveData ?? null,
-      effectiveConnectionType: connection?.effectiveType ?? null,
+      saveData: nav.connection?.saveData ?? null,
+      effectiveConnectionType: nav.connection?.effectiveType ?? null,
       standalone: Boolean(
         nav.standalone
         || window.matchMedia('(display-mode: standalone)').matches
@@ -344,23 +324,22 @@ function buildDeviceProfile(
       batteryApi: typeof nav.getBattery === 'function',
       webgpuApi: nav.gpu !== undefined,
     },
-    graphics: readGraphicsProfile(),
+    graphics: graphicsProfile(),
   }
 }
 
 function readDiagnostics(): AcceptanceDiagnosticsSnapshot {
-  const diagnosticWindow = window as unknown as AcceptanceWindow
   return {
-    explorer: cloneJson(diagnosticWindow.__SOLAR_EXPLORER_DIAGNOSTICS__),
-    framePacing: cloneJson(diagnosticWindow.__SOLAR_FRAME_PACING__),
-    frameLanes: cloneJson(diagnosticWindow.__SOLAR_FRAME_LANES__),
-    sceneLoading: cloneJson(diagnosticWindow.__SOLAR_SCENE_LOADING__),
-    performancePolicy: cloneJson(diagnosticWindow.__SOLAR_PERFORMANCE_POLICY__),
-    textures: cloneJson(diagnosticWindow.__SOLAR_TEXTURE_DIAGNOSTICS__),
-    textureLifecycle: cloneJson(diagnosticWindow.__SOLAR_TEXTURE_LIFECYCLE__),
-    adaptiveLod: cloneJson(diagnosticWindow.__SOLAR_ADAPTIVE_LOD__),
-    simulationTiming: cloneJson(diagnosticWindow.__SOLAR_SIMULATION_TIMING__),
-    smallBodies: cloneJson(diagnosticWindow.__SOLAR_SMALL_BODY_RUNTIME__),
+    explorer: readWindowValue('__SOLAR_EXPLORER_DIAGNOSTICS__'),
+    framePacing: readWindowValue('__SOLAR_FRAME_PACING__'),
+    frameLanes: readWindowValue('__SOLAR_FRAME_LANES__'),
+    sceneLoading: readWindowValue('__SOLAR_SCENE_LOADING__'),
+    performancePolicy: readWindowValue('__SOLAR_PERFORMANCE_POLICY__'),
+    textures: readWindowValue('__SOLAR_TEXTURE_DIAGNOSTICS__'),
+    textureLifecycle: readWindowValue('__SOLAR_TEXTURE_LIFECYCLE__'),
+    adaptiveLod: readWindowValue('__SOLAR_ADAPTIVE_LOD__'),
+    simulationTiming: readWindowValue('__SOLAR_SIMULATION_TIMING__'),
+    smallBodies: readWindowValue('__SOLAR_SMALL_BODY_RUNTIME__'),
   }
 }
 
@@ -368,13 +347,11 @@ function captureSample(
   startedPerformanceMs: number,
   battery: BatteryManagerLike | null
 ): AcceptanceSample {
-  const performanceState = usePerformanceStore.getState()
-  const memory = (performance as PerformanceWithMemory).memory
-
+  const state = usePerformanceStore.getState()
   return {
     capturedAt: new Date().toISOString(),
     elapsedMs: Math.max(0, performance.now() - startedPerformanceMs),
-    quality: getEffectiveQuality(performanceState),
+    quality: getEffectiveQuality(state),
     visibility: document.visibilityState,
     orientation: orientationLabel(),
     viewport: {
@@ -382,8 +359,8 @@ function captureSample(
       height: window.innerHeight,
       devicePixelRatio: window.devicePixelRatio,
     },
-    battery: getBatterySnapshot(battery),
-    usedJsHeapBytes: memory?.usedJSHeapSize ?? null,
+    battery: batterySnapshot(battery),
+    usedJsHeapBytes: (performance as PerformanceWithMemory).memory?.usedJSHeapSize ?? null,
     diagnostics: readDiagnostics(),
   }
 }
@@ -391,10 +368,9 @@ function captureSample(
 function formatDuration(seconds: number) {
   const rounded = Math.max(0, Math.round(seconds))
   const minutes = Math.floor(rounded / 60)
-  const remainder = rounded % 60
   return minutes > 0
-    ? `${minutes}:${String(remainder).padStart(2, '0')}`
-    : `${remainder}s`
+    ? `${minutes}:${String(rounded % 60).padStart(2, '0')}`
+    : `${rounded}s`
 }
 
 function formatMetric(value: number | null, suffix = '') {
@@ -405,12 +381,6 @@ function verdictTone(verdict: AcceptanceVerdict) {
   if (verdict === 'pass') return 'border-emerald-300/20 bg-emerald-300/[0.08] text-emerald-100'
   if (verdict === 'fail') return 'border-rose-300/20 bg-rose-300/[0.08] text-rose-100'
   return 'border-amber-300/20 bg-amber-300/[0.08] text-amber-100'
-}
-
-function verdictIcon(verdict: AcceptanceVerdict) {
-  if (verdict === 'pass') return CheckCircle2
-  if (verdict === 'fail') return XCircle
-  return AlertTriangle
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {
@@ -430,7 +400,7 @@ export default function DeviceAcceptanceLab() {
   const [ready, setReady] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [message, setMessage] = useState(
-    'Choose the physical device class, let the scene settle, then capture evidence.'
+    'Choose the device class, let the production scene settle, then capture evidence.'
   )
   const [workspace, setWorkspace] = useState<StoredWorkspace>(readWorkspace)
   const [liveSample, setLiveSample] = useState<AcceptanceSample | null>(null)
@@ -441,7 +411,7 @@ export default function DeviceAcceptanceLab() {
   const setPreset = usePerformanceStore((state) => state.setPreset)
   const effectiveQuality = getEffectiveQuality({ preset, autoQuality })
   const activeRef = useRef<ActiveCapture | null>(null)
-  const captureTimerRef = useRef<number | null>(null)
+  const timerRef = useRef<number | null>(null)
   const batteryRef = useRef<BatteryManagerLike | null>(null)
   const contextLossesRef = useRef(0)
   const contextRestoresRef = useRef(0)
@@ -462,7 +432,7 @@ export default function DeviceAcceptanceLab() {
     ? FAST_SAMPLE_INTERVAL_MS
     : DEFAULT_SAMPLE_INTERVAL_MS
 
-  const appendActiveEvent = useCallback((
+  const appendEvent = useCallback((
     type: AcceptanceEventType,
     detail?: string
   ) => {
@@ -491,10 +461,9 @@ export default function DeviceAcceptanceLab() {
 
   useEffect(() => {
     if (!ready) return
-
-    const update = () => {
-      setLiveSample(captureSample(pageStartedRef.current, batteryRef.current))
-    }
+    const update = () => setLiveSample(
+      captureSample(pageStartedRef.current, batteryRef.current)
+    )
     queueMicrotask(update)
     const handle = window.setInterval(update, 1_000)
     return () => window.clearInterval(handle)
@@ -502,53 +471,42 @@ export default function DeviceAcceptanceLab() {
 
   useEffect(() => {
     const nav = navigator as NavigatorAcceptance
-    if (!nav.getBattery) return
-
-    nav.getBattery().then((battery) => {
+    nav.getBattery?.().then((battery) => {
       batteryRef.current = battery
       queueMicrotask(() => setBatteryAvailable(true))
-    }).catch(() => {
-      batteryRef.current = null
-    })
+    }).catch(() => undefined)
   }, [])
 
   useEffect(() => {
-    const handleVisibility = () => {
-      appendActiveEvent(
-        document.visibilityState === 'hidden'
-          ? 'visibility-hidden'
-          : 'visibility-visible'
-      )
-    }
-    const handleOrientation = () => {
-      appendActiveEvent('orientation-change', orientationLabel())
-    }
-    const handleContextLost = () => {
+    const visibility = () => appendEvent(
+      document.visibilityState === 'hidden'
+        ? 'visibility-hidden'
+        : 'visibility-visible'
+    )
+    const orientation = () => appendEvent('orientation-change', orientationLabel())
+    const lost = () => {
       contextLossesRef.current += 1
-      appendActiveEvent('context-lost')
+      appendEvent('context-lost')
     }
-    const handleContextRestored = () => {
+    const restored = () => {
       contextRestoresRef.current += 1
-      appendActiveEvent('context-restored')
+      appendEvent('context-restored')
     }
 
-    document.addEventListener('visibilitychange', handleVisibility)
-    window.addEventListener('orientationchange', handleOrientation)
-    window.addEventListener(WEBGL_CONTEXT_LOST_EVENT, handleContextLost)
-    window.addEventListener(WEBGL_CONTEXT_RESTORED_EVENT, handleContextRestored)
-
+    document.addEventListener('visibilitychange', visibility)
+    window.addEventListener('orientationchange', orientation)
+    window.addEventListener(WEBGL_CONTEXT_LOST_EVENT, lost)
+    window.addEventListener(WEBGL_CONTEXT_RESTORED_EVENT, restored)
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibility)
-      window.removeEventListener('orientationchange', handleOrientation)
-      window.removeEventListener(WEBGL_CONTEXT_LOST_EVENT, handleContextLost)
-      window.removeEventListener(WEBGL_CONTEXT_RESTORED_EVENT, handleContextRestored)
+      document.removeEventListener('visibilitychange', visibility)
+      window.removeEventListener('orientationchange', orientation)
+      window.removeEventListener(WEBGL_CONTEXT_LOST_EVENT, lost)
+      window.removeEventListener(WEBGL_CONTEXT_RESTORED_EVENT, restored)
     }
-  }, [appendActiveEvent])
+  }, [appendEvent])
 
   useEffect(() => () => {
-    if (captureTimerRef.current !== null) {
-      window.clearInterval(captureTimerRef.current)
-    }
+    if (timerRef.current !== null) window.clearInterval(timerRef.current)
   }, [])
 
   const sceneComplete = liveSample
@@ -573,13 +531,12 @@ export default function DeviceAcceptanceLab() {
     ? liveSample.battery.level * 100
     : null
 
-  function finishCapture(completion: AcceptanceCompletion) {
+  const finishCapture = useCallback((completion: AcceptanceCompletion) => {
     const active = activeRef.current
     if (!active) return
-
-    if (captureTimerRef.current !== null) {
-      window.clearInterval(captureTimerRef.current)
-      captureTimerRef.current = null
+    if (timerRef.current !== null) {
+      window.clearInterval(timerRef.current)
+      timerRef.current = null
     }
 
     active.events.push({
@@ -618,35 +575,29 @@ export default function DeviceAcceptanceLab() {
       ...current,
       sessions: [session, ...current.sessions].slice(0, 24),
     }))
-    setMessage(
-      `${active.scenario === 'thermal' ? 'Thermal' : 'Profile'} capture finished with a ${summary.verdict.toUpperCase()} automated signal.`
-    )
-  }
+    setMessage(`Capture finished with a ${summary.verdict.toUpperCase()} automated signal.`)
+  }, [])
 
   function startCapture(scenario: AcceptanceScenario) {
     if (activeRef.current) return
     if (!sceneComplete) {
-      setMessage('The staged scene is still settling. Start the capture after diagnostics report complete.')
+      setMessage('The staged scene is still settling. Start after diagnostics report complete.')
       return
     }
 
     const targetDurationSeconds = scenario === 'thermal'
       ? thermalDurationSeconds
       : profileDurationSeconds
-    const device = buildDeviceProfile(
-      workspace.deviceClass,
-      workspace.deviceLabel
-    )
-    const startedPerformanceMs = performance.now()
     const startedAt = new Date().toISOString()
-    const active: ActiveCapture = {
+    const startedPerformanceMs = performance.now()
+    activeRef.current = {
       id: createId('acceptance'),
       scenario,
       targetDurationSeconds,
       quality: effectiveQuality,
       startedAt,
       startedPerformanceMs,
-      device,
+      device: deviceProfile(workspace.deviceClass, workspace.deviceLabel),
       samples: [],
       events: [{
         type: 'capture-started',
@@ -655,46 +606,37 @@ export default function DeviceAcceptanceLab() {
         detail: `${effectiveQuality}:${scenario}`,
       }],
     }
-
-    activeRef.current = active
     setActiveStatus({
       scenario,
       elapsedSeconds: 0,
       targetDurationSeconds,
       sampleCount: 0,
     })
-    setMessage(
-      `${scenario === 'thermal' ? 'Thermal' : 'Profile'} capture started in ${QUALITY_PROFILES[effectiveQuality].label}. Keep the scene active and interact naturally.`
-    )
+    setMessage(`${scenario === 'thermal' ? 'Thermal' : 'Profile'} capture started in ${QUALITY_PROFILES[effectiveQuality].label}.`)
 
     const sample = () => {
-      const current = activeRef.current
-      if (!current) return
-      const nextSample = captureSample(
-        current.startedPerformanceMs,
-        batteryRef.current
-      )
-      current.samples.push(nextSample)
-      setLiveSample(nextSample)
-      const elapsedSeconds = nextSample.elapsedMs / 1_000
+      const active = activeRef.current
+      if (!active) return
+      const next = captureSample(active.startedPerformanceMs, batteryRef.current)
+      active.samples.push(next)
+      setLiveSample(next)
+      const elapsedSeconds = next.elapsedMs / 1_000
       setActiveStatus({
-        scenario: current.scenario,
+        scenario: active.scenario,
         elapsedSeconds,
-        targetDurationSeconds: current.targetDurationSeconds,
-        sampleCount: current.samples.length,
+        targetDurationSeconds: active.targetDurationSeconds,
+        sampleCount: active.samples.length,
       })
-      if (elapsedSeconds >= current.targetDurationSeconds) {
-        finishCapture('completed')
-      }
+      if (elapsedSeconds >= active.targetDurationSeconds) finishCapture('completed')
     }
 
     sample()
-    captureTimerRef.current = window.setInterval(sample, sampleIntervalMs)
+    timerRef.current = window.setInterval(sample, sampleIntervalMs)
   }
 
   function testContextRecovery() {
     if (!activeRef.current) {
-      setMessage('Start a capture before testing context recovery so the lost and restored events are preserved.')
+      setMessage('Start a capture first so context events are preserved.')
       return
     }
     const canvas = document.querySelector('canvas')
@@ -703,55 +645,41 @@ export default function DeviceAcceptanceLab() {
       loseContext: () => void
       restoreContext: () => void
     } | null
-
     if (!extension) {
-      setMessage('This browser does not expose WEBGL_lose_context. Use display sleep and resume instead.')
+      setMessage('WEBGL_lose_context is unavailable. Use display sleep/resume instead.')
       return
     }
-
-    appendActiveEvent('context-test-requested')
-    setMessage('WebGL context recovery test started. The scene should show recovery and return without losing state.')
+    appendEvent('context-test-requested')
     extension.loseContext()
     window.setTimeout(() => extension.restoreContext(), 1_600)
+    setMessage('WebGL context recovery test started.')
   }
 
   function markSleepResume() {
-    appendActiveEvent('sleep-marker', 'Tester is about to lock the display or put the device to sleep.')
-    setMessage('Sleep marker recorded. Lock the display, then return and confirm the scene resumes correctly.')
+    appendEvent('sleep-marker', 'Tester is about to lock or sleep the display.')
+    setMessage('Sleep marker recorded. Lock the display, then return and verify recovery.')
   }
 
   function captureScreenshot() {
     const canvas = document.querySelector('canvas')
-    if (!canvas) {
-      setMessage('The scene canvas is not available yet.')
-      return
-    }
-
+    if (!canvas) return
     const capturedAt = new Date().toISOString()
     const fileName = `solar-${effectiveQuality}-${orientationLabel()}-${capturedAt.replace(/[:.]/g, '-')}.webp`
-    let timeoutHandle = 0
+    let timeout = 0
 
-    const handleComplete = (event: Event) => {
-      window.clearTimeout(timeoutHandle)
+    const complete = (event: Event) => {
+      window.clearTimeout(timeout)
       const detail = (event as CustomEvent<ScreenshotResultDetail>).detail
       if (!detail?.ok) {
-        setMessage(detail?.message ?? 'The renderer could not capture the scene.')
+        setMessage(detail?.message ?? 'Screenshot failed.')
         return
       }
-
       const objectUrl = useSolarSystemStore.getState().screenshotGallery.at(-1)
-      if (!objectUrl) {
-        setMessage('The renderer completed the capture but did not expose an image URL.')
-        return
-      }
-
+      if (!objectUrl) return
       const link = document.createElement('a')
       link.href = objectUrl
       link.download = fileName
-      document.body.appendChild(link)
       link.click()
-      link.remove()
-
       const evidence: AcceptanceScreenshotEvidence = {
         id: createId('screenshot'),
         fileName,
@@ -765,21 +693,21 @@ export default function DeviceAcceptanceLab() {
         ...current,
         screenshots: [evidence, ...current.screenshots].slice(0, 18),
       }))
-      appendActiveEvent('screenshot', fileName)
+      appendEvent('screenshot', fileName)
       setMessage(`Downloaded ${QUALITY_PROFILES[effectiveQuality].label} visual evidence.`)
     }
 
-    window.addEventListener(SCREENSHOT_COMPLETE_EVENT, handleComplete, { once: true })
-    timeoutHandle = window.setTimeout(() => {
-      window.removeEventListener(SCREENSHOT_COMPLETE_EVENT, handleComplete)
-      setMessage('Screenshot capture timed out before the renderer responded.')
+    window.addEventListener(SCREENSHOT_COMPLETE_EVENT, complete, { once: true })
+    timeout = window.setTimeout(() => {
+      window.removeEventListener(SCREENSHOT_COMPLETE_EVENT, complete)
+      setMessage('Screenshot capture timed out.')
     }, 12_000)
     window.dispatchEvent(new Event(SCREENSHOT_CAPTURE_EVENT))
   }
 
   function exportEvidence() {
     const device = workspace.sessions[0]?.device
-      ?? buildDeviceProfile(workspace.deviceClass, workspace.deviceLabel)
+      ?? deviceProfile(workspace.deviceClass, workspace.deviceLabel)
     const payload: AcceptanceEvidenceBundle = {
       schema: DEVICE_ACCEPTANCE_SCHEMA,
       schemaVersion: DEVICE_ACCEPTANCE_SCHEMA_VERSION,
@@ -799,11 +727,9 @@ export default function DeviceAcceptanceLab() {
     const link = document.createElement('a')
     link.href = url
     link.download = `solar-device-acceptance-${device.deviceClass}-${new Date().toISOString().replace(/[:.]/g, '-')}.json`
-    document.body.appendChild(link)
     link.click()
-    link.remove()
     URL.revokeObjectURL(url)
-    setMessage(`Exported ${workspace.sessions.length} session${workspace.sessions.length === 1 ? '' : 's'} and ${workspace.screenshots.length} screenshot record${workspace.screenshots.length === 1 ? '' : 's'}.`)
+    setMessage(`Exported ${workspace.sessions.length} captured session${workspace.sessions.length === 1 ? '' : 's'}.`)
   }
 
   function clearEvidence() {
@@ -813,7 +739,7 @@ export default function DeviceAcceptanceLab() {
       deviceClass: current.deviceClass,
       deviceLabel: current.deviceLabel,
     }))
-    setMessage('Local device-acceptance evidence cleared.')
+    setMessage('Local acceptance evidence cleared.')
   }
 
   const progress = activeStatus
@@ -821,7 +747,7 @@ export default function DeviceAcceptanceLab() {
     : 0
   const latestSession = workspace.sessions[0] ?? null
   const automatedPasses = workspace.sessions.filter(
-    (session) => session.summary.verdict === 'pass'
+    ({ summary }) => summary.verdict === 'pass'
   ).length
   const manualApproved = CHECK_LABELS.every(
     ({ key }) => workspace.manualChecks[key]
@@ -829,7 +755,6 @@ export default function DeviceAcceptanceLab() {
 
   useEffect(() => {
     if (!ready) return
-    const diagnosticWindow = window as unknown as AcceptanceWindow
     const diagnostics: AcceptanceLabDiagnostics = {
       ready,
       sceneComplete,
@@ -845,11 +770,10 @@ export default function DeviceAcceptanceLab() {
       contextRestores: contextRestoresRef.current,
       updatedAt: Date.now(),
     }
-    diagnosticWindow.__SOLAR_DEVICE_ACCEPTANCE__ = diagnostics
-
+    window.__SOLAR_DEVICE_ACCEPTANCE__ = diagnostics
     return () => {
-      if (diagnosticWindow.__SOLAR_DEVICE_ACCEPTANCE__ === diagnostics) {
-        delete diagnosticWindow.__SOLAR_DEVICE_ACCEPTANCE__
+      if (window.__SOLAR_DEVICE_ACCEPTANCE__ === diagnostics) {
+        delete window.__SOLAR_DEVICE_ACCEPTANCE__
       }
     }
   }, [
@@ -865,13 +789,8 @@ export default function DeviceAcceptanceLab() {
 
   if (!ready) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#02030a] px-4 text-white">
-        <div className="rounded-3xl border border-white/10 bg-white/[0.035] px-6 py-5 text-center shadow-2xl backdrop-blur-xl">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-200/65">
-            Device acceptance
-          </p>
-          <p className="mt-2 text-sm text-white/55">Enabling production diagnostics…</p>
-        </div>
+      <main className="grid min-h-screen place-items-center bg-[#02030a] text-white">
+        <p className="text-sm text-white/55">Enabling production diagnostics…</p>
       </main>
     )
   }
@@ -883,27 +802,24 @@ export default function DeviceAcceptanceLab() {
     >
       <SceneContainer interfaceMode="acceptance" />
 
-      <div className="pointer-events-none absolute left-3 top-3 z-[115] sm:left-4 sm:top-4">
-        <Link
-          href="/"
-          className="pointer-events-auto inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/65 px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.16em] text-white/58 shadow-2xl backdrop-blur-xl transition hover:bg-black/80 hover:text-white"
-        >
-          Solar Explorer
-        </Link>
-      </div>
+      <Link
+        href="/"
+        className="pointer-events-auto fixed left-3 top-3 z-[125] rounded-full border border-white/10 bg-black/70 px-3 py-2 text-[9px] uppercase tracking-[0.16em] text-white/58 backdrop-blur-xl"
+      >
+        Solar Explorer
+      </Link>
 
       {collapsed ? (
         <button
           type="button"
           onClick={() => setCollapsed(false)}
-          className="pointer-events-auto fixed bottom-3 right-3 z-[120] flex items-center gap-2 rounded-full border border-amber-200/20 bg-[#07090f]/95 px-4 py-3 text-[9px] font-semibold uppercase tracking-[0.16em] text-amber-100 shadow-2xl backdrop-blur-2xl"
-          aria-label="Open device acceptance controls"
+          className="fixed bottom-3 right-3 z-[130] flex items-center gap-2 rounded-full border border-amber-200/20 bg-[#07090f]/95 px-4 py-3 text-[9px] uppercase tracking-[0.16em] text-amber-100 shadow-2xl backdrop-blur-2xl"
         >
           <Activity className="h-4 w-4" /> Acceptance lab <ChevronUp className="h-3.5 w-3.5" />
         </button>
       ) : (
-        <aside className="pointer-events-auto fixed bottom-2 left-2 right-2 z-[120] max-h-[58vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#05070d]/94 shadow-2xl backdrop-blur-2xl sm:bottom-3 sm:left-auto sm:right-3 sm:top-3 sm:max-h-none sm:w-[430px]">
-          <div className="sticky top-0 z-10 border-b border-white/8 bg-[#05070d]/94 px-4 py-3 backdrop-blur-2xl">
+        <aside className="fixed bottom-2 left-2 right-2 z-[130] max-h-[60vh] overflow-y-auto rounded-3xl border border-white/10 bg-[#05070d]/94 shadow-2xl backdrop-blur-2xl sm:bottom-3 sm:left-auto sm:right-3 sm:top-3 sm:max-h-none sm:w-[430px]">
+          <header className="sticky top-0 z-10 border-b border-white/8 bg-[#05070d]/94 px-4 py-3 backdrop-blur-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="text-[8px] font-semibold uppercase tracking-[0.24em] text-amber-200/58">
@@ -916,32 +832,21 @@ export default function DeviceAcceptanceLab() {
               <button
                 type="button"
                 onClick={() => setCollapsed(true)}
-                className="rounded-xl border border-white/8 bg-white/[0.03] p-2 text-white/45 transition hover:bg-white/[0.08] hover:text-white"
-                aria-label="Collapse device acceptance controls"
+                className="rounded-xl border border-white/8 bg-white/[0.03] p-2 text-white/45"
               >
                 <ChevronDown className="h-4 w-4" />
               </button>
             </div>
-            <p className="mt-2 text-[9px] leading-relaxed text-white/38">
-              This page runs the real production WebGL scene. Captures are stored locally until exported; no telemetry is uploaded.
-            </p>
-            <div className="mt-3 rounded-xl border border-white/7 bg-black/20 px-3 py-2 text-[9px] leading-relaxed text-white/46">
+            <p className="mt-2 rounded-xl border border-white/7 bg-black/20 px-3 py-2 text-[9px] text-white/46">
               {message}
-            </div>
-          </div>
+            </p>
+          </header>
 
           <div className="space-y-4 p-4">
             <section>
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/34">
-                  Live production signals
-                </p>
-                <span className={`flex items-center gap-1.5 text-[8px] font-semibold uppercase tracking-[0.14em] ${
-                  sceneComplete ? 'text-emerald-200/70' : 'text-amber-200/65'
-                }`}>
-                  <span className={`h-1.5 w-1.5 rounded-full ${
-                    sceneComplete ? 'bg-emerald-400' : 'animate-pulse bg-amber-400'
-                  }`} />
+              <div className="flex items-center justify-between text-[8px] uppercase tracking-[0.18em] text-white/34">
+                <span>Live production signals</span>
+                <span className={sceneComplete ? 'text-emerald-200/70' : 'text-amber-200/65'}>
                   {sceneComplete ? 'Settled' : 'Warming'}
                 </span>
               </div>
@@ -956,9 +861,7 @@ export default function DeviceAcceptanceLab() {
             </section>
 
             <section className="rounded-2xl border border-white/7 bg-white/[0.025] p-3">
-              <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/34">
-                Device identity
-              </p>
+              <p className="text-[8px] uppercase tracking-[0.18em] text-white/34">Device identity</p>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
                 {DEVICE_OPTIONS.map((option) => {
                   const Icon = option.icon
@@ -968,15 +871,8 @@ export default function DeviceAcceptanceLab() {
                       key={option.id}
                       type="button"
                       disabled={activeStatus !== null}
-                      onClick={() => setWorkspace((current) => ({
-                        ...current,
-                        deviceClass: option.id,
-                      }))}
-                      className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-left text-[9px] transition ${
-                        selected
-                          ? 'border-amber-200/30 bg-amber-200/[0.09] text-amber-100'
-                          : 'border-white/6 bg-black/15 text-white/48 hover:border-white/14 hover:text-white/72'
-                      } disabled:cursor-not-allowed disabled:opacity-45`}
+                      onClick={() => setWorkspace((current) => ({ ...current, deviceClass: option.id }))}
+                      className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 text-[9px] ${selected ? 'border-amber-200/30 bg-amber-200/[0.09] text-amber-100' : 'border-white/6 bg-black/15 text-white/48'}`}
                     >
                       <Icon className="h-3.5 w-3.5" /> {option.label}
                     </button>
@@ -986,19 +882,14 @@ export default function DeviceAcceptanceLab() {
               <input
                 value={workspace.deviceLabel}
                 disabled={activeStatus !== null}
-                onChange={(event) => setWorkspace((current) => ({
-                  ...current,
-                  deviceLabel: event.target.value,
-                }))}
-                placeholder="Device label, e.g. ThinkPad T14 · Ryzen 7"
-                className="mt-2 w-full rounded-xl border border-white/7 bg-black/25 px-3 py-2 text-[9px] text-white/72 outline-none placeholder:text-white/22 focus:border-amber-200/25 disabled:opacity-45"
+                onChange={(event) => setWorkspace((current) => ({ ...current, deviceLabel: event.target.value }))}
+                placeholder="Device label, model, and GPU"
+                className="mt-2 w-full rounded-xl border border-white/7 bg-black/25 px-3 py-2 text-[9px] text-white/72 outline-none"
               />
             </section>
 
             <section>
-              <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/34">
-                Quality under test
-              </p>
+              <p className="text-[8px] uppercase tracking-[0.18em] text-white/34">Quality under test</p>
               <div className="mt-2 grid grid-cols-4 gap-1.5">
                 {QUALITY_OPTIONS.map((option) => (
                   <button
@@ -1006,11 +897,7 @@ export default function DeviceAcceptanceLab() {
                     type="button"
                     disabled={activeStatus !== null}
                     onClick={() => setPreset(option.id)}
-                    className={`rounded-xl border px-2 py-2 text-[9px] font-medium transition ${
-                      preset === option.id
-                        ? 'border-cyan-200/28 bg-cyan-200/[0.09] text-cyan-100'
-                        : 'border-white/6 bg-white/[0.02] text-white/42 hover:border-white/14 hover:text-white/70'
-                    } disabled:cursor-not-allowed disabled:opacity-45`}
+                    className={`rounded-xl border px-2 py-2 text-[9px] ${preset === option.id ? 'border-cyan-200/28 bg-cyan-200/[0.09] text-cyan-100' : 'border-white/6 bg-white/[0.02] text-white/42'}`}
                   >
                     {option.label}
                   </button>
@@ -1019,14 +906,10 @@ export default function DeviceAcceptanceLab() {
             </section>
 
             <section className="rounded-2xl border border-white/7 bg-white/[0.025] p-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/34">
-                    Automated capture
-                  </p>
-                  <p className="mt-1 text-[9px] text-white/34">
-                    {fastMode ? 'CI fast mode' : '60s profile · 15m thermal'}
-                  </p>
+                  <p className="text-[8px] uppercase tracking-[0.18em] text-white/34">Automated capture</p>
+                  <p className="mt-1 text-[9px] text-white/34">{fastMode ? 'CI fast mode' : '60s profile · 15m thermal'}</p>
                 </div>
                 {activeStatus ? (
                   <span className="font-mono text-[9px] text-amber-100/75">
@@ -1038,22 +921,15 @@ export default function DeviceAcceptanceLab() {
               {activeStatus ? (
                 <div className="mt-3">
                   <div className="h-1.5 overflow-hidden rounded-full bg-white/7">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-amber-300 to-cyan-300 transition-[width]"
-                      style={{ width: `${progress * 100}%` }}
-                    />
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-[8px] text-white/32">
-                    <span>{activeStatus.sampleCount} samples</span>
-                    <span>{activeStatus.scenario}</span>
+                    <div className="h-full bg-gradient-to-r from-amber-300 to-cyan-300" style={{ width: `${progress * 100}%` }} />
                   </div>
                   <button
                     type="button"
                     data-testid="acceptance-stop"
                     onClick={() => finishCapture('stopped')}
-                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200/18 bg-rose-200/[0.07] px-3 py-2.5 text-[9px] font-semibold text-rose-100 transition hover:bg-rose-200/[0.12]"
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-rose-200/18 bg-rose-200/[0.07] px-3 py-2.5 text-[9px] text-rose-100"
                   >
-                    <Square className="h-3.5 w-3.5" /> Stop and keep partial evidence
+                    <Square className="h-3.5 w-3.5" /> Stop and keep evidence
                   </button>
                 </div>
               ) : (
@@ -1063,7 +939,7 @@ export default function DeviceAcceptanceLab() {
                     data-testid="acceptance-start-profile"
                     disabled={!sceneComplete}
                     onClick={() => startCapture('profile')}
-                    className="flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-3 py-2.5 text-[9px] font-semibold text-black transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-3 py-2.5 text-[9px] font-semibold text-black disabled:opacity-40"
                   >
                     <Play className="h-3.5 w-3.5" /> Profile capture
                   </button>
@@ -1071,7 +947,7 @@ export default function DeviceAcceptanceLab() {
                     type="button"
                     disabled={!sceneComplete}
                     onClick={() => startCapture('thermal')}
-                    className="flex items-center justify-center gap-2 rounded-xl border border-white/9 bg-white/[0.04] px-3 py-2.5 text-[9px] font-semibold text-white/62 transition hover:bg-white/[0.09] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                    className="flex items-center justify-center gap-2 rounded-xl border border-white/9 bg-white/[0.04] px-3 py-2.5 text-[9px] text-white/62 disabled:opacity-40"
                   >
                     <Thermometer className="h-3.5 w-3.5" /> Thermal capture
                   </button>
@@ -1080,66 +956,40 @@ export default function DeviceAcceptanceLab() {
             </section>
 
             <section>
-              <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/34">
-                Recovery and visual evidence
-              </p>
+              <p className="text-[8px] uppercase tracking-[0.18em] text-white/34">Recovery and visual evidence</p>
               <div className="mt-2 grid grid-cols-3 gap-1.5">
-                <button
-                  type="button"
-                  onClick={captureScreenshot}
-                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/7 bg-white/[0.025] px-2 py-2.5 text-[8px] text-white/50 transition hover:border-white/15 hover:text-white/80"
-                >
+                <button type="button" onClick={captureScreenshot} className="flex flex-col items-center gap-1.5 rounded-xl border border-white/7 bg-white/[0.025] px-2 py-2.5 text-[8px] text-white/50">
                   <Camera className="h-4 w-4" /> Screenshot
                 </button>
-                <button
-                  type="button"
-                  onClick={markSleepResume}
-                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/7 bg-white/[0.025] px-2 py-2.5 text-[8px] text-white/50 transition hover:border-white/15 hover:text-white/80"
-                >
+                <button type="button" onClick={markSleepResume} className="flex flex-col items-center gap-1.5 rounded-xl border border-white/7 bg-white/[0.025] px-2 py-2.5 text-[8px] text-white/50">
                   <BatteryCharging className="h-4 w-4" /> Sleep marker
                 </button>
-                <button
-                  type="button"
-                  onClick={testContextRecovery}
-                  className="flex flex-col items-center justify-center gap-1.5 rounded-xl border border-white/7 bg-white/[0.025] px-2 py-2.5 text-[8px] text-white/50 transition hover:border-white/15 hover:text-white/80"
-                >
+                <button type="button" onClick={testContextRecovery} className="flex flex-col items-center gap-1.5 rounded-xl border border-white/7 bg-white/[0.025] px-2 py-2.5 text-[8px] text-white/50">
                   <Zap className="h-4 w-4" /> GPU recovery
                 </button>
               </div>
             </section>
 
             <section className="rounded-2xl border border-white/7 bg-white/[0.025] p-3">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/34">
-                  Human acceptance checklist
-                </p>
-                <span className={`text-[8px] font-semibold uppercase tracking-[0.14em] ${
-                  manualApproved ? 'text-emerald-200/70' : 'text-white/28'
-                }`}>
+              <div className="flex items-center justify-between">
+                <p className="text-[8px] uppercase tracking-[0.18em] text-white/34">Human acceptance checklist</p>
+                <span className={manualApproved ? 'text-[8px] text-emerald-200/70' : 'text-[8px] text-white/28'}>
                   {manualApproved ? 'Complete' : 'Required before merge'}
                 </span>
               </div>
-              <div className="mt-2 space-y-2">
+              <div className="mt-2 space-y-1.5">
                 {CHECK_LABELS.map(({ key, label }) => (
-                  <label
-                    key={key}
-                    className="flex cursor-pointer items-start gap-2 rounded-xl border border-white/5 bg-black/15 px-2.5 py-2"
-                  >
+                  <label key={key} className="flex items-start gap-2 rounded-xl border border-white/5 bg-black/15 px-2.5 py-2">
                     <input
                       type="checkbox"
                       checked={workspace.manualChecks[key]}
                       onChange={(event) => setWorkspace((current) => ({
                         ...current,
-                        manualChecks: {
-                          ...current.manualChecks,
-                          [key]: event.target.checked,
-                        },
+                        manualChecks: { ...current.manualChecks, [key]: event.target.checked },
                       }))}
-                      className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-amber-300"
+                      className="mt-0.5 h-3.5 w-3.5 accent-amber-300"
                     />
-                    <span className="text-[9px] leading-relaxed text-white/46">
-                      {label}
-                    </span>
+                    <span className="text-[9px] text-white/46">{label}</span>
                   </label>
                 ))}
               </div>
@@ -1147,58 +997,35 @@ export default function DeviceAcceptanceLab() {
                 value={workspace.manualChecks.notes}
                 onChange={(event) => setWorkspace((current) => ({
                   ...current,
-                  manualChecks: {
-                    ...current.manualChecks,
-                    notes: event.target.value,
-                  },
+                  manualChecks: { ...current.manualChecks, notes: event.target.value },
                 }))}
-                placeholder="Thermal behavior, fan noise, visual differences, driver details, or reproduction notes…"
-                className="mt-2 min-h-20 w-full resize-y rounded-xl border border-white/7 bg-black/25 px-3 py-2 text-[9px] leading-relaxed text-white/62 outline-none placeholder:text-white/20 focus:border-amber-200/25"
+                placeholder="Thermal behavior, fan noise, visual differences, driver details…"
+                className="mt-2 min-h-20 w-full rounded-xl border border-white/7 bg-black/25 px-3 py-2 text-[9px] text-white/62 outline-none"
               />
             </section>
 
             <section>
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/34">
-                  Captured sessions
-                </p>
-                <span
-                  data-testid="acceptance-session-count"
-                  className="font-mono text-[8px] text-white/34"
-                >
+              <div className="flex items-center justify-between">
+                <p className="text-[8px] uppercase tracking-[0.18em] text-white/34">Captured sessions</p>
+                <span data-testid="acceptance-session-count" className="font-mono text-[8px] text-white/34">
                   {workspace.sessions.length} total · {automatedPasses} pass
                 </span>
               </div>
-
               {latestSession ? (
                 <div className={`mt-2 rounded-2xl border p-3 ${verdictTone(latestSession.summary.verdict)}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      {(() => {
-                        const Icon = verdictIcon(latestSession.summary.verdict)
-                        return <Icon className="h-4 w-4" />
-                      })()}
-                      <div>
-                        <p className="text-[9px] font-semibold uppercase tracking-[0.14em]">
-                          {latestSession.summary.verdict} · {latestSession.scenario}
-                        </p>
-                        <p className="mt-0.5 text-[8px] opacity-60">
-                          {QUALITY_PROFILES[latestSession.quality].label} · {formatDuration(latestSession.summary.durationSeconds)}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="font-mono text-[8px] opacity-60">
-                      {latestSession.summary.sampleCount} samples
+                  <div className="flex items-center justify-between">
+                    <span className="flex items-center gap-2 text-[9px] font-semibold uppercase">
+                      {latestSession.summary.verdict === 'pass' ? <CheckCircle2 className="h-4 w-4" /> : latestSession.summary.verdict === 'fail' ? <XCircle className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+                      {latestSession.summary.verdict} · {latestSession.scenario}
                     </span>
+                    <span className="font-mono text-[8px] opacity-60">{latestSession.summary.sampleCount} samples</span>
                   </div>
                   <div className="mt-3 grid grid-cols-3 gap-1.5">
                     <MetricCard label="Median FPS" value={formatMetric(latestSession.summary.medianFps)} />
                     <MetricCard label="Max dispatch" value={formatMetric(latestSession.summary.maximumDispatchMs, ' ms')} />
                     <MetricCard label="Coverage" value={`${Math.round(latestSession.summary.diagnosticsCoverage * 100)}%`} />
                   </div>
-                  <p className="mt-2 text-[8px] leading-relaxed opacity-65">
-                    {latestSession.summary.reasons[0]}
-                  </p>
+                  <p className="mt-2 text-[8px] opacity-65">{latestSession.summary.reasons[0]}</p>
                 </div>
               ) : (
                 <div className="mt-2 rounded-2xl border border-dashed border-white/8 px-3 py-4 text-center text-[9px] text-white/27">
@@ -1208,20 +1035,10 @@ export default function DeviceAcceptanceLab() {
             </section>
 
             <section className="grid grid-cols-2 gap-2 border-t border-white/8 pt-4">
-              <button
-                type="button"
-                data-testid="acceptance-export"
-                onClick={exportEvidence}
-                className="flex items-center justify-center gap-2 rounded-xl bg-cyan-200 px-3 py-2.5 text-[9px] font-semibold text-black transition hover:bg-cyan-100"
-              >
+              <button type="button" data-testid="acceptance-export" onClick={exportEvidence} className="flex items-center justify-center gap-2 rounded-xl bg-cyan-200 px-3 py-2.5 text-[9px] font-semibold text-black">
                 <Download className="h-3.5 w-3.5" /> Export JSON
               </button>
-              <button
-                type="button"
-                disabled={activeStatus !== null}
-                onClick={clearEvidence}
-                className="flex items-center justify-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-[9px] text-white/48 transition hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
-              >
+              <button type="button" disabled={activeStatus !== null} onClick={clearEvidence} className="flex items-center justify-center gap-2 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-2.5 text-[9px] text-white/48 disabled:opacity-40">
                 <RotateCcw className="h-3.5 w-3.5" /> Clear local data
               </button>
             </section>
