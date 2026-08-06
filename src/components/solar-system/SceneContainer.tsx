@@ -10,6 +10,7 @@ import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
 import SceneLoadScheduler from './SceneLoadScheduler'
 import FramePacingController from './FramePacingController'
+import FrameUpdateLanes from './FrameUpdateLanes'
 import AdaptiveLodManager from './AdaptiveLodManager'
 import RendererBoundary from './RendererBoundary'
 import RenderDiagnostics from './RenderDiagnostics'
@@ -179,17 +180,19 @@ export default function SceneContainer() {
           onPointerMissed={() => setSelectedBody(null)}
         >
           <SceneLoadScheduler>
-            <FramePacingController
-              rendererPowerPreference={rendererPowerPreference}
-            />
-            <SimulationController />
-            <ScenePerformanceManager />
-            <TextureLifecycleManager />
-            <AdaptiveLodManager />
-            <ScreenshotCaptureBridge />
-            <WebGLContextMonitor />
-            <RenderDiagnostics />
-            <SolarSystemV3 />
+            <FrameUpdateLanes>
+              <FramePacingController
+                rendererPowerPreference={rendererPowerPreference}
+              />
+              <SimulationController />
+              <ScenePerformanceManager />
+              <TextureLifecycleManager />
+              <AdaptiveLodManager />
+              <ScreenshotCaptureBridge />
+              <WebGLContextMonitor />
+              <RenderDiagnostics />
+              <SolarSystemV3 />
+            </FrameUpdateLanes>
           </SceneLoadScheduler>
         </Canvas>
       </div>
