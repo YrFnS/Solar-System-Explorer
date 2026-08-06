@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Text } from '@react-three/drei'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 
 function seededRandom(seed: number) {
@@ -48,13 +48,18 @@ export default function GalacticNeighborhood() {
     return [pos, cols]
   }, [])
 
-  useFrame(() => {
+  useFrameLane({
+    id: 'galactic-neighborhood',
+    lane: 'decorative',
+    priority: 89,
+    enabled: showGalactic,
+  }, ({ laneDelta }) => {
     if (cloudRef.current && !isPaused) {
-      cloudRef.current.rotation.y += 0.0001
+      cloudRef.current.rotation.y += laneDelta * 0.006
     }
 
     if (galacticCenterRef.current) {
-      galacticCenterRef.current.rotation.y += 0.00005
+      galacticCenterRef.current.rotation.y += laneDelta * 0.003
     }
   })
 
