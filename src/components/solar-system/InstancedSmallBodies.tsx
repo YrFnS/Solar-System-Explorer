@@ -1,18 +1,19 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { DwarfPlanetData } from './data'
 import type { EphemerisSmallBodyData } from './EphemerisSmallBody'
 import { getBodyVisualPosition } from './ephemeris'
 import { useExperienceStore } from './experience-store'
+import { useFrameLane } from './FrameUpdateLanes'
 import {
   getEffectiveQuality,
   type EffectiveQuality,
   usePerformanceStore,
 } from './performance-store'
-import { DAY_MS, getSimulationDateMs, J2000_UNIX_MS } from './simulation-clock'
+import { DAY_MS, J2000_UNIX_MS } from './simulation-clock'
 import { useSolarSystemStore } from './store'
 import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 
@@ -144,7 +145,6 @@ export default function InstancedSmallBodies({
     sphereCount,
     rockyCount,
     texturedBodies,
-    bodyIds,
   } = useMemo(() => {
     let nextSphereIndex = 0
     let nextRockyIndex = 0
@@ -168,7 +168,6 @@ export default function InstancedSmallBodies({
       sphereCount: nextSphereIndex,
       rockyCount: nextRockyIndex,
       texturedBodies: nextTexturedBodies,
-      bodyIds: new Set(bodies.map((body) => body.id)),
     }
   }, [bodies])
 
@@ -282,14 +281,18 @@ export default function InstancedSmallBodies({
     }
   }, [publishDiagnostics])
 
-  useFrame(() => {
+  useFrameLane({
+    id: 'small-body-overview',
+    lane: 'ephemeris',
+    priority: 15,
+    enabled: bodies.length > 0,
+  }, ({ simulationDateMs: dateMs }) => {
     const sphereMesh = sphereRef.current
     const rockyMesh = rockyRef.current
     const hitMesh = hitRef.current
     if (!hitMesh) return
 
     const startedAt = performance.now()
-    const dateMs = getSimulationDateMs()
     const days = (dateMs - J2000_UNIX_MS) / DAY_MS
     const dummy = dummyRef.current
     let positionEvaluations = 0
