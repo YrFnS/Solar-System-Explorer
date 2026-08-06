@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic'
 
 const DeviceAcceptanceLab = dynamic(
-  () => import('../../../../components/solar-system/device-acceptance/DeviceAcceptanceLab'),
+  () => import('../../../components/solar-system/device-acceptance/DeviceAcceptanceLab'),
   {
     ssr: false,
     loading: () => (
