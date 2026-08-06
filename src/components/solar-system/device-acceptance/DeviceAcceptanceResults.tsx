@@ -36,6 +36,7 @@ import {
   type AcceptanceDeviceReview,
   type AcceptanceRequirementStatus,
   type AcceptanceReviewVerdict,
+  type RequiredAcceptanceDeviceClass,
 } from './device-acceptance-review'
 
 interface AcceptanceReviewDiagnostics {
@@ -58,23 +59,23 @@ declare global {
   }
 }
 
-const DEVICE_META = {
+const DEVICE_META: Record<RequiredAcceptanceDeviceClass, {
+  label: string
+  note: string
+}> = {
   'integrated-laptop': {
     label: 'Integrated laptop',
-    icon: Laptop,
     note: 'Intel or AMD integrated graphics · Balanced primary capture',
   },
   'discrete-desktop': {
     label: 'Discrete desktop',
-    icon: Monitor,
     note: 'Dedicated desktop GPU · Ultra primary capture',
   },
   'android-phone': {
     label: 'Android phone',
-    icon: Smartphone,
     note: 'Portrait and landscape · Eco primary capture',
   },
-} as const
+}
 
 function readStoredBundles() {
   if (typeof window === 'undefined') return []
@@ -107,8 +108,7 @@ function formatMetric(value: number | null, suffix = '') {
 }
 
 function formatBytes(value: number | null) {
-  if (value === null) return '—'
-  return `${(value / 1024 / 1024).toFixed(1)} MB`
+  return value === null ? '—' : `${(value / 1024 / 1024).toFixed(1)} MB`
 }
 
 function verdictTone(verdict: AcceptanceReviewVerdict) {
@@ -121,22 +121,46 @@ function verdictTone(verdict: AcceptanceReviewVerdict) {
   return 'border-amber-200/20 bg-amber-200/[0.075] text-amber-100'
 }
 
-function verdictIcon(verdict: AcceptanceReviewVerdict) {
-  if (verdict === 'ready') return CheckCircle2
-  if (verdict === 'blocked') return XCircle
-  return AlertTriangle
-}
-
 function requirementTone(status: AcceptanceRequirementStatus) {
   if (status === 'pass') return 'border-emerald-200/10 bg-emerald-200/[0.035]'
   if (status === 'fail') return 'border-rose-200/12 bg-rose-200/[0.04]'
   return 'border-amber-200/12 bg-amber-200/[0.04]'
 }
 
-function requirementIcon(status: AcceptanceRequirementStatus) {
-  if (status === 'pass') return CheckCircle2
-  if (status === 'fail') return XCircle
-  return AlertTriangle
+function VerdictGlyph({
+  verdict,
+  className,
+}: {
+  verdict: AcceptanceReviewVerdict
+  className?: string
+}) {
+  if (verdict === 'ready') return <CheckCircle2 className={className} />
+  if (verdict === 'blocked') return <XCircle className={className} />
+  return <AlertTriangle className={className} />
+}
+
+function RequirementGlyph({
+  status,
+  className,
+}: {
+  status: AcceptanceRequirementStatus
+  className?: string
+}) {
+  if (status === 'pass') return <CheckCircle2 className={className} />
+  if (status === 'fail') return <XCircle className={className} />
+  return <AlertTriangle className={className} />
+}
+
+function DeviceGlyph({
+  deviceClass,
+  className,
+}: {
+  deviceClass: RequiredAcceptanceDeviceClass
+  className?: string
+}) {
+  if (deviceClass === 'integrated-laptop') return <Laptop className={className} />
+  if (deviceClass === 'discrete-desktop') return <Monitor className={className} />
+  return <Smartphone className={className} />
 }
 
 function MetricCard({ label, value }: { label: string; value: string }) {
@@ -154,8 +178,6 @@ function MetricCard({ label, value }: { label: string; value: string }) {
 
 function DeviceReviewCard({ review }: { review: AcceptanceDeviceReview }) {
   const meta = DEVICE_META[review.deviceClass]
-  const Icon = meta.icon
-  const VerdictIcon = verdictIcon(review.verdict)
 
   return (
     <section
@@ -166,7 +188,7 @@ function DeviceReviewCard({ review }: { review: AcceptanceDeviceReview }) {
       <header className="flex flex-col gap-3 border-b border-white/7 px-4 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
           <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/25">
-            <Icon className="h-5 w-5" />
+            <DeviceGlyph deviceClass={review.deviceClass} className="h-5 w-5" />
           </div>
           <div>
             <p className="text-[8px] font-semibold uppercase tracking-[0.18em] opacity-55">
@@ -179,7 +201,8 @@ function DeviceReviewCard({ review }: { review: AcceptanceDeviceReview }) {
           </div>
         </div>
         <span className="flex items-center gap-2 self-start rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.14em]">
-          <VerdictIcon className="h-3.5 w-3.5" /> {review.verdict}
+          <VerdictGlyph verdict={review.verdict} className="h-3.5 w-3.5" />
+          {review.verdict}
         </span>
       </header>
 
@@ -218,25 +241,53 @@ function DeviceReviewCard({ review }: { review: AcceptanceDeviceReview }) {
       </div>
 
       <div className="space-y-1.5 border-t border-white/7 p-4">
-        {review.requirements.map((requirement) => {
-          const RequirementIcon = requirementIcon(requirement.status)
-          return (
-            <div
-              key={requirement.id}
-              className={`flex items-start gap-2.5 rounded-2xl border px-3 py-2.5 ${requirementTone(requirement.status)}`}
-            >
-              <RequirementIcon className="mt-0.5 h-4 w-4 shrink-0 opacity-75" />
-              <div>
-                <p className="text-[10px] font-medium text-white/82">
-                  {requirement.label}
-                </p>
-                <p className="mt-0.5 text-[9px] leading-relaxed text-white/42">
-                  {requirement.detail}
-                </p>
-              </div>
+        {review.requirements.map((requirement) => (
+          <div
+            key={requirement.id}
+            className={`flex items-start gap-2.5 rounded-2xl border px-3 py-2.5 ${requirementTone(requirement.status)}`}
+          >
+            <RequirementGlyph
+              status={requirement.status}
+              className="mt-0.5 h-4 w-4 shrink-0 opacity-75"
+            />
+            <div>
+              <p className="text-[10px] font-medium text-white/82">
+                {requirement.label}
+              </p>
+              <p className="mt-0.5 text-[9px] leading-relaxed text-white/42">
+                {requirement.detail}
+              </p>
             </div>
-          )
-        })}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function MissingDeviceCard({
+  deviceClass,
+}: {
+  deviceClass: RequiredAcceptanceDeviceClass
+}) {
+  const meta = DEVICE_META[deviceClass]
+  return (
+    <section
+      className="rounded-3xl border border-dashed border-rose-200/18 bg-rose-200/[0.025] p-5"
+      data-device-review={deviceClass}
+      data-device-verdict="blocked"
+    >
+      <div className="flex items-start gap-3">
+        <div className="grid h-10 w-10 place-items-center rounded-2xl border border-white/8 bg-black/25">
+          <DeviceGlyph deviceClass={deviceClass} className="h-5 w-5 text-white/42" />
+        </div>
+        <div>
+          <p className="text-[8px] uppercase tracking-[0.16em] text-rose-100/45">
+            Missing evidence
+          </p>
+          <h2 className="mt-1 text-base font-semibold text-white/82">{meta.label}</h2>
+          <p className="mt-2 text-[10px] leading-relaxed text-white/38">{meta.note}</p>
+        </div>
       </div>
     </section>
   )
@@ -340,10 +391,9 @@ export default function DeviceAcceptanceResults() {
   }
 
   function exportJson() {
-    const report = createAcceptanceReviewReport(bundles)
     downloadText(
       `solar-device-merge-readiness-${timestampFileStem()}.json`,
-      JSON.stringify(report, null, 2),
+      JSON.stringify(createAcceptanceReviewReport(bundles), null, 2),
       'application/json'
     )
     setMessage('Downloaded the merge-readiness report with normalized source bundles.')
@@ -357,8 +407,6 @@ export default function DeviceAcceptanceResults() {
     )
     setMessage('Downloaded the reviewer-friendly Markdown report.')
   }
-
-  const VerdictIcon = verdictIcon(analysis.verdict)
 
   return (
     <main
@@ -400,7 +448,7 @@ export default function DeviceAcceptanceResults() {
           <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/10 bg-black/25">
-                <VerdictIcon className="h-6 w-6" />
+                <VerdictGlyph verdict={analysis.verdict} className="h-6 w-6" />
               </div>
               <div>
                 <p className="text-[9px] font-semibold uppercase tracking-[0.18em] opacity-58">
@@ -588,10 +636,9 @@ export default function DeviceAcceptanceResults() {
               <tbody className="divide-y divide-white/6 text-[10px] text-white/52">
                 {REQUIRED_ACCEPTANCE_DEVICE_CLASSES.map((deviceClass) => {
                   const review = analysis.devices.find((item) => item.deviceClass === deviceClass)
-                  const meta = DEVICE_META[deviceClass]
                   return (
                     <tr key={deviceClass}>
-                      <td className="px-4 py-3 font-medium text-white/76">{meta.label}</td>
+                      <td className="px-4 py-3 font-medium text-white/76">{DEVICE_META[deviceClass].label}</td>
                       <td className="px-3 py-3 uppercase">{review?.verdict ?? 'missing'}</td>
                       <td className="px-3 py-3">{review?.expectedPrimaryQuality ?? '—'}</td>
                       <td className="px-3 py-3 font-mono">{formatMetric(review?.primarySession?.summary.medianFps ?? null)}</td>
@@ -611,29 +658,9 @@ export default function DeviceAcceptanceResults() {
           {analysis.devices.map((review) => (
             <DeviceReviewCard key={review.deviceClass} review={review} />
           ))}
-          {analysis.missingDeviceClasses.map((deviceClass) => {
-            const meta = DEVICE_META[deviceClass]
-            const Icon = meta.icon
-            return (
-              <section
-                key={deviceClass}
-                className="rounded-3xl border border-dashed border-rose-200/18 bg-rose-200/[0.025] p-5"
-                data-device-review={deviceClass}
-                data-device-verdict="blocked"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="grid h-10 w-10 place-items-center rounded-2xl border border-white/8 bg-black/25">
-                    <Icon className="h-5 w-5 text-white/42" />
-                  </div>
-                  <div>
-                    <p className="text-[8px] uppercase tracking-[0.16em] text-rose-100/45">Missing evidence</p>
-                    <h2 className="mt-1 text-base font-semibold text-white/82">{meta.label}</h2>
-                    <p className="mt-2 text-[10px] leading-relaxed text-white/38">{meta.note}</p>
-                  </div>
-                </div>
-              </section>
-            )
-          })}
+          {analysis.missingDeviceClasses.map((deviceClass) => (
+            <MissingDeviceCard key={deviceClass} deviceClass={deviceClass} />
+          ))}
         </div>
       </div>
     </main>
