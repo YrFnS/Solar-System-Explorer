@@ -122,10 +122,11 @@ const DISK_FRAGMENT = /* glsl */ `
 `
 
 interface MatterParticle {
-  angle: number
-  radius: number
+  initialAngle: number
+  initialRadius: number
   speed: number
   vertical: number
+  inwardSpeed?: number
 }
 
 interface JetParticle {
@@ -180,8 +181,8 @@ export default function BlackHole({ data }: { data: BlackHoleData }) {
       const radius = diskInner * 0.65
         + fraction * (diskOuter * 1.14 - diskInner * 0.65)
       return {
-        angle: index * 0.71,
-        radius,
+        initialAngle: index * 0.71,
+        initialRadius: radius,
         speed: 1.5 / Math.sqrt(radius / eventHorizonRadius),
         vertical: (((index * 19) % 31) / 31 - 0.5) * 0.15,
       }
@@ -195,10 +196,13 @@ export default function BlackHole({ data }: { data: BlackHoleData }) {
       const radius = eventHorizonRadius * 1.2
         + fraction * (iscoRadius - eventHorizonRadius * 1.2)
       return {
-        angle: index * 1.17,
-        radius,
+        initialAngle: index * 1.17,
+        initialRadius: radius,
         speed: 3 / Math.sqrt(radius / eventHorizonRadius),
         vertical: (((index * 7) % 17) / 17 - 0.5) * 0.08,
+        inwardSpeed: eventHorizonRadius * (
+          0.12 + (index % 7) * 0.008
+        ),
       }
     }
   ), [eventHorizonRadius, iscoRadius])
@@ -244,7 +248,6 @@ export default function BlackHole({ data }: { data: BlackHoleData }) {
     lane: 'decorative',
     priority: 96,
   }, ({ laneDelta }) => {
-    const step = Math.min(laneDelta, 0.08)
     const elapsed = elapsedRef.current + laneDelta
     elapsedRef.current = elapsed
     const dummy = dummyRef.current
@@ -267,18 +270,20 @@ export default function BlackHole({ data }: { data: BlackHoleData }) {
     if (matterRef.current) {
       for (let index = 0; index < matterParticles.length; index += 1) {
         const particle = matterParticles[index]
-        particle.angle += step * particle.speed
+        const angle = particle.initialAngle + elapsed * particle.speed
         const wobble = Math.sin(elapsed * 0.8 + index) * 0.04
         dummy.position.set(
-          Math.cos(particle.angle) * particle.radius,
+          Math.cos(angle) * particle.initialRadius,
           particle.vertical + wobble,
-          Math.sin(particle.angle) * particle.radius
+          Math.sin(angle) * particle.initialRadius
         )
         const scale = eventHorizonRadius * (
-          0.045 + 0.035 * (1 - particle.radius / (diskOuter * 1.2))
+          0.045 + 0.035 * (
+            1 - particle.initialRadius / (diskOuter * 1.2)
+          )
         )
         dummy.scale.setScalar(Math.max(eventHorizonRadius * 0.025, scale))
-        dummy.rotation.set(0, particle.angle, 0)
+        dummy.rotation.set(0, angle, 0)
         dummy.updateMatrix()
         matterRef.current.setMatrixAt(index, dummy.matrix)
       }
@@ -286,23 +291,26 @@ export default function BlackHole({ data }: { data: BlackHoleData }) {
     }
 
     if (plungingRef.current) {
+      const minimumRadius = eventHorizonRadius * 1.08
+      const radiusRange = iscoRadius - minimumRadius
+
       for (let index = 0; index < plungingParticles.length; index += 1) {
         const particle = plungingParticles[index]
-        particle.angle += step * particle.speed
-        particle.radius -= step * eventHorizonRadius * (
-          0.12 + (index % 7) * 0.008
-        )
-        if (particle.radius <= eventHorizonRadius * 1.08) {
-          particle.radius = iscoRadius
-          particle.angle += 1.3
-        }
+        const angle = particle.initialAngle + elapsed * particle.speed
+        const travel = elapsed * (particle.inwardSpeed ?? 0)
+        const wrapped = (
+          (particle.initialRadius - minimumRadius - travel) % radiusRange
+          + radiusRange
+        ) % radiusRange
+        const radius = minimumRadius + wrapped
+
         dummy.position.set(
-          Math.cos(particle.angle) * particle.radius,
+          Math.cos(angle) * radius,
           particle.vertical,
-          Math.sin(particle.angle) * particle.radius
+          Math.sin(angle) * radius
         )
         dummy.scale.setScalar(eventHorizonRadius * 0.038)
-        dummy.rotation.set(0, particle.angle, 0)
+        dummy.rotation.set(0, angle, 0)
         dummy.updateMatrix()
         plungingRef.current.setMatrixAt(index, dummy.matrix)
       }
@@ -388,7 +396,12 @@ export default function BlackHole({ data }: { data: BlackHoleData }) {
       </mesh>
 
       <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[photonSphereRadius, eventHorizonRadius * 0.08, 16, 128]} />
+        <torusGeometry args={[
+          photonSphereRadius,
+          eventHorizonRadius * 0.08,
+          16,
+          128,
+        ]} />
         <meshBasicMaterial
           ref={photonMaterialRef}
           color="#ffd8a0"
