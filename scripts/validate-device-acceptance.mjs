@@ -2,22 +2,32 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
 const root = process.cwd()
-const pagePath = path.join(root, 'src', 'app', 'lab', 'device-acceptance', 'page.tsx')
-const labPath = path.join(
+const deviceAcceptanceRoot = path.join(
   root,
   'src',
   'components',
   'solar-system',
-  'device-acceptance',
-  'DeviceAcceptanceLab.tsx'
+  'device-acceptance'
 )
-const protocolPath = path.join(
+const pagePath = path.join(root, 'src', 'app', 'lab', 'device-acceptance', 'page.tsx')
+const resultsPagePath = path.join(
   root,
   'src',
-  'components',
-  'solar-system',
+  'app',
+  'lab',
   'device-acceptance',
+  'results',
+  'page.tsx'
+)
+const labPath = path.join(deviceAcceptanceRoot, 'DeviceAcceptanceLab.tsx')
+const resultsPath = path.join(deviceAcceptanceRoot, 'DeviceAcceptanceResults.tsx')
+const protocolPath = path.join(
+  deviceAcceptanceRoot,
   'device-acceptance-protocol.ts'
+)
+const reviewPath = path.join(
+  deviceAcceptanceRoot,
+  'device-acceptance-review.ts'
 )
 const sceneContainerPath = path.join(
   root,
@@ -27,23 +37,43 @@ const sceneContainerPath = path.join(
   'SceneContainer.tsx'
 )
 const smokePath = path.join(root, 'scripts', 'smoke-device-acceptance.mjs')
+const reviewValidatePath = path.join(
+  root,
+  'scripts',
+  'validate-device-acceptance-review.ts'
+)
+const reviewSmokePath = path.join(
+  root,
+  'scripts',
+  'smoke-device-acceptance-review.mjs'
+)
 const packagePath = path.join(root, 'package.json')
 const workflowPath = path.join(root, '.github', 'workflows', 'quality.yml')
 
 const [
   page,
+  resultsPage,
   lab,
+  results,
   protocol,
+  review,
   sceneContainer,
   smoke,
+  reviewValidate,
+  reviewSmoke,
   packageSource,
   workflow,
 ] = await Promise.all([
   readFile(pagePath, 'utf8'),
+  readFile(resultsPagePath, 'utf8'),
   readFile(labPath, 'utf8'),
+  readFile(resultsPath, 'utf8'),
   readFile(protocolPath, 'utf8'),
+  readFile(reviewPath, 'utf8'),
   readFile(sceneContainerPath, 'utf8'),
   readFile(smokePath, 'utf8'),
+  readFile(reviewValidatePath, 'utf8'),
+  readFile(reviewSmokePath, 'utf8'),
   readFile(packagePath, 'utf8'),
   readFile(workflowPath, 'utf8'),
 ])
@@ -57,8 +87,14 @@ function requireContract(condition, message) {
 
 requireContract(
   page.includes('DeviceAcceptanceLab')
-    && page.includes('ssr: false'),
-  'The device-acceptance route must load its client-only laboratory dynamically.'
+    && page.includes('ssr: false')
+    && page.includes('/lab/device-acceptance/results'),
+  'The device-acceptance route must load the client-only capture lab and link to evidence review.'
+)
+requireContract(
+  resultsPage.includes('DeviceAcceptanceResults')
+    && resultsPage.includes('ssr: false'),
+  'The device-acceptance results route must load its client-only review workspace dynamically.'
 )
 requireContract(
   lab.includes('<SceneContainer interfaceMode="acceptance" />')
@@ -108,14 +144,66 @@ requireContract(
     && sceneContainer.includes("interfaceMode === 'full'"),
   'SceneContainer must support a clean acceptance presentation without changing the default explorer UI.'
 )
+
 requireContract(
-  packageJson.scripts?.['device-acceptance:smoke']
-    === 'node scripts/validate-device-acceptance.mjs && node scripts/smoke-device-acceptance.mjs',
-  'package.json must expose the complete device-acceptance:smoke gate.'
+  results.includes('data-device-acceptance-review')
+    && results.includes('__SOLAR_DEVICE_ACCEPTANCE_REVIEW__')
+    && results.includes('review-export-json')
+    && results.includes('review-export-markdown')
+    && results.includes('REQUIRED_ACCEPTANCE_DEVICE_CLASSES'),
+  'The results workspace must expose the cross-device matrix, diagnostics, and report exports.'
 )
 requireContract(
-  workflow.includes('bun run device-acceptance:smoke'),
-  'The Quality workflow must execute the device-acceptance gate.'
+  review.includes("'integrated-laptop'")
+    && review.includes("'discrete-desktop'")
+    && review.includes("'android-phone'")
+    && review.includes('analyzeAcceptanceBundles')
+    && review.includes('missingDeviceClasses')
+    && review.includes('commitShas')
+    && review.includes('calculateResourceDrift')
+    && review.includes('buildAcceptanceMarkdownReport'),
+  'The review engine must enforce the three-device matrix, provenance, resource stability, and report generation.'
+)
+requireContract(
+  reviewValidate.includes("ready.verdict === 'ready'")
+    && reviewValidate.includes('missingPhone.verdict')
+    && reviewValidate.includes('mixedCommit.verdict')
+    && reviewValidate.includes('missingLandscape.verdict'),
+  'Pure review validation must cover ready, missing-device, mixed-commit, and Android-orientation outcomes.'
+)
+requireContract(
+  reviewSmoke.includes('/lab/device-acceptance/results')
+    && reviewSmoke.includes('__SOLAR_DEVICE_ACCEPTANCE_REVIEW__')
+    && reviewSmoke.includes('readyDeviceCount === 3')
+    && reviewSmoke.includes('assertNoPageOverflow'),
+  'Browser review coverage must exercise the ready three-device matrix and responsive layout.'
+)
+
+const expectedAcceptanceCommand = [
+  'node scripts/validate-device-acceptance.mjs',
+  'node scripts/smoke-device-acceptance.mjs',
+  'bun run device-acceptance-review:validate',
+  'bun run device-acceptance-review:smoke',
+].join(' && ')
+requireContract(
+  packageJson.scripts?.['device-acceptance:smoke'] === expectedAcceptanceCommand,
+  'package.json must expose the complete capture and review device-acceptance:smoke gate.'
+)
+requireContract(
+  packageJson.scripts?.['device-acceptance-review:validate']
+    === 'bun scripts/validate-device-acceptance-review.ts'
+    && packageJson.scripts?.['device-acceptance-review:smoke']
+      === 'node scripts/smoke-device-acceptance-review.mjs',
+  'package.json must expose the pure and browser review gates.'
+)
+requireContract(
+  packageJson.scripts?.['quality:local']?.includes('bun run device-acceptance:smoke'),
+  'quality:local must execute the complete acceptance gate.'
+)
+requireContract(
+  workflow.includes('bun run device-acceptance:smoke')
+    && workflow.includes('physical-device acceptance and review workspaces'),
+  'The Quality workflow must execute and name the complete acceptance and review gate.'
 )
 requireContract(
   smoke.includes('/lab/device-acceptance')
@@ -129,5 +217,5 @@ if (failures.length > 0) {
   failures.forEach((failure) => console.error(`- ${failure}`))
   process.exitCode = 1
 } else {
-  console.log('[device-acceptance-contract] production scene, profile/thermal capture, recovery, screenshots, export, and browser evidence passed')
+  console.log('[device-acceptance-contract] production capture, three-device review, provenance, reports, and browser evidence passed')
 }
