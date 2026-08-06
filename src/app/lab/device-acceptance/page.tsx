@@ -26,12 +26,20 @@ export default function DeviceAcceptancePage() {
   return (
     <>
       <DeviceAcceptanceLab />
-      <Link
-        href="/lab/device-acceptance/results"
-        className="fixed left-3 top-14 z-[126] rounded-full border border-cyan-200/15 bg-black/70 px-3 py-2 text-[9px] uppercase tracking-[0.16em] text-cyan-100/65 backdrop-blur-xl"
-      >
-        Review evidence
-      </Link>
+      <nav className="fixed left-3 top-14 z-[126] flex flex-col items-start gap-2">
+        <Link
+          href="/lab/device-acceptance/launch"
+          className="rounded-full border border-amber-200/15 bg-black/70 px-3 py-2 text-[9px] uppercase tracking-[0.16em] text-amber-100/65 backdrop-blur-xl"
+        >
+          Campaign launcher
+        </Link>
+        <Link
+          href="/lab/device-acceptance/results"
+          className="rounded-full border border-cyan-200/15 bg-black/70 px-3 py-2 text-[9px] uppercase tracking-[0.16em] text-cyan-100/65 backdrop-blur-xl"
+        >
+          Review evidence
+        </Link>
+      </nav>
     </>
   )
 }
