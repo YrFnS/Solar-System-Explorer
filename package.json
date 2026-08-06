@@ -11,7 +11,8 @@
     "textures:ktx2:verify": "node scripts/verify-ktx2.mjs",
     "ephemeris:validate": "bun scripts/validate-ephemeris.ts",
     "performance:budget": "node scripts/check-performance-budget.mjs",
-    "quality:gate": "node scripts/validate-quality-gate.mjs && node scripts/report-frame-callbacks.mjs",
+    "quality:gate": "node scripts/validate-quality-gate.mjs",
+    "frame-callbacks:report": "node scripts/report-frame-callbacks.mjs",
     "runtime:smoke": "node scripts/smoke-runtime-foundation.mjs && node scripts/smoke-texture-lifecycle.mjs",
     "mobile:smoke": "node scripts/validate-mobile-overlay-contract.mjs && node scripts/smoke-mobile-overlay.mjs",
     "small-bodies:smoke": "node scripts/validate-small-body-batching.mjs && node scripts/smoke-small-body-batching.mjs",
@@ -27,7 +28,7 @@
     "dev": "next dev -p 3000",
     "build:next": "next build",
     "build": "bun run typecheck && node scripts/optimize-textures.mjs && node scripts/sync-basis-transcoder.mjs && node scripts/verify-ktx2.mjs && bun run build:next",
-    "quality:local": "bun run quality:gate && bun run audit && bun run lint && bun run ephemeris:validate && bun run webgpu:analysis:validate && bun run build && bun run performance:budget && bun run ui:smoke && bun run runtime:smoke && bun run webgpu:smoke && bun run webgpu:benchmark:smoke && bun run webgpu:results:smoke",
+    "quality:local": "bun run quality:gate && bun run frame-callbacks:report && bun run audit && bun run lint && bun run ephemeris:validate && bun run webgpu:analysis:validate && bun run build && bun run performance:budget && bun run ui:smoke && bun run runtime:smoke && bun run webgpu:smoke && bun run webgpu:benchmark:smoke && bun run webgpu:results:smoke",
     "start": "NODE_ENV=production bun .next/standalone/server.js",
     "lint": "eslint ."
   },
