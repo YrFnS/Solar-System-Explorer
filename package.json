@@ -11,7 +11,7 @@
     "textures:ktx2:verify": "node scripts/verify-ktx2.mjs",
     "ephemeris:validate": "bun scripts/validate-ephemeris.ts",
     "performance:budget": "node scripts/check-performance-budget.mjs",
-    "quality:gate": "node scripts/validate-quality-gate.mjs",
+    "quality:gate": "node scripts/validate-quality-gate.mjs && node scripts/report-frame-callbacks.mjs",
     "runtime:smoke": "node scripts/smoke-runtime-foundation.mjs && node scripts/smoke-texture-lifecycle.mjs",
     "mobile:smoke": "node scripts/validate-mobile-overlay-contract.mjs && node scripts/smoke-mobile-overlay.mjs",
     "small-bodies:smoke": "node scripts/validate-small-body-batching.mjs && node scripts/smoke-small-body-batching.mjs",
