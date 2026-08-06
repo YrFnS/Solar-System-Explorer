@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import { getQualityProfile, usePerformanceStore } from './performance-store'
 import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
@@ -55,9 +55,16 @@ export default function NearEarthObjects() {
     meshRef.current.computeBoundingSphere()
   }, [count])
 
-  useFrame((_, delta) => {
-    if (!meshRef.current || isPaused) return
-    meshRef.current.rotation.y -= delta * 0.018 * Math.max(0.1, timeSpeed)
+  useFrameLane({
+    id: 'near-earth-field',
+    lane: 'decorative',
+    priority: 90,
+    enabled: showPhenomena && !isPaused,
+  }, ({ laneDelta }) => {
+    if (!meshRef.current) return
+    meshRef.current.rotation.y -= (
+      laneDelta * 0.018 * Math.max(0.1, timeSpeed)
+    )
   })
 
   if (!showPhenomena) return null
