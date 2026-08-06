@@ -1,11 +1,11 @@
 'use client'
 
 import { useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { getBodyVisualVelocity } from './ephemeris'
 import { useExperienceStore } from './experience-store'
-import { getSimulationDateMs } from './simulation-clock'
+import { useFrameLane } from './FrameUpdateLanes'
+import { useSolarSystemStore } from './store'
 
 interface VelocityVectorProps {
   bodyId: string
@@ -25,15 +25,23 @@ export default function VelocityVector({
   const showVelocityVectors = useExperienceStore(
     (state) => state.showVelocityVectors
   )
+  const selectedBody = useSolarSystemStore((state) => state.selectedBody)
+  const enabled = mode === 'scientific' && showVelocityVectors
+  const selected = selectedBody === bodyId
 
-  useFrame(() => {
+  useFrameLane({
+    id: `velocity:${bodyId}`,
+    lane: selected ? 'critical' : 'ephemeris',
+    priority: selected ? -20 : 30,
+    enabled,
+  }, ({ simulationDateMs }) => {
     const arrow = arrowRef.current
-    if (!arrow || mode !== 'scientific' || !showVelocityVectors) return
+    if (!arrow) return
 
     const velocity = velocityRef.current
     getBodyVisualVelocity(
       bodyId,
-      getSimulationDateMs(),
+      simulationDateMs,
       mode,
       velocity
     )
@@ -54,7 +62,7 @@ export default function VelocityVector({
     )
   })
 
-  if (mode !== 'scientific' || !showVelocityVectors) return null
+  if (!enabled) return null
 
   return (
     <arrowHelper
