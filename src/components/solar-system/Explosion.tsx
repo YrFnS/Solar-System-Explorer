@@ -36,8 +36,8 @@ export default function Explosion({ position, color, onComplete }: ExplosionProp
     id: `explosion:${position.join(':')}`,
     lane: 'critical',
     priority: -15,
-    enabled: !completedRef.current,
   }, ({ nowMs }) => {
+    if (completedRef.current) return
     if (startedAtRef.current === null) startedAtRef.current = nowMs
     const elapsed = (nowMs - startedAtRef.current) / 1_000
 
@@ -50,7 +50,7 @@ export default function Explosion({ position, color, onComplete }: ExplosionProp
       materialRef.current.opacity = Math.max(0, 1 - elapsed * 0.5)
     }
 
-    if (elapsed > 2 && !completedRef.current) {
+    if (elapsed > 2) {
       completedRef.current = true
       onComplete?.()
     }
