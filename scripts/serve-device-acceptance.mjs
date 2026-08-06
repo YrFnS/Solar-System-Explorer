@@ -7,7 +7,7 @@ const root = process.cwd()
 const standaloneRoot = path.resolve(root, '.next', 'standalone')
 const standaloneServer = path.join(standaloneRoot, 'server.js')
 const standaloneNextRoot = path.join(standaloneRoot, '.next')
-const host = process.env.ACCEPTANCE_HOST || process.env.HOSTNAME || '0.0.0.0'
+const host = process.env.ACCEPTANCE_HOST || '0.0.0.0'
 const port = Number(process.env.ACCEPTANCE_PORT || process.env.PORT || 3000)
 
 if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
