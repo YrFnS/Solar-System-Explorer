@@ -1,12 +1,13 @@
 'use client'
 
 import { useRef } from 'react'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import { getSpawnedObjectVisualPosition } from './ephemeris'
 import { useExperienceStore } from './experience-store'
+import { useFrameLane } from './FrameUpdateLanes'
 import PlanetLabel from './PlanetLabel'
-import { DAY_MS, J2000_UNIX_MS, getSimulationDateMs } from './simulation-clock'
+import { DAY_MS, J2000_UNIX_MS } from './simulation-clock'
 import { useSolarSystemStore, type SpawnedObject } from './store'
 
 function SpawnedObjectMesh({ object }: { object: SpawnedObject }) {
@@ -19,20 +20,23 @@ function SpawnedObjectMesh({ object }: { object: SpawnedObject }) {
   const setFocusTarget = useSolarSystemStore((state) => state.setFocusTarget)
   const selected = selectedBody === object.id
 
-  useFrame(() => {
-    const dateMs = getSimulationDateMs()
+  useFrameLane({
+    id: `spawned-object:${object.id}`,
+    lane: selected ? 'critical' : 'ephemeris',
+    priority: selected ? -20 : 60,
+  }, ({ simulationDateMs }) => {
     if (groupRef.current) {
       groupRef.current.position.copy(
         getSpawnedObjectVisualPosition(
           object,
-          dateMs,
+          simulationDateMs,
           mode,
           positionRef.current
         )
       )
     }
     if (meshRef.current) {
-      const days = (dateMs - J2000_UNIX_MS) / DAY_MS
+      const days = (simulationDateMs - J2000_UNIX_MS) / DAY_MS
       meshRef.current.rotation.set(days * 0.19, days * 0.31, days * 0.11)
     }
   })
@@ -44,7 +48,7 @@ function SpawnedObjectMesh({ object }: { object: SpawnedObject }) {
   }
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} name={`spawned:${object.id}`}>
       <mesh ref={meshRef} onClick={handleClick}>
         {object.type === 'asteroid' ? (
           <dodecahedronGeometry args={[object.radius, 1]} />
