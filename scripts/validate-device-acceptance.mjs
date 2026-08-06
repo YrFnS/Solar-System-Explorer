@@ -10,6 +10,15 @@ const deviceAcceptanceRoot = path.join(
   'device-acceptance'
 )
 const pagePath = path.join(root, 'src', 'app', 'lab', 'device-acceptance', 'page.tsx')
+const launchPagePath = path.join(
+  root,
+  'src',
+  'app',
+  'lab',
+  'device-acceptance',
+  'launch',
+  'page.tsx'
+)
 const resultsPagePath = path.join(
   root,
   'src',
@@ -20,6 +29,11 @@ const resultsPagePath = path.join(
   'page.tsx'
 )
 const labPath = path.join(deviceAcceptanceRoot, 'DeviceAcceptanceLab.tsx')
+const launchPath = path.join(deviceAcceptanceRoot, 'DeviceAcceptanceLaunch.tsx')
+const launchProtocolPath = path.join(
+  deviceAcceptanceRoot,
+  'device-acceptance-launch.ts'
+)
 const resultsPath = path.join(deviceAcceptanceRoot, 'DeviceAcceptanceResults.tsx')
 const protocolPath = path.join(
   deviceAcceptanceRoot,
@@ -37,6 +51,17 @@ const sceneContainerPath = path.join(
   'SceneContainer.tsx'
 )
 const smokePath = path.join(root, 'scripts', 'smoke-device-acceptance.mjs')
+const launchValidatePath = path.join(
+  root,
+  'scripts',
+  'validate-device-acceptance-launch.ts'
+)
+const launchSmokePath = path.join(
+  root,
+  'scripts',
+  'smoke-device-acceptance-launch.mjs'
+)
+const servePath = path.join(root, 'scripts', 'serve-device-acceptance.mjs')
 const reviewValidatePath = path.join(
   root,
   'scripts',
@@ -52,26 +77,38 @@ const workflowPath = path.join(root, '.github', 'workflows', 'quality.yml')
 
 const [
   page,
+  launchPage,
   resultsPage,
   lab,
+  launch,
+  launchProtocol,
   results,
   protocol,
   review,
   sceneContainer,
   smoke,
+  launchValidate,
+  launchSmoke,
+  serve,
   reviewValidate,
   reviewSmoke,
   packageSource,
   workflow,
 ] = await Promise.all([
   readFile(pagePath, 'utf8'),
+  readFile(launchPagePath, 'utf8'),
   readFile(resultsPagePath, 'utf8'),
   readFile(labPath, 'utf8'),
+  readFile(launchPath, 'utf8'),
+  readFile(launchProtocolPath, 'utf8'),
   readFile(resultsPath, 'utf8'),
   readFile(protocolPath, 'utf8'),
   readFile(reviewPath, 'utf8'),
   readFile(sceneContainerPath, 'utf8'),
   readFile(smokePath, 'utf8'),
+  readFile(launchValidatePath, 'utf8'),
+  readFile(launchSmokePath, 'utf8'),
+  readFile(servePath, 'utf8'),
   readFile(reviewValidatePath, 'utf8'),
   readFile(reviewSmokePath, 'utf8'),
   readFile(packagePath, 'utf8'),
@@ -90,6 +127,11 @@ requireContract(
     && page.includes('ssr: false')
     && page.includes('/lab/device-acceptance/results'),
   'The device-acceptance route must load the client-only capture lab and link to evidence review.'
+)
+requireContract(
+  launchPage.includes('DeviceAcceptanceLaunch')
+    && launchPage.includes('ssr: false'),
+  'The device campaign route must load its client-only launcher dynamically.'
 )
 requireContract(
   resultsPage.includes('DeviceAcceptanceResults')
@@ -146,6 +188,49 @@ requireContract(
 )
 
 requireContract(
+  launch.includes('data-device-acceptance-launch')
+    && launch.includes('ACCEPTANCE_LAUNCH_DEVICE_CONFIGS')
+    && launch.includes('DEVICE_ACCEPTANCE_CAPTURE_BACKUP_STORAGE_KEY')
+    && launch.includes('__SOLAR_DEVICE_ACCEPTANCE_LAUNCH__')
+    && launch.includes('/lab/device-acceptance/results')
+    && launch.includes('launch-open-'),
+  'The campaign launcher must generate the three device links, protect older evidence, publish diagnostics, and link to review.'
+)
+requireContract(
+  launchProtocol.includes("'integrated-laptop'")
+    && launchProtocol.includes("'discrete-desktop'")
+    && launchProtocol.includes("'android-phone'")
+    && launchProtocol.includes("recommendedQuality: 'balanced'")
+    && launchProtocol.includes("recommendedQuality: 'ultra'")
+    && launchProtocol.includes("recommendedQuality: 'eco'")
+    && launchProtocol.includes('prepareAcceptanceLaunch')
+    && launchProtocol.includes('backup'),
+  'The campaign protocol must map all required devices to primary profiles and support clean-workspace backup.'
+)
+requireContract(
+  launchValidate.includes('fresh.backup?.sessions.length')
+    && launchValidate.includes('preserved.workspace.sessions.length')
+    && launchValidate.includes('unsupported-device'),
+  'Pure launcher validation must cover fresh backup, preserved evidence, and invalid device links.'
+)
+requireContract(
+  launchSmoke.includes('/lab/device-acceptance/launch?campaign=smoke-campaign')
+    && launchSmoke.includes('generatedLinkCount === 3')
+    && launchSmoke.includes('assertNoPageOverflow')
+    && launchSmoke.includes('Previous local evidence was not backed up'),
+  'Browser launcher coverage must verify three links, responsive layout, device bootstrap, and evidence backup.'
+)
+requireContract(
+  serve.includes('networkInterfaces()')
+    && serve.includes("HOSTNAME: host")
+    && serve.includes("'/lab/device-acceptance/launch'")
+    && serve.includes("'/lab/device-acceptance/results'")
+    && serve.includes("await cp(path.resolve(root, 'public')")
+    && serve.includes("path.resolve(root, '.next', 'static')"),
+  'The acceptance server must prepare standalone assets, bind for LAN access, and print launcher/review URLs.'
+)
+
+requireContract(
   results.includes('data-device-acceptance-review')
     && results.includes('__SOLAR_DEVICE_ACCEPTANCE_REVIEW__')
     && results.includes('review-export-json')
@@ -182,12 +267,21 @@ requireContract(
 const expectedAcceptanceCommand = [
   'node scripts/validate-device-acceptance.mjs',
   'node scripts/smoke-device-acceptance.mjs',
+  'bun run device-acceptance-launch:validate',
+  'bun run device-acceptance-launch:smoke',
   'bun run device-acceptance-review:validate',
   'bun run device-acceptance-review:smoke',
 ].join(' && ')
 requireContract(
   packageJson.scripts?.['device-acceptance:smoke'] === expectedAcceptanceCommand,
-  'package.json must expose the complete capture and review device-acceptance:smoke gate.'
+  'package.json must expose the complete capture, launch, and review device-acceptance:smoke gate.'
+)
+requireContract(
+  packageJson.scripts?.['device-acceptance-launch:validate']
+    === 'bun scripts/validate-device-acceptance-launch.ts'
+    && packageJson.scripts?.['device-acceptance-launch:smoke']
+      === 'node scripts/smoke-device-acceptance-launch.mjs',
+  'package.json must expose the pure and browser campaign-launch gates.'
 )
 requireContract(
   packageJson.scripts?.['device-acceptance-review:validate']
@@ -197,13 +291,20 @@ requireContract(
   'package.json must expose the pure and browser review gates.'
 )
 requireContract(
+  packageJson.scripts?.['acceptance:serve']
+    === 'node scripts/serve-device-acceptance.mjs'
+    && packageJson.scripts?.['acceptance:preview']
+      === 'bun run build && bun run acceptance:serve',
+  'package.json must expose production LAN acceptance server commands.'
+)
+requireContract(
   packageJson.scripts?.['quality:local']?.includes('bun run device-acceptance:smoke'),
   'quality:local must execute the complete acceptance gate.'
 )
 requireContract(
   workflow.includes('bun run device-acceptance:smoke')
-    && workflow.includes('physical-device acceptance and review workspaces'),
-  'The Quality workflow must execute and name the complete acceptance and review gate.'
+    && workflow.includes('physical-device capture, launch, and review workspaces'),
+  'The Quality workflow must execute and name the complete capture, launch, and review gate.'
 )
 requireContract(
   smoke.includes('/lab/device-acceptance')
@@ -217,5 +318,5 @@ if (failures.length > 0) {
   failures.forEach((failure) => console.error(`- ${failure}`))
   process.exitCode = 1
 } else {
-  console.log('[device-acceptance-contract] production capture, three-device review, provenance, reports, and browser evidence passed')
+  console.log('[device-acceptance-contract] production capture, campaign launch, LAN serving, three-device review, provenance, reports, and browser evidence passed')
 }
