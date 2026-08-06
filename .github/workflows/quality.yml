@@ -40,6 +40,9 @@ jobs:
       - name: Validate release gate contract
         run: bun run quality:gate
 
+      - name: Report direct frame callbacks
+        run: bun run frame-callbacks:report
+
       - name: Audit modules and dependencies
         run: bun run audit
 
