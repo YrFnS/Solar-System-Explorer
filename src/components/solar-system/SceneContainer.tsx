@@ -42,6 +42,10 @@ type IdleWindow = Window & {
   cancelIdleCallback?: (handle: number) => void
 }
 
+export interface SceneContainerProps {
+  interfaceMode?: 'full' | 'acceptance'
+}
+
 function DeferredInterface() {
   const [ready, setReady] = useState(false)
 
@@ -126,7 +130,9 @@ function ContextRecovery({ onRetryEco }: { onRetryEco: () => void }) {
   )
 }
 
-export default function SceneContainer() {
+export default function SceneContainer({
+  interfaceMode = 'full',
+}: SceneContainerProps) {
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const profile = getQualityProfile({ preset, autoQuality })
@@ -196,8 +202,8 @@ export default function SceneContainer() {
           </SceneLoadScheduler>
         </Canvas>
       </div>
-      <DeferredInterface />
-      <PerformanceDock />
+      {interfaceMode === 'full' ? <DeferredInterface /> : null}
+      {interfaceMode === 'full' ? <PerformanceDock /> : null}
       {contextLost ? <ContextRecovery onRetryEco={retryEco} /> : null}
     </RendererBoundary>
   )
