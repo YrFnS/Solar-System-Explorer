@@ -2,7 +2,6 @@
 
 import { useMemo, useRef, useState } from 'react'
 import { Html } from '@react-three/drei'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
   ASTRONOMICAL_UNIT_KM,
@@ -10,7 +9,7 @@ import {
   getBodyVisualPosition,
 } from './ephemeris'
 import { useExperienceStore } from './experience-store'
-import { getSimulationDateMs } from './simulation-clock'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 
 function formatDistance(distanceKm: number | null) {
@@ -49,12 +48,15 @@ function DistanceRulerInner({ body1, body2 }: { body1: string; body2: string }) 
     return next
   }, [])
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: `distance-ruler:${body1}:${body2}`,
+    lane: 'critical',
+    priority: -5,
+  }, ({ simulationDateMs, renderDelta }) => {
     if (!lineRef.current) return
 
-    const dateMs = getSimulationDateMs()
-    const p1 = getBodyVisualPosition(body1, dateMs, mode, p1Ref.current)
-    const p2 = getBodyVisualPosition(body2, dateMs, mode, p2Ref.current)
+    const p1 = getBodyVisualPosition(body1, simulationDateMs, mode, p1Ref.current)
+    const p2 = getBodyVisualPosition(body2, simulationDateMs, mode, p2Ref.current)
     const positions = lineRef.current.geometry.attributes.position as THREE.BufferAttribute
 
     positions.setXYZ(0, p1.x, p1.y, p1.z)
@@ -68,12 +70,12 @@ function DistanceRulerInner({ body1, body2 }: { body1: string; body2: string }) 
       )
     }
 
-    publishElapsedRef.current += delta
+    publishElapsedRef.current += renderDelta
     if (publishElapsedRef.current < 0.2) return
     publishElapsedRef.current = 0
 
-    const telemetry1 = getBodyTelemetry(body1, dateMs, mode)
-    const telemetry2 = getBodyTelemetry(body2, dateMs, mode)
+    const telemetry1 = getBodyTelemetry(body1, simulationDateMs, mode)
+    const telemetry2 = getBodyTelemetry(body2, simulationDateMs, mode)
     const physical1 = physicalVectorFromTelemetry(
       p1,
       telemetry1.distanceFromSunAu,
