@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import {
   getEffectiveQuality,
@@ -174,8 +174,13 @@ export default function MeteorShower() {
     }
   }, [geometry, material, pool, reducedMotion])
 
-  useFrame((_, delta) => {
-    if (!pointsRef.current || !showPhenomena) return
+  useFrameLane({
+    id: 'meteor-shower',
+    lane: 'decorative',
+    priority: 86,
+    enabled: showPhenomena,
+  }, ({ laneDelta }) => {
+    if (!pointsRef.current) return
 
     const scene = useSolarSystemStore.getState()
     if (scene.isPaused) return
@@ -186,7 +191,7 @@ export default function MeteorShower() {
     const meteors = meteorsRef.current
     let buffersChanged = false
 
-    spawnTimerRef.current += delta
+    spawnTimerRef.current += laneDelta
     if (spawnTimerRef.current >= nextSpawnRef.current) {
       spawnTimerRef.current = 0
       nextSpawnRef.current = randomSpawnInterval(reducedMotion)
@@ -202,7 +207,7 @@ export default function MeteorShower() {
       const meteor = meteors[meteorIndex]
       if (!meteor.active) continue
 
-      meteor.lifetime += delta
+      meteor.lifetime += laneDelta
       if (meteor.lifetime >= meteor.maxLifetime) {
         meteor.active = false
         hideMeteor(meteorIndex, positionAttribute, alphaAttribute, sizeAttribute)
@@ -210,7 +215,7 @@ export default function MeteorShower() {
         continue
       }
 
-      meteor.position.addScaledVector(meteor.velocity, delta)
+      meteor.position.addScaledVector(meteor.velocity, laneDelta)
       for (let segment = METEOR_TAIL_LENGTH - 1; segment > 0; segment--) {
         meteor.trail[segment].copy(meteor.trail[segment - 1])
       }
