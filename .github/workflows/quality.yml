@@ -76,7 +76,7 @@ jobs:
       - name: Smoke test desktop, mobile, accessibility, WebGL, and KTX2
         run: bun run ui:smoke
 
-      - name: Smoke test physical-device acceptance and review workspaces
+      - name: Smoke test physical-device capture, launch, and review workspaces
         run: bun run device-acceptance:smoke
 
       - name: Smoke test runtime quality transitions and recovery
