@@ -6,28 +6,31 @@ import { AlertTriangle, Gauge, RefreshCw } from 'lucide-react'
 import { Canvas } from '@react-three/fiber'
 import SolarSystemV3 from './SolarSystemV3'
 import PerformanceDock from './PerformanceDock'
-import ExperienceDock from './ExperienceDock'
 import SimulationController from './SimulationController'
 import ScenePerformanceManager from './ScenePerformanceManager'
+import SceneLoadScheduler from './SceneLoadScheduler'
+import FramePacingController from './FramePacingController'
+import FrameUpdateLanes from './FrameUpdateLanes'
 import AdaptiveLodManager from './AdaptiveLodManager'
 import RendererBoundary from './RendererBoundary'
 import RenderDiagnostics from './RenderDiagnostics'
 import ScreenshotCaptureBridge from './ScreenshotCaptureBridge'
+import TextureLifecycleManager from './textures/TextureLifecycleManager'
 import WebGLContextMonitor, {
   WEBGL_CONTEXT_LOST_EVENT,
   WEBGL_CONTEXT_RESTORED_EVENT,
 } from './WebGLContextMonitor'
-import ProgressiveSceneWarmup, {
-  prepareSceneWarmup,
-} from './ProgressiveSceneWarmup'
 import { installAssetUrlPolicy } from './asset-policy'
 import { installModelAvailabilityPolicy } from './model-policy'
 import { useSolarSystemStore } from './store'
-import { getQualityProfile, usePerformanceStore } from './performance-store'
+import {
+  getQualityProfile,
+  type RendererPowerPreference,
+  usePerformanceStore,
+} from './performance-store'
 
 installAssetUrlPolicy()
 installModelAvailabilityPolicy()
-const INITIAL_SCENE_WARMUP = prepareSceneWarmup()
 
 const UIOverlay = dynamic(() => import('./UIOverlayV4'), {
   ssr: false,
@@ -37,6 +40,10 @@ const UIOverlay = dynamic(() => import('./UIOverlayV4'), {
 type IdleWindow = Window & {
   requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
   cancelIdleCallback?: (handle: number) => void
+}
+
+export interface SceneContainerProps {
+  interfaceMode?: 'full' | 'acceptance'
 }
 
 function DeferredInterface() {
@@ -123,13 +130,19 @@ function ContextRecovery({ onRetryEco }: { onRetryEco: () => void }) {
   )
 }
 
-export default function SceneContainer() {
-  const [rendererGeneration, setRendererGeneration] = useState(0)
-  const [contextLost, setContextLost] = useState(false)
-  const setSelectedBody = useSolarSystemStore((state) => state.setSelectedBody)
+export default function SceneContainer({
+  interfaceMode = 'full',
+}: SceneContainerProps) {
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const profile = getQualityProfile({ preset, autoQuality })
+  const rendererPowerPreference: RendererPowerPreference = preset === 'ultra'
+    ? 'high-performance'
+    : 'low-power'
+
+  const [rendererGeneration, setRendererGeneration] = useState(0)
+  const [contextLost, setContextLost] = useState(false)
+  const setSelectedBody = useSolarSystemStore((state) => state.setSelectedBody)
 
   useEffect(() => {
     const handleLost = () => setContextLost(true)
@@ -153,7 +166,7 @@ export default function SceneContainer() {
     <RendererBoundary>
       <div className="absolute inset-0 z-0">
         <Canvas
-          key={rendererGeneration}
+          key={`${rendererGeneration}:${rendererPowerPreference}`}
           camera={{
             position: [80, 60, 80],
             fov: 45,
@@ -161,30 +174,36 @@ export default function SceneContainer() {
             far: 10000,
           }}
           dpr={profile.dpr}
-          frameloop="always"
+          frameloop="never"
           performance={{ min: 0.45, max: 1, debounce: 250 }}
           gl={{
             antialias: false,
             alpha: false,
             depth: true,
             stencil: false,
-            powerPreference: 'high-performance',
+            powerPreference: rendererPowerPreference,
           }}
           onPointerMissed={() => setSelectedBody(null)}
         >
-          <SimulationController />
-          <ScenePerformanceManager />
-          <ProgressiveSceneWarmup plan={INITIAL_SCENE_WARMUP} />
-          <AdaptiveLodManager />
-          <ScreenshotCaptureBridge />
-          <WebGLContextMonitor />
-          <RenderDiagnostics />
-          <SolarSystemV3 />
+          <SceneLoadScheduler>
+            <FrameUpdateLanes>
+              <FramePacingController
+                rendererPowerPreference={rendererPowerPreference}
+              />
+              <SimulationController />
+              <ScenePerformanceManager />
+              <TextureLifecycleManager />
+              <AdaptiveLodManager />
+              <ScreenshotCaptureBridge />
+              <WebGLContextMonitor />
+              <RenderDiagnostics />
+              <SolarSystemV3 />
+            </FrameUpdateLanes>
+          </SceneLoadScheduler>
         </Canvas>
       </div>
-      <DeferredInterface />
-      <PerformanceDock />
-      <ExperienceDock />
+      {interfaceMode === 'full' ? <DeferredInterface /> : null}
+      {interfaceMode === 'full' ? <PerformanceDock /> : null}
       {contextLost ? <ContextRecovery onRetryEco={retryEco} /> : null}
     </RendererBoundary>
   )

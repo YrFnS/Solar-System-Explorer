@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useRef } from 'react'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { useMemo, useRef, type RefObject } from 'react'
+import { type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type {
   CentaurData,
@@ -16,9 +16,10 @@ import {
 } from './ephemeris'
 import EphemerisMoon from './EphemerisMoon'
 import { useExperienceStore } from './experience-store'
+import { useFrameLane } from './FrameUpdateLanes'
 import PlanetLabel from './PlanetLabel'
 import Rings from './Rings'
-import { getSimulationDateMs, J2000_UNIX_MS, DAY_MS } from './simulation-clock'
+import { J2000_UNIX_MS, DAY_MS } from './simulation-clock'
 import { useSolarSystemStore } from './store'
 import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 import VelocityVector from './VelocityVector'
@@ -63,32 +64,14 @@ function ProceduralSurface({ body }: { body: EphemerisSmallBodyData }) {
   )
 }
 
-function Tail({ body }: { body: CometData | InterstellarObjectData }) {
-  const groupRef = useRef<THREE.Group>(null)
-  const velocityRef = useRef(new THREE.Vector3())
-  const directionRef = useRef(new THREE.Vector3())
-  const quaternionRef = useRef(new THREE.Quaternion())
-  const mode = useExperienceStore((state) => state.mode)
+function Tail({
+  body,
+  groupRef,
+}: {
+  body: CometData | InterstellarObjectData
+  groupRef: RefObject<THREE.Group | null>
+}) {
   const tailColor = 'tailColor' in body && body.tailColor ? body.tailColor : body.color
-
-  useFrame(() => {
-    if (!groupRef.current) return
-    getBodyVisualVelocity(
-      body.id,
-      getSimulationDateMs(),
-      mode,
-      velocityRef.current
-    )
-    if (velocityRef.current.lengthSq() < 1e-8) return
-
-    directionRef.current.copy(velocityRef.current).normalize().negate()
-    quaternionRef.current.setFromUnitVectors(
-      new THREE.Vector3(0, 1, 0),
-      directionRef.current
-    )
-    groupRef.current.quaternion.copy(quaternionRef.current)
-  })
-
   const length = body.type === 'Interstellar Object' ? 2.2 : 3.8
 
   return (
@@ -126,7 +109,12 @@ function SelectionMarker({ body }: { body: EphemerisSmallBodyData }) {
 export default function EphemerisSmallBody({ body }: EphemerisSmallBodyProps) {
   const groupRef = useRef<THREE.Group>(null)
   const spinRef = useRef<THREE.Group>(null)
+  const tailRef = useRef<THREE.Group>(null)
   const positionRef = useRef(new THREE.Vector3())
+  const velocityRef = useRef(new THREE.Vector3())
+  const directionRef = useRef(new THREE.Vector3())
+  const quaternionRef = useRef(new THREE.Quaternion())
+  const upRef = useRef(new THREE.Vector3(0, 1, 0))
   const mode = useExperienceStore((state) => state.mode)
   const selectedBody = useSolarSystemStore((state) => state.selectedBody)
   const setSelectedBody = useSolarSystemStore((state) => state.setSelectedBody)
@@ -137,19 +125,38 @@ export default function EphemerisSmallBody({ body }: EphemerisSmallBodyProps) {
   const hasRings = 'hasRings' in body && Boolean(body.hasRings)
   const moons = 'moons' in body ? body.moons ?? [] : []
 
-  useFrame(() => {
-    const dateMs = getSimulationDateMs()
+  useFrameLane({
+    id: `small-body-detail:${body.id}`,
+    lane: 'critical',
+    priority: -25,
+  }, ({ simulationDateMs }) => {
     if (groupRef.current) {
       groupRef.current.position.copy(
-        getBodyVisualPosition(body.id, dateMs, mode, positionRef.current)
+        getBodyVisualPosition(body.id, simulationDateMs, mode, positionRef.current)
       )
     }
     if (spinRef.current) {
-      const days = (dateMs - J2000_UNIX_MS) / DAY_MS
+      const days = (simulationDateMs - J2000_UNIX_MS) / DAY_MS
       const speed = 'rotationSpeed' in body ? body.rotationSpeed : 0.08
       spinRef.current.rotation.y = days * speed * 0.35
       spinRef.current.rotation.x = days * 0.018
     }
+
+    if (!isComet || !tailRef.current) return
+    getBodyVisualVelocity(
+      body.id,
+      simulationDateMs,
+      mode,
+      velocityRef.current
+    )
+    if (velocityRef.current.lengthSq() < 1e-8) return
+
+    directionRef.current.copy(velocityRef.current).normalize().negate()
+    quaternionRef.current.setFromUnitVectors(
+      upRef.current,
+      directionRef.current
+    )
+    tailRef.current.quaternion.copy(quaternionRef.current)
   })
 
   const handleClick = (event: ThreeEvent<MouseEvent>) => {
@@ -164,7 +171,7 @@ export default function EphemerisSmallBody({ body }: EphemerisSmallBodyProps) {
       : null
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} name={`small-body:${body.id}`}>
       <group ref={spinRef} onClick={handleClick}>
         {texturedDwarf ? (
           <TexturedSurface body={texturedDwarf} />
@@ -177,7 +184,12 @@ export default function EphemerisSmallBody({ body }: EphemerisSmallBodyProps) {
         </mesh>
       </group>
 
-      {isComet && <Tail body={body as CometData | InterstellarObjectData} />}
+      {isComet && (
+        <Tail
+          body={body as CometData | InterstellarObjectData}
+          groupRef={tailRef}
+        />
+      )}
 
       {hasRings && (
         <Rings

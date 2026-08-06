@@ -1,8 +1,8 @@
 'use client'
 
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import {
   getEffectiveQuality,
@@ -65,12 +65,18 @@ function ScatteredDiscBeltInner() {
     mesh.computeBoundingSphere()
   }, [dummy, effectiveCount])
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: 'scattered-disc-field',
+    lane: 'decorative',
+    priority: 82,
+  }, ({ laneDelta }) => {
     if (!meshRef.current) return
 
     const timeSpeed = useSolarSystemStore.getState().timeSpeed
     const motionFactor = reducedMotion ? 0.15 : 1
-    meshRef.current.rotation.y += delta * 0.0018 * timeSpeed * motionFactor
+    meshRef.current.rotation.y += (
+      laneDelta * 0.0018 * timeSpeed * motionFactor
+    )
   })
 
   return (

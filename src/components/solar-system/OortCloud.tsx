@@ -1,8 +1,8 @@
 'use client'
 
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import {
   getEffectiveQuality,
@@ -60,12 +60,19 @@ export default function OortCloud() {
     mesh.computeBoundingSphere()
   }, [dummy, effectiveCount])
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: 'oort-cloud',
+    lane: 'decorative',
+    priority: 83,
+    enabled: showKuiperBelt,
+  }, ({ laneDelta }) => {
     if (!meshRef.current) return
 
     const timeSpeed = useSolarSystemStore.getState().timeSpeed
     const motionFactor = reducedMotion ? 0.12 : 1
-    meshRef.current.rotation.y += delta * 0.00035 * timeSpeed * motionFactor
+    meshRef.current.rotation.y += (
+      laneDelta * 0.00035 * timeSpeed * motionFactor
+    )
   })
 
   if (!showKuiperBelt) return null

@@ -1,8 +1,8 @@
 'use client'
 
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import {
   getEffectiveQuality,
@@ -66,12 +66,18 @@ function TrojanSwarm() {
     mesh.computeBoundingSphere()
   }, [dummy, effectiveCount])
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: 'trojan-swarms',
+    lane: 'decorative',
+    priority: 84,
+  }, ({ laneDelta }) => {
     if (!meshRef.current) return
 
     const timeSpeed = useSolarSystemStore.getState().timeSpeed
     const motionFactor = reducedMotion ? 0.18 : 1
-    meshRef.current.rotation.y += delta * JUPITER_ORBIT_SPEED * 0.05 * timeSpeed * motionFactor
+    meshRef.current.rotation.y += (
+      laneDelta * JUPITER_ORBIT_SPEED * 0.05 * timeSpeed * motionFactor
+    )
   })
 
   return (

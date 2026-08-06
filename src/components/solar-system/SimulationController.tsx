@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import {
   activateExperienceMode,
   useExperienceStore,
@@ -9,16 +9,43 @@ import {
 import {
   advanceSimulationClock,
   getSimulationDateMs,
+  MINUTE_MS,
   setSimulationDateMs,
 } from './simulation-clock'
+import {
+  FRAME_PACING_RESUME_EVENT,
+  requestPacedFrame,
+} from './FramePacingController'
 import { useSolarSystemStore } from './store'
 
-const UI_PUBLISH_INTERVAL = 0.2
+const NORMAL_UI_PUBLISH_INTERVAL_SECONDS = 1
+const HIGH_WARP_UI_PUBLISH_INTERVAL_SECONDS = 0.25
+const HIGH_WARP_THRESHOLD = 43_200
+const MAX_VISIBLE_WALL_DELTA_SECONDS = 0.75
+
+export interface SolarSimulationTimingDiagnostics {
+  dateMs: number
+  timeSpeed: number
+  paused: boolean
+  renderFrames: number
+  activeWallSeconds: number
+  simulatedMinutes: number
+  lastWallDeltaSeconds: number
+  uiPublishIntervalSeconds: number
+  visibilityResets: number
+  updatedAt: number
+}
+
+declare global {
+  interface Window {
+    __SOLAR_SIMULATION_TIMING__?: SolarSimulationTimingDiagnostics
+  }
+}
 
 /**
- * Advances the authoritative ephemeris clock before any orbital component runs.
- * Scene objects read the mutable clock directly in useFrame, while the date is
- * mirrored into Zustand at a low frequency for DOM controls and telemetry.
+ * Advances the authoritative ephemeris clock from monotonic wall time rather
+ * than assuming a fixed amount of simulation work per rendered frame. A 24,
+ * 30, 45, or 60 FPS render cadence therefore advances the same simulated time.
  */
 export default function SimulationController() {
   const timeSpeed = useSolarSystemStore((state) => state.timeSpeed)
@@ -27,9 +54,14 @@ export default function SimulationController() {
   const setElapsedTime = useSolarSystemStore((state) => state.setElapsedTime)
   const mode = useExperienceStore((state) => state.mode)
   const publishDate = useExperienceStore((state) => state.setSimulationDateMs)
-  const invalidate = useThree((state) => state.invalidate)
+
   const publishElapsedRef = useRef(Number.POSITIVE_INFINITY)
   const initializedModeRef = useRef(false)
+  const lastWallTimeRef = useRef<number | null>(null)
+  const renderFramesRef = useRef(0)
+  const activeWallSecondsRef = useRef(0)
+  const simulatedMinutesRef = useRef(0)
+  const visibilityResetsRef = useRef(0)
 
   const customDateMs = customDate?.getTime() ?? null
 
@@ -37,8 +69,8 @@ export default function SimulationController() {
     if (initializedModeRef.current) return
     initializedModeRef.current = true
     activateExperienceMode(mode)
-    invalidate()
-  }, [invalidate, mode])
+    requestPacedFrame('experience-initialized', 500)
+  }, [mode])
 
   useEffect(() => {
     const nextDateMs = customDateMs ?? Date.now()
@@ -46,14 +78,68 @@ export default function SimulationController() {
     publishDate(nextDateMs)
     setElapsedTime(nextDateMs)
     publishElapsedRef.current = 0
-    invalidate()
-  }, [customDateMs, invalidate, publishDate, setElapsedTime])
+    lastWallTimeRef.current = performance.now()
+    requestPacedFrame('simulation-date-change', 650)
+  }, [customDateMs, publishDate, setElapsedTime])
 
-  useFrame((_, delta) => {
-    const dateMs = advanceSimulationClock(delta, timeSpeed, isPaused)
-    publishElapsedRef.current += delta
+  useEffect(() => {
+    const resetWallBaseline = () => {
+      lastWallTimeRef.current = performance.now()
+      visibilityResetsRef.current += 1
+    }
 
-    if (publishElapsedRef.current < UI_PUBLISH_INTERVAL) return
+    const handleVisibility = () => {
+      if (!document.hidden) resetWallBaseline()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibility)
+    window.addEventListener(FRAME_PACING_RESUME_EVENT, resetWallBaseline)
+    resetWallBaseline()
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+      window.removeEventListener(FRAME_PACING_RESUME_EVENT, resetWallBaseline)
+    }
+  }, [])
+
+  useFrame(() => {
+    const now = performance.now()
+    const previous = lastWallTimeRef.current ?? now
+    lastWallTimeRef.current = now
+
+    const rawWallDelta = Math.max(0, (now - previous) / 1_000)
+    const wallDelta = Math.min(
+      MAX_VISIBLE_WALL_DELTA_SECONDS,
+      rawWallDelta
+    )
+    const beforeDateMs = getSimulationDateMs()
+    const dateMs = advanceSimulationClock(wallDelta, timeSpeed, isPaused)
+    const simulatedDeltaMinutes = (dateMs - beforeDateMs) / MINUTE_MS
+    const uiPublishInterval = Math.abs(timeSpeed) >= HIGH_WARP_THRESHOLD
+      ? HIGH_WARP_UI_PUBLISH_INTERVAL_SECONDS
+      : NORMAL_UI_PUBLISH_INTERVAL_SECONDS
+
+    renderFramesRef.current += 1
+    publishElapsedRef.current += wallDelta
+    if (!isPaused && timeSpeed !== 0) {
+      activeWallSecondsRef.current += wallDelta
+      simulatedMinutesRef.current += simulatedDeltaMinutes
+    }
+
+    window.__SOLAR_SIMULATION_TIMING__ = {
+      dateMs,
+      timeSpeed,
+      paused: isPaused,
+      renderFrames: renderFramesRef.current,
+      activeWallSeconds: activeWallSecondsRef.current,
+      simulatedMinutes: simulatedMinutesRef.current,
+      lastWallDeltaSeconds: wallDelta,
+      uiPublishIntervalSeconds: uiPublishInterval,
+      visibilityResets: visibilityResetsRef.current,
+      updatedAt: Date.now(),
+    }
+
+    if (publishElapsedRef.current < uiPublishInterval) return
 
     publishElapsedRef.current = 0
     publishDate(dateMs)
@@ -64,6 +150,10 @@ export default function SimulationController() {
     const dateMs = getSimulationDateMs()
     publishDate(dateMs)
     setElapsedTime(dateMs)
+
+    return () => {
+      delete window.__SOLAR_SIMULATION_TIMING__
+    }
   }, [publishDate, setElapsedTime])
 
   return null

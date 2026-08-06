@@ -12,23 +12,31 @@ import { KTX2_MANIFEST } from './textures/texture-manifest'
 import { useTextureRuntimeStore } from './textures/texture-runtime-store'
 
 const OPTIONS: Array<{ id: QualityPreset; label: string; note: string }> = [
-  { id: 'auto', label: 'Auto', note: 'Adapts to this device and live frame rate.' },
-  { id: 'eco', label: 'Eco', note: 'Best for phones, battery life, and cool operation.' },
-  { id: 'balanced', label: 'Balanced', note: 'Smooth exploration with strong visual detail.' },
-  { id: 'ultra', label: 'Ultra', note: 'Highest density and resolution for powerful GPUs.' },
+  {
+    id: 'auto',
+    label: 'Auto',
+    note: 'Starts conservatively and promotes only after a complete paced scene benchmark.',
+  },
+  { id: 'eco', label: 'Eco', note: 'Up to 30 FPS with a low-power GPU preference.' },
+  { id: 'balanced', label: 'Balanced', note: 'Adaptive 30–45 FPS with a low-power GPU preference.' },
+  { id: 'ultra', label: 'Ultra', note: 'Up to 60 FPS and high-performance GPU preference.' },
 ]
 
 export default function PerformanceDock() {
   const [open, setOpen] = useState(false)
   const screenshotMode = useSolarSystemStore((state) => state.screenshotMode)
-  const isPaused = useSolarSystemStore((state) => state.isPaused)
-  const autoRotate = useSolarSystemStore((state) => state.autoRotate)
-  const followMode = useSolarSystemStore((state) => state.followMode)
-  const isTourMode = useSolarSystemStore((state) => state.isTourMode)
-  const cameraMode = useSolarSystemStore((state) => state.cameraMode)
   const preset = usePerformanceStore((state) => state.preset)
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
+  const autoBaseline = usePerformanceStore((state) => state.autoBaseline)
+  const autoCeiling = usePerformanceStore((state) => state.autoCeiling)
+  const autoStatus = usePerformanceStore((state) => state.autoStatus)
+  const autoReason = usePerformanceStore((state) => state.autoReason)
   const fps = usePerformanceStore((state) => state.fps)
+  const frameMode = usePerformanceStore((state) => state.frameMode)
+  const frameTargetFps = usePerformanceStore((state) => state.frameTargetFps)
+  const rendererPowerPreference = usePerformanceStore(
+    (state) => state.rendererPowerPreference
+  )
   const reducedMotion = usePerformanceStore((state) => state.reducedMotion)
   const setPreset = usePerformanceStore((state) => state.setPreset)
   const setReducedMotion = usePerformanceStore((state) => state.setReducedMotion)
@@ -42,15 +50,22 @@ export default function PerformanceDock() {
 
   const effectiveQuality = getEffectiveQuality({ preset, autoQuality })
   const profile = QUALITY_PROFILES[effectiveQuality]
-  const idle = isPaused && !autoRotate && !followMode && !isTourMode && cameraMode !== 'fly'
-  const statusColor = idle
-    ? 'bg-sky-400'
-    : fps >= 52
-      ? 'bg-emerald-400'
-      : fps >= 36
-        ? 'bg-amber-400'
-        : 'bg-rose-400'
-  const liveLabel = idle ? 'IDLE' : `${fps} FPS`
+  const resting = frameMode === 'static' || frameMode === 'suspended'
+  const targetRatio = frameTargetFps > 0 ? fps / frameTargetFps : 1
+  const statusColor = frameMode === 'suspended'
+    ? 'bg-violet-400'
+    : frameMode === 'static'
+      ? 'bg-sky-400'
+      : targetRatio >= 0.86
+        ? 'bg-emerald-400'
+        : targetRatio >= 0.62
+          ? 'bg-amber-400'
+          : 'bg-rose-400'
+  const liveLabel = frameMode === 'suspended'
+    ? 'SLEEP'
+    : frameMode === 'static'
+      ? `${frameTargetFps} FPS REST`
+      : `${fps}/${frameTargetFps} FPS`
   const textureTier = effectiveQuality === 'eco'
     ? '512'
     : effectiveQuality === 'balanced'
@@ -84,6 +99,10 @@ export default function PerformanceDock() {
     <div
       className="absolute right-3 top-14 z-40 pointer-events-auto sm:right-5 sm:top-16"
       data-texture-backend={textureBackendLabel.toLowerCase()}
+      data-auto-quality-status={autoStatus}
+      data-frame-pacing-mode={frameMode}
+      data-frame-target-fps={frameTargetFps}
+      data-renderer-power-preference={rendererPowerPreference}
     >
       <button
         type="button"
@@ -93,7 +112,7 @@ export default function PerformanceDock() {
         aria-label="Open rendering quality controls"
       >
         <span className="relative flex h-2 w-2">
-          {!idle && (
+          {!resting && (
             <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-40 ${statusColor}`} />
           )}
           <span className={`relative inline-flex h-2 w-2 rounded-full ${statusColor}`} />
@@ -114,7 +133,7 @@ export default function PerformanceDock() {
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-300/80">
                   Render engine
                 </p>
-                <h2 className="mt-1 text-sm font-semibold">Adaptive detail control</h2>
+                <h2 className="mt-1 text-sm font-semibold">Adaptive detail and cadence</h2>
               </div>
               <button
                 type="button"
@@ -126,8 +145,38 @@ export default function PerformanceDock() {
               </button>
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-white/45">
-              Resolution, texture size, and object density scale independently, while a paused scene sleeps until it needs another frame.
+              Resolution, textures, workload, render cadence, and GPU preference scale together without changing simulation speed.
             </p>
+
+            <div className="mt-3 rounded-xl border border-white/8 bg-white/[0.035] px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-white/48">
+                  Frame pacing · {frameMode}
+                </span>
+                <span className="font-mono text-[8px] text-white/42">
+                  {frameTargetFps} FPS · {rendererPowerPreference}
+                </span>
+              </div>
+              <p className="mt-1.5 text-[9px] leading-relaxed text-white/38">
+                Active interaction uses the profile cap; quiet simulation steps down, paused scenes rest at a few frames per second, and hidden tabs suspend completely.
+              </p>
+            </div>
+
+            {preset === 'auto' ? (
+              <div className="mt-3 rounded-xl border border-sky-300/12 bg-sky-300/[0.055] px-3 py-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[8px] font-semibold uppercase tracking-[0.16em] text-sky-200/65">
+                    Auto · {autoStatus}
+                  </span>
+                  <span className="font-mono text-[8px] text-white/35">
+                    {QUALITY_PROFILES[autoBaseline].label} → {QUALITY_PROFILES[autoCeiling].label}
+                  </span>
+                </div>
+                <p className="mt-1.5 text-[9px] leading-relaxed text-white/42">
+                  {autoReason}
+                </p>
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-2 p-3">
@@ -178,7 +227,7 @@ export default function PerformanceDock() {
             <label className="flex cursor-pointer items-center justify-between gap-4">
               <span>
                 <span className="block text-[11px] font-medium text-white/80">Reduced motion</span>
-                <span className="mt-0.5 block text-[9px] text-white/35">Slows decorative fields and disables camera auto-rotation.</span>
+                <span className="mt-0.5 block text-[9px] text-white/35">Caps active cadence at 30 FPS and disables camera auto-rotation.</span>
               </span>
               <input
                 type="checkbox"
@@ -203,14 +252,14 @@ export default function PerformanceDock() {
               </span>
             </div>
             <div className="bg-[#07090f] px-2 py-2 text-center">
-              <span className="block text-[8px] uppercase tracking-wider text-white/30">Codec</span>
-              <span className="mt-0.5 block font-mono text-[10px] text-white/65">
-                {textureBackendLabel}
+              <span className="block text-[8px] uppercase tracking-wider text-white/30">Power</span>
+              <span className="mt-0.5 block font-mono text-[9px] text-white/65">
+                {rendererPowerPreference === 'low-power' ? 'LOW' : 'HIGH'}
               </span>
             </div>
             <div className="bg-[#07090f] px-2 py-2 text-center">
               <span className="block text-[8px] uppercase tracking-wider text-white/30">Live</span>
-              <span className="mt-0.5 block font-mono text-[10px] text-white/65">{liveLabel}</span>
+              <span className="mt-0.5 block font-mono text-[9px] text-white/65">{liveLabel}</span>
             </div>
           </div>
         </div>

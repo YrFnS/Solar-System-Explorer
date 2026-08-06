@@ -1,9 +1,9 @@
 'use client'
 
 import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import {
   getEffectiveQuality,
@@ -23,15 +23,8 @@ const MAX_LABEL_DISTANCE: Record<EffectiveQuality, number> = {
   ultra: 2500,
 }
 
-const LABEL_SAMPLE_RATE: Record<EffectiveQuality, number> = {
-  eco: 10,
-  balanced: 7,
-  ultra: 4,
-}
-
 export default function PlanetLabel({ name, offset, bodyId }: PlanetLabelProps) {
   const groupRef = useRef<THREE.Group>(null!)
-  const frameRef = useRef(0)
   const worldPositionRef = useRef(new THREE.Vector3())
   const projectedPositionRef = useRef(new THREE.Vector3())
 
@@ -40,16 +33,23 @@ export default function PlanetLabel({ name, offset, bodyId }: PlanetLabelProps) 
   const autoQuality = usePerformanceStore((state) => state.autoQuality)
   const quality = getEffectiveQuality({ preset, autoQuality })
   const isSelected = bodyId ? selectedBody === bodyId : false
+  const labelId = bodyId ?? name.toLowerCase().replace(/\s+/g, '-')
 
-  useFrame(({ camera }) => {
+  useFrameLane({
+    id: `label:${labelId}`,
+    lane: isSelected ? 'critical' : 'decorative',
+    priority: isSelected ? -10 : 40,
+  }, ({ state }) => {
     if (!groupRef.current) return
 
-    frameRef.current += 1
-    if (!isSelected && frameRef.current % LABEL_SAMPLE_RATE[quality] !== 0) return
+    if (isSelected) {
+      groupRef.current.visible = true
+      return
+    }
 
     const worldPosition = groupRef.current.getWorldPosition(worldPositionRef.current)
-    const cameraDistance = camera.position.distanceTo(worldPosition)
-    const projected = projectedPositionRef.current.copy(worldPosition).project(camera)
+    const cameraDistance = state.camera.position.distanceTo(worldPosition)
+    const projected = projectedPositionRef.current.copy(worldPosition).project(state.camera)
     const insideViewport =
       projected.z >= -1 &&
       projected.z <= 1 &&
@@ -57,7 +57,7 @@ export default function PlanetLabel({ name, offset, bodyId }: PlanetLabelProps) 
       Math.abs(projected.y) <= 1.12
 
     groupRef.current.visible =
-      isSelected || (insideViewport && cameraDistance <= MAX_LABEL_DISTANCE[quality])
+      insideViewport && cameraDistance <= MAX_LABEL_DISTANCE[quality]
   })
 
   const labelWidth = name.length * 0.12 + 0.2

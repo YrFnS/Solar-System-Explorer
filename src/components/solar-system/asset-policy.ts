@@ -1,9 +1,9 @@
 import * as THREE from 'three'
 import {
   getEffectiveQuality,
-  type EffectiveQuality,
   usePerformanceStore,
 } from './performance-store'
+import { getTextureFallbackUrl } from './textures/texture-manifest'
 
 let installed = false
 
@@ -14,37 +14,11 @@ const REMOTE_ASSET_REWRITES: Array<[string, string]> = [
   ['moonbump1k.jpg', '/textures/moon.jpg'],
 ]
 
-const TEXTURE_WIDTHS: Record<EffectiveQuality, number> = {
-  eco: 512,
-  balanced: 1024,
-  ultra: 2048,
-}
-
-function rewriteToOptimizedTexture(url: string) {
-  const suffixIndex = url.search(/[?#]/)
-  const pathname = suffixIndex >= 0 ? url.slice(0, suffixIndex) : url
-  const suffix = suffixIndex >= 0 ? url.slice(suffixIndex) : ''
-
-  if (
-    !pathname.startsWith('/textures/') ||
-    pathname.startsWith('/textures/optimized/') ||
-    !/\.(?:jpe?g|png|svg)$/i.test(pathname)
-  ) {
-    return url
-  }
-
-  const relativePath = pathname
-    .slice('/textures/'.length)
-    .replace(/\.(?:jpe?g|png|svg)$/i, '')
-  const quality = getEffectiveQuality(usePerformanceStore.getState())
-  const width = TEXTURE_WIDTHS[quality]
-
-  return `/textures/optimized/${relativePath}-${width}.webp${suffix}`
-}
-
 /**
- * Keeps legacy data entries compatible, removes common third-party texture
- * requests, and selects the texture tier that matches the active render profile.
+ * Keeps legacy data entries compatible and routes ordinary Three.js texture
+ * requests to the same explicit quality-tier URLs used by useAdaptiveTexture.
+ * Authored adaptive materials pass an already-tiered URL, which remains
+ * unchanged here and becomes the actual React Three Fiber cache key.
  */
 export function installAssetUrlPolicy() {
   if (installed || typeof window === 'undefined') return
@@ -53,6 +27,7 @@ export function installAssetUrlPolicy() {
   THREE.DefaultLoadingManager.setURLModifier((url) => {
     const rewrite = REMOTE_ASSET_REWRITES.find(([needle]) => url.includes(needle))
     const localUrl = rewrite ? rewrite[1] : url
-    return rewriteToOptimizedTexture(localUrl)
+    const quality = getEffectiveQuality(usePerformanceStore.getState())
+    return getTextureFallbackUrl(localUrl, quality)
   })
 }

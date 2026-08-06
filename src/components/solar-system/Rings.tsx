@@ -1,8 +1,9 @@
 'use client'
 
 import { useRef, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useTexture } from '@react-three/drei'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 
 interface RingsProps {
   innerRadius: number
@@ -12,8 +13,6 @@ interface RingsProps {
   planetRadius: number
   textureUrl?: string
 }
-
-import { useTexture } from '@react-three/drei'
 
 function TexturedRing({ innerRadius, outerRadius, opacity, planetRadius, textureUrl }: Omit<RingsProps, 'color'>) {
   const texture = useTexture(textureUrl!)
@@ -25,20 +24,15 @@ function TexturedRing({ innerRadius, outerRadius, opacity, planetRadius, texture
     const uv = geo.attributes.uv
     const v3 = new THREE.Vector3()
 
-    // SolarSystemScope's ring textures are 1D horizontal strips. 
-    // We map the distance from center (inner..outer) to the X axis of the texture.
     for (let i = 0; i < pos.count; i++) {
       v3.fromBufferAttribute(pos, i)
       const r = v3.length()
-      // u is 0 at inner radius, 1 at outer radius
       const u = (r - innerRadius) / (outerRadius - innerRadius)
-      // v is technically not used since it's a 1D gradient strip, but we can set it to 0.5
       uv.setXY(i, u, 0.5)
     }
     return geo
   }, [innerRadius, outerRadius])
 
-  // Ring shadow on planet
   const shadowGeometry = useMemo(() => {
     const segments = 128
     const geo = new THREE.CircleGeometry(planetRadius * 0.98, segments)
@@ -72,7 +66,6 @@ function TexturedRing({ innerRadius, outerRadius, opacity, planetRadius, texture
         />
       </mesh>
 
-      {/* Ring shadow on planet surface */}
       <mesh
         geometry={shadowGeometry}
         rotation={[Math.PI * 0.35, 0, 0]}
@@ -109,7 +102,6 @@ function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius
 
   const geometry = useMemo(() => {
     const geo = new THREE.RingGeometry(innerRadius, outerRadius, 128, 4)
-    // Fix UV mapping - map U to radial distance
     const pos = geo.attributes.position
     const uv = geo.attributes.uv
     const v3 = new THREE.Vector3()
@@ -123,23 +115,18 @@ function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius
       const u = (r - innerRadius) / (outerRadius - innerRadius)
       uv.setXY(i, u, 0.5)
 
-      // Per-vertex color and alpha for ring bands with enhanced color gradients
       let alpha = 0
       let brightness = 1.0
-      let colorShift = 0.0 // Warm/cool shift for variety
+      let colorShift = 0.0
 
-      // C Ring (faint inner) - slightly cooler/bluer
       if (u >= 0.00 && u < 0.15) {
         alpha = u < 0.05 ? u / 0.05 * 0.2 : (0.15 - u) / 0.1 * 0.2
         brightness = 0.65
         colorShift = -0.15
-      }
-      // B Ring (bright, wide) - warm golden
-      else if (u >= 0.18 && u < 0.48) {
+      } else if (u >= 0.18 && u < 0.48) {
         alpha = 0.85
         brightness = 1.0 + (0.33 - Math.abs(u - 0.33)) * 0.5
         colorShift = (u - 0.33) * 0.3
-        // B Ring color variation: inner part slightly orange, outer slightly pale
         if (u < 0.30) {
           brightness *= 1.05
           colorShift = 0.1
@@ -147,32 +134,24 @@ function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius
           brightness *= 1.15
           colorShift = 0.05
         }
-      }
-      // Cassini Division (dark gap - enhanced)
-      else if (u >= 0.48 && u < 0.54) {
+      } else if (u >= 0.48 && u < 0.54) {
         alpha = 0.025
         brightness = 0.15
         colorShift = 0
-      }
-      // A Ring - slightly cooler/brighter than B ring
-      else if (u >= 0.54 && u < 0.84) {
+      } else if (u >= 0.54 && u < 0.84) {
         alpha = 0.65 * (1.0 - (u - 0.54) / 0.3 * 0.25)
         brightness = 0.95
         colorShift = -0.05
-        // Encke gap
         if (u >= 0.72 && u < 0.74) {
           alpha = 0.02
           brightness = 0.12
         }
-      }
-      // F Ring (narrow outer) - bright and icy
-      else if (u >= 0.88 && u < 0.93) {
+      } else if (u >= 0.88 && u < 0.93) {
         alpha = 0.4 * (1.0 - Math.abs(u - 0.905) / 0.025)
         brightness = 0.85
         colorShift = -0.1
       }
 
-      // Apply color shift: warm shift increases red/green, cool shift increases blue
       const cr = baseColor.r * brightness * (1.0 + colorShift * 0.3)
       const cg = baseColor.g * brightness * (1.0 + colorShift * 0.15)
       const cb = baseColor.b * brightness * (1.0 - colorShift * 0.2)
@@ -188,7 +167,6 @@ function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius
     return geo
   }, [innerRadius, outerRadius, color])
 
-  // Ring shadow - a dark disc slightly above the planet's equator
   const shadowGeometry = useMemo(() => {
     const segments = 128
     const geo = new THREE.CircleGeometry(planetRadius * 0.98, segments)
@@ -208,7 +186,6 @@ function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius
     return geo
   }, [planetRadius])
 
-  // Material with shimmer effect
   const ringMaterial = useMemo(() => {
     return new THREE.ShaderMaterial({
       uniforms: {
@@ -235,24 +212,15 @@ function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius
         uniform float opacity;
         uniform float time;
         void main() {
-          // Enhanced ice crystal shimmer/sparkle - more pronounced
           float shimmer1 = sin(vUv.x * 80.0 + time * 0.8) * 0.05 + sin(vUv.x * 120.0 - time * 0.5) * 0.03 + 1.0;
           float shimmer2 = sin(vUv.x * 200.0 + time * 1.5) * 0.02;
           float shimmer3 = sin(vUv.x * 350.0 - time * 2.0) * 0.015;
           float shimmer = shimmer1 + shimmer2 + shimmer3;
-
-          // Ice sparkle - random bright points
           float sparkle = step(0.97, sin(vUv.x * 500.0 + time * 3.0) * sin(vUv.x * 300.0 - time * 2.5)) * 0.3;
-
           vec3 finalColor = vRingColor * shimmer;
-
-          // Stronger specular highlight on bright portions - ice reflection
           float spec = pow(max(vRingAlpha, 0.0), 1.5) * 0.25;
           finalColor += vec3(1.0, 0.98, 0.95) * spec;
-
-          // Add sparkle (ice crystals catching light)
           finalColor += vec3(1.0, 0.98, 1.0) * sparkle * vRingAlpha;
-
           gl_FragColor = vec4(finalColor, vRingAlpha * opacity);
         }
       `,
@@ -262,8 +230,12 @@ function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius
     })
   }, [opacity])
 
-  useFrame((_, delta) => {
-    timeRef.current += delta
+  useFrameLane({
+    id: `ring-shimmer:${innerRadius}:${outerRadius}`,
+    lane: 'decorative',
+    priority: 50,
+  }, ({ laneDelta }) => {
+    timeRef.current += laneDelta
     if (ringRef.current) {
       const mat = ringRef.current.material as THREE.ShaderMaterial
       mat.uniforms.time.value = timeRef.current
@@ -280,7 +252,6 @@ function ProceduralRing({ innerRadius, outerRadius, color, opacity, planetRadius
         renderOrder={2}
       />
 
-      {/* Ring shadow on planet surface */}
       <mesh
         geometry={shadowGeometry}
         rotation={[Math.PI * 0.35, 0, 0]}

@@ -21,6 +21,11 @@ import { useExperienceStore } from '../experience-store'
 import { useSolarSystemStore } from '../store'
 import { getBodyCatalogEntry } from './body-catalog'
 
+interface BodyInspectorProps {
+  mobileActive: boolean
+  onOpenMissionControl: () => void
+}
+
 function formatDistance(au: number | null, km: number | null) {
   if (au !== null && Number.isFinite(au) && au >= 0.01) {
     return `${new Intl.NumberFormat('en', { maximumFractionDigits: 4 }).format(au)} AU`
@@ -52,19 +57,22 @@ function InspectorAction({
       type="button"
       onClick={onClick}
       title={label}
-      className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[8px] font-medium transition ${
+      className={`flex min-h-11 min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 py-2 text-[10px] font-medium transition sm:min-h-0 sm:flex-row sm:px-2 sm:text-[8px] ${
         active
           ? 'border-amber-300/30 bg-amber-300/12 text-amber-100'
-          : 'border-white/7 bg-white/[0.035] text-white/45 hover:border-white/15 hover:bg-white/[0.08] hover:text-white/80'
+          : 'border-white/7 bg-white/[0.035] text-white/50 hover:border-white/15 hover:bg-white/[0.08] hover:text-white/80'
       }`}
     >
       {children}
-      <span className="hidden sm:inline">{label}</span>
+      <span>{label}</span>
     </button>
   )
 }
 
-export default function BodyInspector() {
+export default function BodyInspector({
+  mobileActive,
+  onOpenMissionControl,
+}: BodyInspectorProps) {
   const selectedBody = useSolarSystemStore((state) => state.selectedBody)
   const screenshotMode = useSolarSystemStore((state) => state.screenshotMode)
   const spawnedObjects = useSolarSystemStore((state) => state.spawnedObjects)
@@ -145,9 +153,19 @@ export default function BodyInspector() {
   ] : []
 
   return (
-    <aside className="pointer-events-auto fixed inset-x-2 bottom-2 z-40 max-h-[68vh] overflow-hidden rounded-3xl border border-white/10 bg-[#07090f]/96 text-white shadow-2xl backdrop-blur-2xl sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-24 sm:max-h-[calc(100vh-7rem)] sm:w-[21rem]">
-      <div className="h-0.5" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
-      <div className="relative overflow-hidden border-b border-white/8 px-4 py-3.5">
+    <aside
+      className={`solar-mobile-sheet solar-mobile-safe-bottom pointer-events-auto fixed inset-x-2 z-50 flex max-h-[min(78dvh,46rem)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#07090f]/96 text-white shadow-2xl backdrop-blur-2xl ${
+        mobileActive ? '' : 'max-sm:hidden'
+      } sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-4 sm:top-24 sm:max-h-[calc(100vh-7rem)] sm:w-[21rem]`}
+      data-mobile-bottom-surface="inspector"
+      data-mobile-surface-active={mobileActive ? 'true' : 'false'}
+    >
+      <div className="h-0.5 flex-none" style={{ background: `linear-gradient(90deg, transparent, ${accent}, transparent)` }} />
+      <div className="flex flex-none justify-center py-2 sm:hidden" aria-hidden="true">
+        <span className="h-1 w-10 rounded-full bg-white/18" />
+      </div>
+
+      <div className="relative flex-none overflow-hidden border-b border-white/8 px-4 pb-3.5 pt-1 sm:py-3.5">
         <div className="absolute inset-0 opacity-[0.08]" style={{ background: `radial-gradient(circle at 15% 20%, ${accent}, transparent 58%)` }} />
         <div className="relative flex items-start gap-3">
           <div
@@ -158,46 +176,56 @@ export default function BodyInspector() {
             }}
           />
           <div className="min-w-0 flex-1">
-            <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/30">Selected object</p>
-            <h2 className="mt-1 truncate text-base font-semibold text-white/92">{title}</h2>
-            <p className="mt-0.5 truncate text-[9px] text-white/38">{type}</p>
+            <p className="text-[8px] font-semibold uppercase tracking-[0.2em] text-white/35">Selected object</p>
+            <h2 className="mt-1 truncate text-lg font-semibold text-white/92 sm:text-base">{title}</h2>
+            <p className="mt-0.5 truncate text-[10px] text-white/45 sm:text-[9px]">{type}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setSelectedBody(null)}
-            className="rounded-xl p-1.5 text-white/32 transition hover:bg-white/10 hover:text-white"
-            aria-label="Close body inspector"
-          >
-            <X className="h-4 w-4" />
-          </button>
+          <div className="flex flex-none items-center gap-1">
+            <button
+              type="button"
+              onClick={onOpenMissionControl}
+              className="solar-mobile-icon-button grid h-11 w-11 place-items-center rounded-xl text-amber-200/60 transition hover:bg-amber-300/10 hover:text-amber-100 sm:hidden"
+              aria-label="Open mission control"
+            >
+              <Orbit className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedBody(null)}
+              className="solar-mobile-icon-button grid h-11 w-11 place-items-center rounded-xl text-white/38 transition hover:bg-white/10 hover:text-white sm:h-8 sm:w-8"
+              aria-label="Close body inspector"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {(liveDistance || liveSpeed) && (
           <div className="relative mt-3 grid grid-cols-2 gap-1.5">
             <div className="rounded-xl border border-white/6 bg-black/20 px-2.5 py-2">
-              <span className="flex items-center gap-1 text-[7px] uppercase tracking-wider text-white/25"><Ruler className="h-2.5 w-2.5" /> Sun distance</span>
-              <span className="mt-1 block font-mono text-[9px] text-white/62">{liveDistance ?? '—'}</span>
+              <span className="flex items-center gap-1 text-[7px] uppercase tracking-wider text-white/30"><Ruler className="h-2.5 w-2.5" /> Sun distance</span>
+              <span className="mt-1 block font-mono text-[9px] text-white/68">{liveDistance ?? '—'}</span>
             </div>
             <div className="rounded-xl border border-white/6 bg-black/20 px-2.5 py-2">
-              <span className="flex items-center gap-1 text-[7px] uppercase tracking-wider text-white/25"><Orbit className="h-2.5 w-2.5" /> Orbital speed</span>
-              <span className="mt-1 block font-mono text-[9px] text-white/62">{liveSpeed ?? '—'}</span>
+              <span className="flex items-center gap-1 text-[7px] uppercase tracking-wider text-white/30"><Orbit className="h-2.5 w-2.5" /> Orbital speed</span>
+              <span className="mt-1 block font-mono text-[9px] text-white/68">{liveSpeed ?? '—'}</span>
             </div>
           </div>
         )}
       </div>
 
-      <div className="max-h-[44vh] overflow-y-auto overscroll-contain px-4 py-3 sm:max-h-[calc(100vh-22rem)]">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3">
         {info?.physicsNote ? (
-          <div className="mb-3 rounded-xl border border-amber-300/12 bg-amber-300/[0.055] px-3 py-2 text-[8px] leading-relaxed text-amber-100/55">
+          <div className="mb-3 rounded-xl border border-amber-300/12 bg-amber-300/[0.055] px-3 py-2 text-[8px] leading-relaxed text-amber-100/60">
             {info.physicsNote}
           </div>
         ) : null}
 
         <div className="space-y-1">
           {details.map(([key, value]) => (
-            <div key={key} className="flex items-start justify-between gap-4 border-b border-white/5 py-1.5 last:border-0">
-              <span className="text-[9px] text-white/30">{key}</span>
-              <span className="max-w-[58%] text-right text-[9px] leading-relaxed text-white/65">
+            <div key={key} className="flex items-start justify-between gap-4 border-b border-white/5 py-2 last:border-0 sm:py-1.5">
+              <span className="text-[9px] text-white/38">{key}</span>
+              <span className="max-w-[58%] text-right text-[9px] leading-relaxed text-white/70">
                 {typeof value === 'number' ? value.toLocaleString() : value}
               </span>
             </div>
@@ -206,20 +234,20 @@ export default function BodyInspector() {
 
         {mode === 'scientific' && telemetry ? (
           <div className="mt-3 overflow-hidden rounded-2xl border border-emerald-300/10 bg-emerald-300/[0.035]">
-            <div className="flex items-center gap-1.5 border-b border-emerald-300/8 px-3 py-2 text-[7px] font-semibold uppercase tracking-[0.18em] text-emerald-200/48">
+            <div className="flex items-center gap-1.5 border-b border-emerald-300/8 px-3 py-2 text-[7px] font-semibold uppercase tracking-[0.18em] text-emerald-200/50">
               <Atom className="h-3 w-3" /> Ephemeris telemetry
             </div>
             <div className="grid grid-cols-2 gap-px bg-emerald-300/8">
               {scienceRows.map(({ label, value, icon: Icon }) => (
                 <div key={label} className="bg-[#080d10] px-3 py-2.5">
-                  <span className="flex items-center gap-1 text-[7px] uppercase tracking-wider text-white/25"><Icon className="h-2.5 w-2.5 text-emerald-300/50" /> {label}</span>
-                  <span className="mt-1 block font-mono text-[9px] text-white/62">{value}</span>
+                  <span className="flex items-center gap-1 text-[7px] uppercase tracking-wider text-white/30"><Icon className="h-2.5 w-2.5 text-emerald-300/50" /> {label}</span>
+                  <span className="mt-1 block font-mono text-[9px] text-white/68">{value}</span>
                 </div>
               ))}
             </div>
             <div className="flex items-start gap-2 px-3 py-2.5">
               <Info className="mt-0.5 h-3 w-3 flex-none text-sky-300/55" />
-              <p className="text-[8px] leading-relaxed text-white/30">{telemetry.note}</p>
+              <p className="text-[8px] leading-relaxed text-white/38">{telemetry.note}</p>
             </div>
           </div>
         ) : null}
@@ -227,28 +255,28 @@ export default function BodyInspector() {
         {info?.funFacts?.[0] ? (
           <div className="mt-3 rounded-2xl border border-white/6 bg-white/[0.025] px-3 py-2.5">
             <p className="text-[7px] font-semibold uppercase tracking-[0.2em]" style={{ color: accent }}>Observe</p>
-            <p className="mt-1.5 text-[9px] leading-relaxed text-white/40">{info.funFacts[0]}</p>
+            <p className="mt-1.5 text-[9px] leading-relaxed text-white/48">{info.funFacts[0]}</p>
           </div>
         ) : null}
       </div>
 
-      <div className="grid grid-cols-4 gap-1.5 border-t border-white/8 p-3">
+      <div className="grid flex-none grid-cols-4 gap-1.5 border-t border-white/8 p-3">
         <InspectorAction label="Focus" onClick={() => setFocusTarget(selectedBody)}>
-          <Focus className="h-3 w-3" />
+          <Focus className="h-4 w-4 sm:h-3 sm:w-3" />
         </InspectorAction>
         <InspectorAction label="Save" active={Boolean(existingBookmark)} onClick={toggleBookmark}>
-          {existingBookmark ? <BookmarkCheck className="h-3 w-3" /> : <Bookmark className="h-3 w-3" />}
+          {existingBookmark ? <BookmarkCheck className="h-4 w-4 sm:h-3 sm:w-3" /> : <Bookmark className="h-4 w-4 sm:h-3 sm:w-3" />}
         </InspectorAction>
         <InspectorAction label="Measure" active={Boolean(rulerTarget)} onClick={toggleRuler}>
-          <Milestone className="h-3 w-3" />
+          <Milestone className="h-4 w-4 sm:h-3 sm:w-3" />
         </InspectorAction>
         <InspectorAction label="Compare" onClick={beginComparison}>
-          <GitCompareArrows className="h-3 w-3" />
+          <GitCompareArrows className="h-4 w-4 sm:h-3 sm:w-3" />
         </InspectorAction>
       </div>
 
       {rulerTarget === selectedBody ? (
-        <div className="border-t border-amber-300/10 bg-amber-300/[0.04] px-4 py-2 text-center text-[8px] text-amber-100/45">
+        <div className="flex-none border-t border-amber-300/10 bg-amber-300/[0.04] px-4 py-2 text-center text-[8px] text-amber-100/50">
           Measurement origin set. Select another body to draw the live ephemeris distance.
         </div>
       ) : null}

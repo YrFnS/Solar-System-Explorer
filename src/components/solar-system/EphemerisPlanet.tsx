@@ -2,7 +2,7 @@
 
 import { useMemo, useRef } from 'react'
 import { Billboard } from '@react-three/drei'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { PlanetData } from './data'
 import {
@@ -11,9 +11,9 @@ import {
 } from './ephemeris'
 import EphemerisMoon from './EphemerisMoon'
 import { useExperienceStore } from './experience-store'
+import { useFrameLane } from './FrameUpdateLanes'
 import PlanetLabel from './PlanetLabel'
 import Rings from './Rings'
-import { getSimulationDateMs } from './simulation-clock'
 import { useSolarSystemStore } from './store'
 import AdaptiveTexturedRings from './textures/AdaptiveTexturedRings'
 import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
@@ -51,10 +51,15 @@ function CloudLayer({ data }: { data: PlanetData }) {
   const texture = useAdaptiveTexture(data.cloudMapUrl!, { anisotropy: 2 })
   const ref = useRef<THREE.Mesh>(null)
 
-  useFrame(() => {
+  useFrameLane({
+    id: `planet-cloud:${data.id}`,
+    lane: 'decorative',
+    priority: 20,
+  }, ({ simulationDateMs }) => {
     if (!ref.current) return
-    const dateMs = getSimulationDateMs()
-    ref.current.rotation.y = ((dateMs / 3_600_000) * 0.026) % (Math.PI * 2)
+    ref.current.rotation.y = (
+      (simulationDateMs / 3_600_000) * 0.026
+    ) % (Math.PI * 2)
   })
 
   return (
@@ -205,15 +210,23 @@ export default function EphemerisPlanet({ data }: EphemerisPlanetProps) {
   const showLabels = useSolarSystemStore((state) => state.showLabels)
   const selected = selectedBody === data.id
 
-  useFrame(() => {
-    const dateMs = getSimulationDateMs()
+  useFrameLane({
+    id: `planet:${data.id}`,
+    lane: selected ? 'critical' : 'ephemeris',
+    priority: selected ? -40 : 0,
+  }, ({ simulationDateMs }) => {
     if (groupRef.current) {
       groupRef.current.position.copy(
-        getMajorPlanetVisualPosition(data, dateMs, mode, positionRef.current)
+        getMajorPlanetVisualPosition(
+          data,
+          simulationDateMs,
+          mode,
+          positionRef.current
+        )
       )
     }
     if (spinRef.current) {
-      spinRef.current.rotation.y = getPlanetRotationAngle(data, dateMs)
+      spinRef.current.rotation.y = getPlanetRotationAngle(data, simulationDateMs)
     }
   })
 
@@ -224,7 +237,7 @@ export default function EphemerisPlanet({ data }: EphemerisPlanetProps) {
   }
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} name={`body:${data.id}`}>
       <group rotation={[0, 0, THREE.MathUtils.degToRad(data.axialTilt)]}>
         <group ref={spinRef} onClick={handleClick}>
           {data.textureUrl ? <TexturedSurface data={data} /> : <ColorSurface data={data} />}

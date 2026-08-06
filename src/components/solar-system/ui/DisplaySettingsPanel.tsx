@@ -9,6 +9,10 @@ import {
   Sparkles,
   X,
 } from 'lucide-react'
+import {
+  getSceneSystemLimitNote,
+  useSceneSystemStatus,
+} from '../scene-workload-policy'
 import { useSolarSystemStore } from '../store'
 
 interface DisplaySettingsPanelProps {
@@ -19,19 +23,33 @@ interface DisplaySettingsPanelProps {
 function ToggleRow({
   label,
   note,
+  limitedNote,
   checked,
   onChange,
 }: {
   label: string
   note?: string
+  limitedNote?: string
   checked: boolean
   onChange: (value: boolean) => void
 }) {
   return (
     <label className="flex cursor-pointer items-center justify-between gap-4 rounded-2xl border border-white/5 bg-white/[0.025] px-3 py-2.5 transition hover:border-white/10 hover:bg-white/[0.045]">
       <span className="min-w-0">
-        <span className="block text-[10px] font-medium text-white/75">{label}</span>
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-medium text-white/75">{label}</span>
+          {limitedNote ? (
+            <span className="rounded-full border border-sky-300/15 bg-sky-300/[0.07] px-1.5 py-0.5 text-[7px] font-semibold uppercase tracking-wider text-sky-200/60">
+              Paused by quality
+            </span>
+          ) : null}
+        </span>
         {note ? <span className="mt-0.5 block text-[8px] leading-relaxed text-white/28">{note}</span> : null}
+        {limitedNote ? (
+          <span className="mt-1 block text-[8px] leading-relaxed text-sky-200/42">
+            {limitedNote}
+          </span>
+        ) : null}
       </span>
       <span className={`relative h-5 w-9 flex-none rounded-full border transition ${checked ? 'border-amber-300/35 bg-amber-300/25' : 'border-white/10 bg-white/5'}`}>
         <input
@@ -83,6 +101,29 @@ export default function DisplaySettingsPanel({ open, onClose }: DisplaySettingsP
   const setCameraPosition = useSolarSystemStore((state) => state.setCameraPosition)
   const resetCamera = useSolarSystemStore((state) => state.resetCamera)
 
+  const asteroidStatus = useSceneSystemStatus('asteroid-belt')
+  const kuiperStatus = useSceneSystemStatus('kuiper-belt')
+  const nebulaStatus = useSceneSystemStatus('nebula')
+  const heliosphereStatus = useSceneSystemStatus('heliosphere')
+  const trojanStatus = useSceneSystemStatus('trojans')
+  const centaurStatus = useSceneSystemStatus('centaurs')
+  const scatteredStatus = useSceneSystemStatus('scattered-disc')
+  const phenomenaStatus = useSceneSystemStatus('phenomena')
+  const solarWindStatus = useSceneSystemStatus('solar-wind')
+  const zodiacalStatus = useSceneSystemStatus('zodiacal-light')
+  const limitedCount = [
+    asteroidStatus,
+    kuiperStatus,
+    nebulaStatus,
+    heliosphereStatus,
+    trojanStatus,
+    centaurStatus,
+    scatteredStatus,
+    phenomenaStatus,
+    solarWindStatus,
+    zodiacalStatus,
+  ].filter((status) => status.limited).length
+
   if (!open) return null
 
   return (
@@ -106,6 +147,12 @@ export default function DisplaySettingsPanel({ open, onClose }: DisplaySettingsP
         </div>
 
         <div className="overflow-y-auto overscroll-contain p-3">
+          {limitedCount > 0 ? (
+            <div className="mb-3 rounded-2xl border border-sky-300/12 bg-sky-300/[0.055] px-3 py-2.5 text-[9px] leading-relaxed text-sky-100/50">
+              The current quality profile pauses {limitedCount} expensive preference{limitedCount === 1 ? '' : 's'}. Their switches stay saved and become active again when the render profile permits them.
+            </div>
+          ) : null}
+
           <section>
             <div className="mb-2 flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.16em] text-white/40">
               <Camera className="h-3.5 w-3.5 text-sky-300/70" /> Camera
@@ -154,13 +201,13 @@ export default function DisplaySettingsPanel({ open, onClose }: DisplaySettingsP
               <Orbit className="h-3.5 w-3.5 text-violet-300/70" /> System layers
             </div>
             <div className="grid gap-1.5 sm:grid-cols-2">
-              <ToggleRow label="Asteroid belt" checked={showAsteroidBelt} onChange={setShowAsteroidBelt} />
-              <ToggleRow label="Kuiper belt" checked={showKuiperBelt} onChange={setShowKuiperBelt} />
-              <ToggleRow label="Nebula backdrop" checked={showNebula} onChange={setShowNebula} />
-              <ToggleRow label="Heliosphere" checked={showHeliosphere} onChange={setShowHeliosphere} />
-              <ToggleRow label="Jupiter Trojans" checked={showTrojans} onChange={setShowTrojans} />
-              <ToggleRow label="Centaur field" checked={showCentaurs} onChange={setShowCentaurs} />
-              <ToggleRow label="Scattered disc" checked={showScatteredDisc} onChange={setShowScatteredDisc} />
+              <ToggleRow label="Asteroid belt" checked={showAsteroidBelt} onChange={setShowAsteroidBelt} limitedNote={asteroidStatus.limited ? getSceneSystemLimitNote('asteroid-belt') : undefined} />
+              <ToggleRow label="Kuiper belt" checked={showKuiperBelt} onChange={setShowKuiperBelt} limitedNote={kuiperStatus.limited ? getSceneSystemLimitNote('kuiper-belt') : undefined} />
+              <ToggleRow label="Nebula backdrop" checked={showNebula} onChange={setShowNebula} limitedNote={nebulaStatus.limited ? getSceneSystemLimitNote('nebula') : undefined} />
+              <ToggleRow label="Heliosphere" checked={showHeliosphere} onChange={setShowHeliosphere} limitedNote={heliosphereStatus.limited ? getSceneSystemLimitNote('heliosphere') : undefined} />
+              <ToggleRow label="Jupiter Trojans" checked={showTrojans} onChange={setShowTrojans} limitedNote={trojanStatus.limited ? getSceneSystemLimitNote('trojans') : undefined} />
+              <ToggleRow label="Centaur field" checked={showCentaurs} onChange={setShowCentaurs} limitedNote={centaurStatus.limited ? getSceneSystemLimitNote('centaurs') : undefined} />
+              <ToggleRow label="Scattered disc" checked={showScatteredDisc} onChange={setShowScatteredDisc} limitedNote={scatteredStatus.limited ? getSceneSystemLimitNote('scattered-disc') : undefined} />
             </div>
           </section>
 
@@ -169,9 +216,9 @@ export default function DisplaySettingsPanel({ open, onClose }: DisplaySettingsP
               <Sparkles className="h-3.5 w-3.5 text-rose-300/70" /> Phenomena
             </div>
             <div className="space-y-1.5">
-              <ToggleRow label="Active phenomena" note="Master switch for decorative dynamic effects." checked={showPhenomena} onChange={setShowPhenomena} />
-              <ToggleRow label="Solar wind" checked={showSolarWind} onChange={setShowSolarWind} />
-              <ToggleRow label="Zodiacal light" checked={showZodiacalLight} onChange={setShowZodiacalLight} />
+              <ToggleRow label="Active phenomena" note="Master switch for decorative dynamic effects." checked={showPhenomena} onChange={setShowPhenomena} limitedNote={phenomenaStatus.limited ? getSceneSystemLimitNote('phenomena') : undefined} />
+              <ToggleRow label="Solar wind" checked={showSolarWind} onChange={setShowSolarWind} limitedNote={solarWindStatus.limited ? getSceneSystemLimitNote('solar-wind') : undefined} />
+              <ToggleRow label="Zodiacal light" checked={showZodiacalLight} onChange={setShowZodiacalLight} limitedNote={zodiacalStatus.limited ? getSceneSystemLimitNote('zodiacal-light') : undefined} />
             </div>
           </section>
         </div>
