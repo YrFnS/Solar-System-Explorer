@@ -1,10 +1,16 @@
-# P2 Device Acceptance and Merge Readiness
+# P2 Device Acceptance, Campaign Launch, and Merge Readiness
 
-Production stays on WebGL 2. This phase does not promote WebGPU; it establishes the physical-device evidence and review gate required before the integrated runtime branch can move out of draft.
+Production stays on WebGL 2. This phase does not promote WebGPU; it establishes the physical-device evidence, repeatable launch flow, and review gate required before the integrated runtime branch can move out of draft.
 
 ## Routes
 
-Capture evidence on each physical device at:
+Create one coordinated physical-device campaign at:
+
+```text
+/lab/device-acceptance/launch
+```
+
+Capture production evidence on each physical device at:
 
 ```text
 /lab/device-acceptance
@@ -16,9 +22,108 @@ Combine and review exported bundles at:
 /lab/device-acceptance/results
 ```
 
-The capture route runs the same production `SceneContainer` used by the main explorer. The results route does not render a benchmark mock; it analyzes the exported production diagnostics, human approvals, screenshots, thermal samples, recovery events, and commit provenance.
+The capture route runs the same production `SceneContainer` used by the main explorer. The launcher only prepares device identity, campaign context, the recommended primary profile, and a clean local workspace. The results route analyzes exported production diagnostics, human approvals, screenshots, thermal samples, recovery events, and commit provenance.
 
-All evidence remains in browser local storage until it is explicitly exported or imported. Nothing is uploaded automatically.
+Nothing is uploaded automatically. Capture and review data stays in browser local storage until it is explicitly exported or imported.
+
+## Fastest local or LAN setup
+
+Build the exact branch once:
+
+```bash
+bun install --frozen-lockfile
+bun run build
+```
+
+Then start the acceptance server:
+
+```bash
+bun run acceptance:serve
+```
+
+The command:
+
+- prepares `public` and `.next/static` inside the standalone build;
+- binds the production server for LAN access;
+- detects non-loopback IPv4 addresses;
+- prints the campaign launcher and results URLs for localhost and the LAN;
+- keeps every device on the same built commit.
+
+A combined build-and-serve command is also available:
+
+```bash
+bun run acceptance:preview
+```
+
+By default the server uses port `3000`. Override it when needed:
+
+```bash
+ACCEPTANCE_PORT=3100 bun run acceptance:serve
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:ACCEPTANCE_PORT = "3100"
+bun run acceptance:serve
+```
+
+Allow the selected port through the local firewall and keep the laptop, desktop, and phone on a network that can reach the printed address. A `localhost` or `127.0.0.1` URL cannot be opened from another device.
+
+Some browser APIs require HTTPS. LAN HTTP remains sufficient for the production WebGL scene and most acceptance diagnostics, but Battery Status, clipboard, sharing, and other optional APIs can vary by browser and security context. Record unavailable APIs in the device notes rather than treating their absence as an application failure.
+
+## P2.3 campaign launcher
+
+Open the printed launcher URL on the operator machine.
+
+The launcher creates one campaign ID and three preconfigured links:
+
+| Device class | Primary profile |
+| --- | --- |
+| Integrated-graphics laptop | Balanced |
+| Discrete-GPU desktop | Ultra |
+| Android phone | Eco |
+
+For each card:
+
+1. Enter the device model and GPU label.
+2. Copy, share, or open its launch link.
+3. Open that exact link on the assigned device.
+4. Let the link redirect into `/lab/device-acceptance`.
+
+The launch link sets:
+
+- campaign ID;
+- required device class;
+- recommended primary profile;
+- device label containing the campaign ID;
+- clean-workspace preference.
+
+When **Start a clean workspace** is enabled, older local evidence is preserved in:
+
+```text
+solar-explorer-device-acceptance-backup-v1
+```
+
+The new campaign workspace uses:
+
+```text
+solar-explorer-device-acceptance-v1
+```
+
+Campaign bootstrap metadata uses:
+
+```text
+solar-explorer-device-acceptance-campaign-v1
+```
+
+This prevents stale sessions from silently mixing with a new hardware campaign while still retaining one recoverable local backup.
+
+The launcher publishes diagnostics through:
+
+```js
+window.__SOLAR_DEVICE_ACCEPTANCE_LAUNCH__
+```
 
 ## Required device matrix
 
@@ -28,7 +133,7 @@ Capture one exported JSON bundle from each class:
 2. Desktop with a discrete GPU.
 3. Android phone in portrait and landscape.
 
-Give each device a clear label containing the model and GPU when known. All bundles used for one merge decision should come from the same deployed commit.
+Give each device a clear label containing the model and GPU when known. All bundles used for one merge decision must come from the same deployed commit.
 
 ## Per-device capture procedure
 
@@ -38,12 +143,12 @@ For Eco, Balanced, and Ultra:
 
 1. Select the quality profile.
 2. Wait until the panel reports **Settled**.
-3. Orbit, zoom, search, select several bodies, open and close panels, and use the guided interactions.
+3. Orbit, zoom, search, select several bodies, open and close panels, and use guided interactions.
 4. Download a screenshot from the acceptance panel.
 5. Confirm there are no missing planets, black surfaces, broken transparency, unreadable labels, or overlapping mobile controls.
 6. Mark the corresponding visual-parity checklist item.
 
-Ultra is still captured on lower-end devices. Low performance may be expected there, but a renderer crash, missing scene, or unrecovered context is not acceptable.
+Ultra is still captured on lower-end devices. Low performance can be expected there, but a renderer crash, missing scene, or unrecovered context is not acceptable.
 
 ### 2. Primary profile capture
 
@@ -66,7 +171,7 @@ Run a 15-minute thermal capture using the primary profile. Keep the scene visibl
 Review:
 
 - first-window versus last-window median FPS;
-- battery percentage change when the Battery Status API is available;
+- battery percentage change when Battery Status is available;
 - fan noise or device warmth in the notes field;
 - texture, geometry, and heap counters for unexpected growth;
 - context-loss events;
@@ -92,7 +197,11 @@ During an active capture, press **GPU recovery**. On browsers exposing `WEBGL_lo
 
 Confirm that the recovery screen appears and the scene returns without losing application state. The session should contain matching `context-lost` and `context-restored` events.
 
-Some mobile browsers do not expose the testing extension. In that case, use display sleep/resume and document the limitation in notes with wording such as `WEBGL_lose_context unavailable on this browser`.
+Some mobile browsers do not expose the testing extension. In that case, use display sleep/resume and document the limitation in notes with wording such as:
+
+```text
+WEBGL_lose_context unavailable on this browser
+```
 
 ### 6. Export
 
@@ -136,19 +245,20 @@ The results workspace reports:
 - **Review** — there is no hard failure, but one or more signals require human attention, such as incomplete GPU identity, missing visibility transitions, absent deployment SHA, or moderate resource drift.
 - **Blocked** — required hardware evidence is missing, a primary or thermal session fails, visual or orientation approval is absent, context loss is unrecovered, the shared-clock invariant fails, resource growth is severe, or bundles span multiple commits.
 
-The reviewer workspace combines multiple bundles from the same device class when needed, but it warns when a class is represented by more than one export. Remove stale bundles before final approval.
+The reviewer workspace combines multiple bundles from the same device class when needed, but warns when one class is represented by more than one export. Remove stale bundles before final approval.
 
 ### Resource stability thresholds
 
 For the selected thermal session:
 
 - more than two additional resident textures blocks readiness;
+- one or two additional textures require review;
 - more than twelve additional geometries blocks readiness;
-- more than four additional geometries requires review;
+- more than four additional geometries require review;
 - heap growth above 64 MB and 50% blocks readiness;
 - heap growth above 32 MB and 25% requires review.
 
-Heap evidence is optional because it is not exposed by every browser. Texture and geometry evidence comes from the production renderer diagnostics.
+Heap evidence is optional because it is not exposed by every browser. Texture and geometry evidence comes from production renderer diagnostics.
 
 ## Merge-readiness gate
 
