@@ -204,14 +204,16 @@ export function useFrameLane(
   const reactId = useId()
   const callbackRef = useRef(callback)
   const enabledRef = useRef(enabled)
-  callbackRef.current = callback
-  enabledRef.current = enabled
 
   if (!registry) {
     throw new Error('useFrameLane must be used inside FrameUpdateLanes')
   }
 
   const registrationKey = `${id}:${reactId}`
+
+  useLayoutEffect(() => {
+    callbackRef.current = callback
+  }, [callback])
 
   useLayoutEffect(() => registry.register({
     key: registrationKey,
@@ -223,6 +225,7 @@ export function useFrameLane(
   }), [lane, priority, registrationKey, registry])
 
   useEffect(() => {
+    enabledRef.current = enabled
     registry.invalidate(lane, `${id}:enabled`, true)
   }, [enabled, id, lane, registry])
 }
