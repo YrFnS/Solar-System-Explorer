@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
 const DeviceAcceptanceLab = dynamic(
@@ -22,5 +23,15 @@ const DeviceAcceptanceLab = dynamic(
 )
 
 export default function DeviceAcceptancePage() {
-  return <DeviceAcceptanceLab />
+  return (
+    <>
+      <DeviceAcceptanceLab />
+      <Link
+        href="/lab/device-acceptance/results"
+        className="fixed left-3 top-14 z-[126] rounded-full border border-cyan-200/15 bg-black/70 px-3 py-2 text-[9px] uppercase tracking-[0.16em] text-cyan-100/65 backdrop-blur-xl"
+      >
+        Review evidence
+      </Link>
+    </>
+  )
 }
