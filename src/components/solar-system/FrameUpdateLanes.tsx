@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useFrame, type RootState } from '@react-three/fiber'
+import * as THREE from 'three'
 import {
   FRAME_PACING_RESUME_EVENT,
   requestPacedFrame,
@@ -76,6 +77,26 @@ interface FrameLaneRuntimeStats {
   maxMs: number
 }
 
+interface CameraSnapshot {
+  initialized: boolean
+  position: THREE.Vector3
+  quaternion: THREE.Quaternion
+  zoom: number
+  fov: number
+}
+
+interface LaneDiagnostics {
+  registered: number
+  enabled: number
+  ticks: number
+  callbackExecutions: number
+  skippedFrames: number
+  averageMs: number
+  lastMs: number
+  maxMs: number
+  labels: string[]
+}
+
 export interface SolarFrameLaneDiagnostics {
   quality: EffectiveQuality
   dispatcherCallbacks: number
@@ -96,17 +117,7 @@ export interface SolarFrameLaneDiagnostics {
   averageDispatchMs: number
   lastDispatchMs: number
   maxDispatchMs: number
-  lanes: Record<FrameUpdateLane, {
-    registered: number
-    enabled: number
-    ticks: number
-    callbackExecutions: number
-    skippedFrames: number
-    averageMs: number
-    lastMs: number
-    maxMs: number
-    labels: string[]
-  }>
+  lanes: Record<FrameUpdateLane, LaneDiagnostics>
   lastInvalidationReason: string
   updatedAt: number
 }
@@ -217,16 +228,9 @@ export function useFrameLane(
 }
 
 function cameraChanged(
-  state: RootState,
-  snapshot: {
-    initialized: boolean
-    position: RootState['camera']['position']
-    quaternion: RootState['camera']['quaternion']
-    zoom: number
-    fov: number
-  }
+  camera: RootState['camera'],
+  snapshot: CameraSnapshot
 ) {
-  const camera = state.camera
   const zoom = 'zoom' in camera ? camera.zoom : 1
   const fov = 'fov' in camera ? camera.fov : Number.NaN
   const changed = !snapshot.initialized
@@ -285,10 +289,10 @@ export default function FrameUpdateLanes({ children }: { children: ReactNode }) 
     return navigator.webdriver
       || new URLSearchParams(window.location.search).get('diagnostics') === '1'
   }, [])
-  const cameraSnapshotRef = useRef({
+  const cameraSnapshotRef = useRef<CameraSnapshot>({
     initialized: false,
-    position: null as RootState['camera']['position'] | null,
-    quaternion: null as RootState['camera']['quaternion'] | null,
+    position: new THREE.Vector3(),
+    quaternion: new THREE.Quaternion(),
     zoom: Number.NaN,
     fov: Number.NaN,
   })
@@ -359,19 +363,21 @@ export default function FrameUpdateLanes({ children }: { children: ReactNode }) 
     const decorativeTargetHz = reducedMotionRef.current
       ? Math.min(8, DECORATIVE_TARGET_HZ[qualityRef.current])
       : DECORATIVE_TARGET_HZ[qualityRef.current]
-    const laneDiagnostics = createLaneMaps((() => null) as never) as SolarFrameLaneDiagnostics['lanes']
+    const laneDiagnostics = {} as Record<FrameUpdateLane, LaneDiagnostics>
     let registeredCallbacks = 0
     let enabledCallbacks = 0
 
     for (const lane of LANES) {
       const registrations = orderedRef.current[lane]
-      const enabled = registrations.filter((entry) => entry.enabledRef.current)
+      const enabledRegistrations = registrations.filter(
+        (entry) => entry.enabledRef.current
+      )
       const stats = laneStatsRef.current[lane]
       registeredCallbacks += registrations.length
-      enabledCallbacks += enabled.length
+      enabledCallbacks += enabledRegistrations.length
       laneDiagnostics[lane] = {
         registered: registrations.length,
-        enabled: enabled.length,
+        enabled: enabledRegistrations.length,
         ticks: stats.ticks,
         callbackExecutions: stats.callbackExecutions,
         skippedFrames: stats.skippedFrames,
@@ -429,6 +435,7 @@ export default function FrameUpdateLanes({ children }: { children: ReactNode }) 
     const handleResume = () => {
       lastLaneAtRef.current = createLaneMaps(() => Number.NEGATIVE_INFINITY)
       lastEphemerisDateRef.current = Number.NaN
+      cameraSnapshotRef.current.initialized = false
       invalidate('all', 'visibility-resume', true)
     }
 
@@ -495,25 +502,7 @@ export default function FrameUpdateLanes({ children }: { children: ReactNode }) 
 
     runLane('critical')
 
-    if (!cameraSnapshotRef.current.position) {
-      cameraSnapshotRef.current.position = state.camera.position.clone()
-      cameraSnapshotRef.current.quaternion = state.camera.quaternion.clone()
-    }
-    const snapshot = cameraSnapshotRef.current
-    if (
-      snapshot.position
-      && snapshot.quaternion
-      && cameraChanged(state, {
-        initialized: snapshot.initialized,
-        position: snapshot.position,
-        quaternion: snapshot.quaternion,
-        zoom: snapshot.zoom,
-        fov: snapshot.fov,
-      })
-    ) {
-      snapshot.initialized = true
-      snapshot.zoom = 'zoom' in state.camera ? state.camera.zoom : 1
-      snapshot.fov = 'fov' in state.camera ? state.camera.fov : Number.NaN
+    if (cameraChanged(state.camera, cameraSnapshotRef.current)) {
       dirtyRef.current.decorative = true
       cameraInvalidationsRef.current += 1
       lastInvalidationReasonRef.current = 'camera'
