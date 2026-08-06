@@ -73,8 +73,10 @@ requireContract(
 )
 
 requireContract(
-  count(instancedBodies, /useFrame\s*\(/g) === 1,
-  'InstancedSmallBodies must use exactly one frame callback for the entire overview.'
+  count(instancedBodies, /useFrameLane\s*\(/g) === 1
+    && count(instancedBodies, /useFrame\s*\(/g) === 0
+    && instancedBodies.includes("lane: 'ephemeris'"),
+  'InstancedSmallBodies must use exactly one shared ephemeris-lane registration for the entire overview.'
 )
 requireContract(
   count(instancedBodies, /<instancedMesh\b/g) === 3
@@ -126,5 +128,5 @@ if (failures.length > 0) {
   failures.forEach((failure) => console.error(`- ${failure}`))
   process.exitCode = 1
 } else {
-  console.log('[small-body-contract] one manager, three body batches, one orbit batch, and one detail promotion passed')
+  console.log('[small-body-contract] one lane manager, three body batches, one orbit batch, and one detail promotion passed')
 }
