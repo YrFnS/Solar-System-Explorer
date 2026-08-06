@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { FlyControls, OrbitControls } from '@react-three/drei'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
   getBodyRadius,
@@ -14,6 +14,10 @@ import {
   useExperienceStore,
 } from './experience-store'
 import { requestPacedFrame } from './FramePacingController'
+import {
+  requestFrameLaneUpdate,
+  useFrameLane,
+} from './FrameUpdateLanes'
 import {
   DAY_MS,
   getSimulationDateMs,
@@ -62,6 +66,7 @@ export function SimulationKeyboardControls() {
       publishDate(dateMs)
       setCustomDate(new Date(dateMs))
       requestPacedFrame('keyboard-date-step', 650)
+      requestFrameLaneUpdate('ephemeris', 'keyboard-date-step')
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -281,12 +286,16 @@ export default function EphemerisCameraController() {
     requestPacedFrame('camera-reset', 1_800)
   }, [camera, cameraPosition, setCameraPosition])
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: 'camera-controller',
+    lane: 'critical',
+    priority: -100,
+  }, ({ renderDelta }) => {
     if (animatingRef.current) {
       if (focusTarget) {
         resolveBodyPosition(focusTarget, targetRef.current)
       }
-      progressRef.current += delta * 0.9
+      progressRef.current += renderDelta * 0.9
       const progress = Math.min(1, progressRef.current)
       const eased = easeInOutCubic(progress)
       camera.position.lerpVectors(startRef.current, endRef.current, eased)
@@ -305,7 +314,7 @@ export default function EphemerisCameraController() {
       controlsRef.current.target.lerp(targetRef.current, 0.12)
       controlsRef.current.update()
     }
-  }, -20)
+  })
 
   if (cameraMode === 'fly') {
     return (
@@ -334,7 +343,10 @@ export default function EphemerisCameraController() {
       dampingFactor={0.05}
       autoRotate={autoRotate}
       autoRotateSpeed={0.5}
-      onChange={() => requestPacedFrame('orbit-controls', 750)}
+      onChange={() => {
+        requestPacedFrame('orbit-controls', 750)
+        requestFrameLaneUpdate('decorative', 'camera-controls')
+      }}
     />
   )
 }
