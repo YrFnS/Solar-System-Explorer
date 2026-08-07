@@ -40,10 +40,13 @@ export default function Home() {
   if (!mounted) return <LoadingScreen />
 
   return (
-    <div className="w-screen h-screen bg-black overflow-hidden relative">
+    <main
+      aria-label="Solar System Explorer"
+      className="w-screen h-screen bg-black overflow-hidden relative"
+    >
       <Suspense fallback={<LoadingScreen />}>
         <SceneContainer />
       </Suspense>
-    </div>
+    </main>
   )
 }
