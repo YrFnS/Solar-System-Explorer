@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { FlyControls, OrbitControls } from '@react-three/drei'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
   getBodyRadius,
@@ -13,6 +13,11 @@ import {
   activateExperienceMode,
   useExperienceStore,
 } from './experience-store'
+import { requestPacedFrame } from './FramePacingController'
+import {
+  requestFrameLaneUpdate,
+  useFrameLane,
+} from './FrameUpdateLanes'
 import {
   DAY_MS,
   getSimulationDateMs,
@@ -60,6 +65,8 @@ export function SimulationKeyboardControls() {
       setClockDateMs(dateMs)
       publishDate(dateMs)
       setCustomDate(new Date(dateMs))
+      requestPacedFrame('keyboard-date-step', 650)
+      requestFrameLaneUpdate('ephemeris', 'keyboard-date-step')
     }
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -202,7 +209,7 @@ export default function EphemerisCameraController() {
   const spawnedObjects = useSolarSystemStore((state) => state.spawnedObjects)
   const isPaused = useSolarSystemStore((state) => state.isPaused)
   const mode = useExperienceStore((state) => state.mode)
-  const { camera, invalidate } = useThree()
+  const { camera } = useThree()
 
   const animatingRef = useRef(false)
   const progressRef = useRef(0)
@@ -259,11 +266,10 @@ export default function EphemerisCameraController() {
     progressRef.current = 0
     animatingRef.current = true
     setSelectedBody(focusTarget)
-    invalidate()
+    requestPacedFrame('camera-focus', 1_800)
   }, [
     camera,
     focusTarget,
-    invalidate,
     resolveBodyPosition,
     resolveBodyRadius,
     setSelectedBody,
@@ -277,15 +283,19 @@ export default function EphemerisCameraController() {
     progressRef.current = 0
     animatingRef.current = true
     setCameraPosition(null)
-    invalidate()
-  }, [camera, cameraPosition, invalidate, setCameraPosition])
+    requestPacedFrame('camera-reset', 1_800)
+  }, [camera, cameraPosition, setCameraPosition])
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: 'camera-controller',
+    lane: 'critical',
+    priority: -100,
+  }, ({ renderDelta }) => {
     if (animatingRef.current) {
       if (focusTarget) {
         resolveBodyPosition(focusTarget, targetRef.current)
       }
-      progressRef.current += delta * 0.9
+      progressRef.current += renderDelta * 0.9
       const progress = Math.min(1, progressRef.current)
       const eased = easeInOutCubic(progress)
       camera.position.lerpVectors(startRef.current, endRef.current, eased)
@@ -296,7 +306,6 @@ export default function EphemerisCameraController() {
       }
 
       if (progress >= 1) animatingRef.current = false
-      else invalidate()
       return
     }
 
@@ -305,7 +314,7 @@ export default function EphemerisCameraController() {
       controlsRef.current.target.lerp(targetRef.current, 0.12)
       controlsRef.current.update()
     }
-  }, -20)
+  })
 
   if (cameraMode === 'fly') {
     return (
@@ -334,7 +343,10 @@ export default function EphemerisCameraController() {
       dampingFactor={0.05}
       autoRotate={autoRotate}
       autoRotateSpeed={0.5}
-      onChange={() => invalidate()}
+      onChange={() => {
+        requestPacedFrame('orbit-controls', 750)
+        requestFrameLaneUpdate('decorative', 'camera-controls')
+      }}
     />
   )
 }

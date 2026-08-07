@@ -1,7 +1,6 @@
 'use client'
 
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
   ASTEROID_BELT_INNER,
@@ -11,6 +10,7 @@ import {
   KUIPER_BELT_OUTER,
   KUIPER_COUNT,
 } from './data'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import {
   getEffectiveQuality,
@@ -95,12 +95,18 @@ function ParticleBelt({
     mesh.computeBoundingSphere()
   }, [dummy, effectiveCount, innerRadius, outerRadius, seed, size, ySpread])
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: `particle-belt:${geometryType}:${seed}`,
+    lane: 'decorative',
+    priority: 80,
+  }, ({ laneDelta }) => {
     if (!meshRef.current) return
 
     const timeSpeed = useSolarSystemStore.getState().timeSpeed
     const motionFactor = reducedMotion ? 0.18 : 1
-    meshRef.current.rotation.y += delta * rotationSpeed * timeSpeed * motionFactor
+    meshRef.current.rotation.y += (
+      laneDelta * rotationSpeed * timeSpeed * motionFactor
+    )
   })
 
   return (

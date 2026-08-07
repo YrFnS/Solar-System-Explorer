@@ -2,6 +2,16 @@
 
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
+import {
+  getEffectiveQuality,
+  usePerformanceStore,
+} from './performance-store'
+import {
+  SCENE_LOAD_STAGES,
+  useSceneLoadStage,
+} from './SceneLoadScheduler'
+
+const SETTLED_MEASUREMENT_DELAY_SECONDS = 1.5
 
 export interface SolarExplorerDiagnostics {
   drawCalls: number
@@ -24,24 +34,36 @@ declare global {
 
 /**
  * Exposes low-frequency renderer counters only for automated browsers or an
- * explicit `?diagnostics=1` session. Normal production visitors pay no
- * traversal cost and receive no global debug surface.
+ * explicit `?diagnostics=1` session. Snapshots are withheld while a fresh
+ * renderer is admitting scene stages and for a short stabilization window
+ * afterward, so comparisons never mix a core frame or previous quality with a
+ * settled frame from the current profile.
  */
 export default function RenderDiagnostics() {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
-  const elapsedRef = useRef(Number.POSITIVE_INFINITY)
+  const sceneLoadStage = useSceneLoadStage()
+  const preset = usePerformanceStore((state) => state.preset)
+  const autoQuality = usePerformanceStore((state) => state.autoQuality)
+  const quality = getEffectiveQuality({ preset, autoQuality })
+  const elapsedRef = useRef(0)
   const enabled = useMemo(() => {
     if (typeof window === 'undefined') return false
     return navigator.webdriver
       || new URLSearchParams(window.location.search).get('diagnostics') === '1'
   }, [])
+  const sceneSettled = sceneLoadStage >= SCENE_LOAD_STAGES.artifacts
+
+  useEffect(() => {
+    elapsedRef.current = 0
+    delete window.__SOLAR_EXPLORER_DIAGNOSTICS__
+  }, [quality, sceneSettled])
 
   useFrame((_, delta) => {
-    if (!enabled) return
+    if (!enabled || !sceneSettled) return
 
     elapsedRef.current += delta
-    if (elapsedRef.current < 1) return
+    if (elapsedRef.current < SETTLED_MEASUREMENT_DELAY_SECONDS) return
     elapsedRef.current = 0
 
     let sceneObjects = 0

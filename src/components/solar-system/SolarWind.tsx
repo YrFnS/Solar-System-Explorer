@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import {
   getEffectiveQuality,
@@ -31,6 +31,7 @@ export default function SolarWind() {
     100,
     Math.round(BASE_PARTICLE_COUNT * QUALITY_PROFILES[quality].instanceDensity)
   )
+  const enabled = showPhenomena && showSolarWind
 
   const { directions, radii, speeds } = useMemo(() => {
     const random = seededRandom(6299)
@@ -57,18 +58,23 @@ export default function SolarWind() {
     }
   }, [count])
 
-  useFrame((_, delta) => {
-    if (!materialRef.current || !showPhenomena || !showSolarWind) return
+  useFrameLane({
+    id: 'solar-wind',
+    lane: 'decorative',
+    priority: 85,
+    enabled,
+  }, ({ laneDelta }) => {
+    if (!materialRef.current) return
 
     const scene = useSolarSystemStore.getState()
     if (scene.isPaused) return
 
     const motionFactor = reducedMotion ? 0.2 : 1
-    elapsedRef.current += delta * scene.timeSpeed * motionFactor
+    elapsedRef.current += laneDelta * scene.timeSpeed * motionFactor
     materialRef.current.uniforms.uTime.value = elapsedRef.current
   })
 
-  if (!showPhenomena || !showSolarWind) return null
+  if (!enabled) return null
 
   return (
     <points>

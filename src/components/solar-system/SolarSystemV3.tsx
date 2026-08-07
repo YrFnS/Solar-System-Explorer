@@ -1,12 +1,6 @@
 'use client'
 
-import {
-  lazy,
-  Suspense,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import * as THREE from 'three'
 import Sun from './Sun'
 import EphemerisPlanet from './EphemerisPlanet'
@@ -18,6 +12,10 @@ import StarField from './StarField'
 import SoundManager from './SoundManager'
 import { planets } from './data'
 import { useExperienceStore } from './experience-store'
+import {
+  SCENE_LOAD_STAGES,
+  useSceneLoadStage,
+} from './SceneLoadScheduler'
 
 const BackgroundScene = lazy(() => import('./scene/BackgroundScene'))
 const PhenomenaScene = lazy(() => import('./scene/PhenomenaScene'))
@@ -25,54 +23,6 @@ const SmallBodiesScene = lazy(() => import('./scene/SmallBodiesScene'))
 const OuterFieldsScene = lazy(() => import('./scene/OuterFieldsScene'))
 const ArtifactsScene = lazy(() => import('./scene/ArtifactsScene'))
 const SandboxScene = lazy(() => import('./scene/SandboxScene'))
-
-type IdleWindow = Window & {
-  requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number
-  cancelIdleCallback?: (handle: number) => void
-}
-
-function useSceneStage() {
-  const [stage, setStage] = useState(0)
-
-  useEffect(() => {
-    const idleWindow = window as IdleWindow
-    const idleHandles: number[] = []
-    const timers: number[] = []
-    let cancelled = false
-
-    const scheduleStage = (nextStage: number, delay: number) => {
-      const timer = window.setTimeout(() => {
-        if (cancelled) return
-
-        if (idleWindow.requestIdleCallback) {
-          const idleHandle = idleWindow.requestIdleCallback(
-            () => {
-              if (!cancelled) setStage(nextStage)
-            },
-            { timeout: 650 }
-          )
-          idleHandles.push(idleHandle)
-          return
-        }
-
-        setStage(nextStage)
-      }, delay)
-      timers.push(timer)
-    }
-
-    scheduleStage(1, 70)
-    scheduleStage(2, 360)
-    scheduleStage(3, 950)
-
-    return () => {
-      cancelled = true
-      timers.forEach((timer) => window.clearTimeout(timer))
-      idleHandles.forEach((handle) => idleWindow.cancelIdleCallback?.(handle))
-    }
-  }, [])
-
-  return stage
-}
 
 function EclipticReferenceGrid() {
   const mode = useExperienceStore((state) => state.mode)
@@ -122,7 +72,7 @@ function EclipticReferenceGrid() {
 }
 
 export default function SolarSystemV3() {
-  const stage = useSceneStage()
+  const stage = useSceneLoadStage()
   const mode = useExperienceStore((state) => state.mode)
 
   return (
@@ -148,22 +98,37 @@ export default function SolarSystemV3() {
         <EphemerisPlanet key={planet.id} data={planet} />
       ))}
 
-      {stage >= 1 ? (
+      {stage >= SCENE_LOAD_STAGES.background ? (
         <Suspense fallback={null}>
           <BackgroundScene />
+        </Suspense>
+      ) : null}
+
+      {stage >= SCENE_LOAD_STAGES.phenomena ? (
+        <Suspense fallback={null}>
           <PhenomenaScene />
         </Suspense>
       ) : null}
 
-      {stage >= 2 ? (
+      {stage >= SCENE_LOAD_STAGES.smallBodies ? (
         <Suspense fallback={null}>
           <SmallBodiesScene />
-          <OuterFieldsScene />
-          {mode === 'sandbox' ? <SandboxScene /> : null}
         </Suspense>
       ) : null}
 
-      {stage >= 3 && mode !== 'scientific' ? (
+      {stage >= SCENE_LOAD_STAGES.outerFields ? (
+        <Suspense fallback={null}>
+          <OuterFieldsScene />
+        </Suspense>
+      ) : null}
+
+      {stage >= SCENE_LOAD_STAGES.sandbox && mode === 'sandbox' ? (
+        <Suspense fallback={null}>
+          <SandboxScene />
+        </Suspense>
+      ) : null}
+
+      {stage >= SCENE_LOAD_STAGES.artifacts && mode !== 'scientific' ? (
         <Suspense fallback={null}>
           <ArtifactsScene />
         </Suspense>

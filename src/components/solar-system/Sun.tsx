@@ -1,9 +1,10 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
-import { useFrame, ThreeEvent, useThree } from '@react-three/fiber'
+import { useMemo, useRef } from 'react'
+import { type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import { sunData } from './data'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 
@@ -24,13 +25,12 @@ function SunCorona() {
         varying vec3 vNormal;
         varying vec3 vPosition;
         uniform float time;
-        
-        // Simplex noise function
+
         vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
         vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
         vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
         vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
-        
+
         float snoise(vec3 v) {
           const vec2 C = vec2(1.0/6.0, 1.0/3.0);
           const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
@@ -73,11 +73,10 @@ function SunCorona() {
           m = m * m;
           return 42.0 * dot(m*m, vec4(dot(p0,x0),dot(p1,x1),dot(p2,x2),dot(p3,x3)));
         }
-        
+
         void main() {
           vNormal = normalize(normalMatrix * normal);
           vec3 pos = position;
-          // Subtler distortion
           float noise = snoise(pos * 1.5 + time * 0.2) * 0.1;
           pos += normal * noise;
           vPosition = pos;
@@ -91,7 +90,7 @@ function SunCorona() {
         uniform vec3 color1;
         uniform vec3 color2;
         uniform vec3 color3;
-        
+
         void main() {
           float intensity = pow(0.65 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.5);
           float pulse = sin(time * 1.5) * 0.1 + 0.9;
@@ -107,11 +106,14 @@ function SunCorona() {
     })
   }, [])
 
-  useFrame((_, delta) => {
-    if (coronaRef.current) {
-      const mat = coronaRef.current.material as THREE.ShaderMaterial
-      mat.uniforms.time.value += delta
-    }
+  useFrameLane({
+    id: 'sun-corona',
+    lane: 'decorative',
+    priority: 70,
+  }, ({ laneDelta }) => {
+    if (!coronaRef.current) return
+    const material = coronaRef.current.material as THREE.ShaderMaterial
+    material.uniforms.time.value += laneDelta
   })
 
   return (
@@ -155,11 +157,14 @@ function SunGlow() {
     })
   }, [])
 
-  useFrame((_, delta) => {
-    if (glowRef.current) {
-      const mat = glowRef.current.material as THREE.ShaderMaterial
-      mat.uniforms.time.value += delta
-    }
+  useFrameLane({
+    id: 'sun-glow',
+    lane: 'decorative',
+    priority: 71,
+  }, ({ laneDelta }) => {
+    if (!glowRef.current) return
+    const material = glowRef.current.material as THREE.ShaderMaterial
+    material.uniforms.time.value += laneDelta
   })
 
   return (
@@ -173,21 +178,25 @@ function SunFlares() {
   const groupRef = useRef<THREE.Group>(null)
   const materialRef = useRef<THREE.ShaderMaterial>(null)
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: 'sun-flares',
+    lane: 'decorative',
+    priority: 72,
+  }, ({ laneDelta }) => {
     if (groupRef.current) {
-      groupRef.current.rotation.y += delta * 0.02
+      groupRef.current.rotation.y += laneDelta * 0.02
     }
     if (materialRef.current) {
-      materialRef.current.uniforms.time.value += delta
+      materialRef.current.uniforms.time.value += laneDelta
     }
   })
 
   return (
     <group ref={groupRef}>
-      {[0, 1, 2, 3, 4, 5].map((i) => (
+      {[0, 1, 2, 3, 4, 5].map((index) => (
         <mesh
-          key={i}
-          rotation={[0, (i / 6) * Math.PI * 2, 0]}
+          key={index}
+          rotation={[0, (index / 6) * Math.PI * 2, 0]}
         >
           <planeGeometry args={[0.15, sunData.radius * 3]} />
           <shaderMaterial
@@ -211,7 +220,6 @@ function SunFlares() {
               uniform vec3 color;
               uniform float time;
               void main() {
-                // Sharper alpha fade to prevent square edges
                 float alpha = smoothstep(0.0, 0.4, vUv.y) * smoothstep(1.0, 0.6, vUv.y);
                 float horizontalFade = smoothstep(0.0, 0.2, vUv.x) * smoothstep(1.0, 0.8, vUv.x);
                 alpha *= horizontalFade;
@@ -244,72 +252,74 @@ function SolarWindParticles() {
     blending: THREE.AdditiveBlending,
   }), [])
 
-  // Initialize particle positions and velocities
   useMemo(() => {
-    const data = new Float32Array(SOLAR_WIND_COUNT * 6) // x,y,z, vx,vy,vz
-    for (let i = 0; i < SOLAR_WIND_COUNT; i++) {
-      const idx = i * 6
-      // Random direction on sphere surface at sun radius
+    const data = new Float32Array(SOLAR_WIND_COUNT * 6)
+    for (let index = 0; index < SOLAR_WIND_COUNT; index++) {
+      const offset = index * 6
       const theta = Math.random() * Math.PI * 2
       const phi = Math.acos(2 * Math.random() - 1)
-      const r = sunData.radius * (1.0 + Math.random() * 0.3)
-      data[idx] = r * Math.sin(phi) * Math.cos(theta)
-      data[idx + 1] = r * Math.sin(phi) * Math.sin(theta)
-      data[idx + 2] = r * Math.cos(phi)
-      // Outward velocity with some randomness
+      const radius = sunData.radius * (1.0 + Math.random() * 0.3)
+      data[offset] = radius * Math.sin(phi) * Math.cos(theta)
+      data[offset + 1] = radius * Math.sin(phi) * Math.sin(theta)
+      data[offset + 2] = radius * Math.cos(phi)
       const speed = 1.5 + Math.random() * 2.0
-      const nx = Math.sin(phi) * Math.cos(theta)
-      const ny = Math.sin(phi) * Math.sin(theta)
-      const nz = Math.cos(phi)
-      data[idx + 3] = nx * speed
-      data[idx + 4] = ny * speed
-      data[idx + 5] = nz * speed
+      const normalX = Math.sin(phi) * Math.cos(theta)
+      const normalY = Math.sin(phi) * Math.sin(theta)
+      const normalZ = Math.cos(phi)
+      data[offset + 3] = normalX * speed
+      data[offset + 4] = normalY * speed
+      data[offset + 5] = normalZ * speed
     }
     particleData.current = data
   }, [])
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: 'sun-wind-particles',
+    lane: 'decorative',
+    priority: 75,
+  }, ({ laneDelta }) => {
     if (!meshRef.current || !particleData.current) return
     const data = particleData.current
-    const maxDist = sunData.radius * 5
+    const maxDistance = sunData.radius * 5
 
-    for (let i = 0; i < SOLAR_WIND_COUNT; i++) {
-      const idx = i * 6
-      // Update position
-      data[idx] += data[idx + 3] * delta
-      data[idx + 1] += data[idx + 4] * delta
-      data[idx + 2] += data[idx + 5] * delta
+    for (let index = 0; index < SOLAR_WIND_COUNT; index++) {
+      const offset = index * 6
+      data[offset] += data[offset + 3] * laneDelta
+      data[offset + 1] += data[offset + 4] * laneDelta
+      data[offset + 2] += data[offset + 5] * laneDelta
 
-      // Calculate distance from origin
-      const dx = data[idx]
-      const dy = data[idx + 1]
-      const dz = data[idx + 2]
-      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz)
+      const x = data[offset]
+      const y = data[offset + 1]
+      const z = data[offset + 2]
+      const distance = Math.sqrt(x * x + y * y + z * z)
 
-      // Reset particle if too far or random chance
-      if (dist > maxDist || (dist > sunData.radius * 2 && Math.random() < delta * 0.5)) {
+      if (
+        distance > maxDistance
+        || (
+          distance > sunData.radius * 2
+          && Math.random() < laneDelta * 0.5
+        )
+      ) {
         const theta = Math.random() * Math.PI * 2
         const phi = Math.acos(2 * Math.random() - 1)
-        const r = sunData.radius * (1.0 + Math.random() * 0.2)
-        data[idx] = r * Math.sin(phi) * Math.cos(theta)
-        data[idx + 1] = r * Math.sin(phi) * Math.sin(theta)
-        data[idx + 2] = r * Math.cos(phi)
+        const radius = sunData.radius * (1.0 + Math.random() * 0.2)
+        data[offset] = radius * Math.sin(phi) * Math.cos(theta)
+        data[offset + 1] = radius * Math.sin(phi) * Math.sin(theta)
+        data[offset + 2] = radius * Math.cos(phi)
         const speed = 1.5 + Math.random() * 2.0
-        const nx = Math.sin(phi) * Math.cos(theta)
-        const ny = Math.sin(phi) * Math.sin(theta)
-        const nz = Math.cos(phi)
-        data[idx + 3] = nx * speed
-        data[idx + 4] = ny * speed
-        data[idx + 5] = nz * speed
+        const normalX = Math.sin(phi) * Math.cos(theta)
+        const normalY = Math.sin(phi) * Math.sin(theta)
+        const normalZ = Math.cos(phi)
+        data[offset + 3] = normalX * speed
+        data[offset + 4] = normalY * speed
+        data[offset + 5] = normalZ * speed
       }
 
-      // Set instance transform
-      dummy.position.set(data[idx], data[idx + 1], data[idx + 2])
-      // Fade out with distance
-      const alpha = Math.max(0, 1 - dist / maxDist)
+      dummy.position.set(data[offset], data[offset + 1], data[offset + 2])
+      const alpha = Math.max(0, 1 - distance / maxDistance)
       dummy.scale.setScalar(alpha * 0.8 + 0.2)
       dummy.updateMatrix()
-      meshRef.current.setMatrixAt(i, dummy.matrix)
+      meshRef.current.setMatrixAt(index, dummy.matrix)
     }
     meshRef.current.instanceMatrix.needsUpdate = true
   })
@@ -323,105 +333,31 @@ function SolarWindParticles() {
   )
 }
 
-function LensFlare() {
-  const groupRef = useRef<THREE.Group>(null)
-  const { camera } = useThree()
-
-  useFrame(() => {
-    if (!groupRef.current) return
-    // Make lens flare always face camera and stay at sun position
-    groupRef.current.quaternion.copy(camera.quaternion)
-  })
-
-  const flareMaterial = useMemo(() => {
-    return new THREE.ShaderMaterial({
-      uniforms: {
-        time: { value: 0 },
-      },
-      vertexShader: `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        varying vec2 vUv;
-        uniform float time;
-        void main() {
-          vec2 center = vUv - 0.5;
-          float dist = length(center);
-          
-          // Main flare - bright center
-          float flare1 = 0.08 / (dist + 0.05);
-          
-          // Horizontal streak
-          float streak = 0.02 / (abs(center.y) + 0.01);
-          streak *= smoothstep(0.5, 0.0, abs(center.x));
-          
-          // Secondary ghost flares
-          float ghost1 = 0.005 / (length(center - vec2(0.15, 0.1)) + 0.02);
-          float ghost2 = 0.003 / (length(center - vec2(-0.2, -0.08)) + 0.02);
-          
-          // Animate brightness
-          float pulse = sin(time * 1.5) * 0.15 + 0.85;
-          float flicker = sin(time * 7.0) * 0.05 + 1.0;
-          
-          float alpha = (flare1 + streak + ghost1 + ghost2) * pulse * flicker;
-          alpha = min(alpha, 1.0);
-          
-          // Warm color
-          vec3 color = vec3(1.0, 0.85, 0.5);
-          
-          gl_FragColor = vec4(color, alpha * 0.4);
-        }
-      `,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-    })
-  }, [])
-
-  useFrame((_, delta) => {
-    if (groupRef.current) {
-      const mat = (groupRef.current.children[0] as THREE.Mesh).material as THREE.ShaderMaterial
-      mat.uniforms.time.value += delta
-    }
-  })
-
-  return (
-    <group ref={groupRef}>
-      <mesh material={flareMaterial}>
-        <planeGeometry args={[sunData.radius * 6, sunData.radius * 6]} />
-      </mesh>
-    </group>
-  )
-}
-
 export default function Sun() {
   const meshRef = useRef<THREE.Mesh>(null!)
-  const setSelectedBody = useSolarSystemStore((s) => s.setSelectedBody)
-  const selectedBody = useSolarSystemStore((s) => s.selectedBody)
+  const setSelectedBody = useSolarSystemStore((state) => state.setSelectedBody)
+  const selectedBody = useSolarSystemStore((state) => state.selectedBody)
+  const isSelected = selectedBody === 'sun'
 
   const sunTexture = useAdaptiveTexture(sunData.textureUrl!, { anisotropy: 4 })
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: 'sun-surface',
+    lane: isSelected ? 'critical' : 'decorative',
+    priority: isSelected ? -15 : 69,
+  }, ({ laneDelta }) => {
     if (meshRef.current) {
-      meshRef.current.rotation.y += delta * 0.05
+      meshRef.current.rotation.y += laneDelta * 0.05
     }
   })
 
-  const handleClick = (e: ThreeEvent<MouseEvent>) => {
-    e.stopPropagation()
+  const handleClick = (event: ThreeEvent<MouseEvent>) => {
+    event.stopPropagation()
     setSelectedBody('sun')
   }
 
-  const isSelected = selectedBody === 'sun'
-
   return (
-    <group>
-      {/* Main sun sphere */}
+    <group name="body:sun">
       <mesh
         ref={meshRef}
         onClick={handleClick}
@@ -430,27 +366,23 @@ export default function Sun() {
         <meshBasicMaterial map={sunTexture} />
       </mesh>
 
-      {/* Corona effect */}
       <SunCorona />
-
-      {/* Outer glow */}
       <SunGlow />
-
-      {/* Solar flares */}
       <SunFlares />
-
-      {/* Solar wind particles */}
       <SolarWindParticles />
 
-      {/* Selection ring */}
       {isSelected && (
         <mesh rotation={[Math.PI / 2, 0, 0]}>
           <ringGeometry args={[sunData.radius + 0.3, sunData.radius + 0.35, 64]} />
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.6} side={THREE.DoubleSide} />
+          <meshBasicMaterial
+            color="#ffffff"
+            transparent
+            opacity={0.6}
+            side={THREE.DoubleSide}
+          />
         </mesh>
       )}
 
-      {/* Point light from sun */}
       <pointLight
         color="#FDB813"
         intensity={500}

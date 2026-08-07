@@ -34,6 +34,8 @@ const QUALITY_WIDTHS: Record<EffectiveQuality, number> = {
   ultra: 2048,
 }
 
+const TEXTURE_SOURCE_PATTERN = /\.(?:jpe?g|png|svg)$/i
+
 function stripUrlDecorations(url: string) {
   const index = url.search(/[?#]/)
   return index >= 0 ? url.slice(0, index) : url
@@ -45,8 +47,15 @@ export function normalizeTextureSource(url: string) {
   if (normalized.includes('earth_clouds_1024.png')) {
     return '/textures/earth-clouds.svg'
   }
-  if (normalized.includes('moonmap1k.jpg') || normalized.includes('moon_1024.jpg')) {
+  if (
+    normalized.includes('moonmap1k.jpg')
+    || normalized.includes('moon_1024.jpg')
+    || normalized.includes('moonbump1k.jpg')
+  ) {
     return '/textures/moon.jpg'
+  }
+  if (normalized.includes('earth_specular_2048.jpg')) {
+    return '/textures/earth.jpg'
   }
 
   return normalized
@@ -72,7 +81,29 @@ export function getKtx2TextureUrl(entry: Ktx2TextureEntry, quality: EffectiveQua
   return `/textures/ktx2/${getTextureTierWidth(quality)}/${entry.id}.ktx2`
 }
 
-export function getTextureFallbackUrl(sourceUrl: string) {
+/**
+ * Returns a concrete generated WebP path for the requested quality. The tier is
+ * part of the URL itself, so React Three Fiber's loader cache cannot reuse a
+ * 2K image after the application has moved to Eco.
+ */
+export function getTextureFallbackUrl(
+  sourceUrl: string,
+  quality: EffectiveQuality
+) {
   const entry = getKtx2TextureEntry(sourceUrl)
-  return entry?.input ?? normalizeTextureSource(sourceUrl)
+  const canonicalSource = normalizeTextureSource(entry?.input ?? sourceUrl)
+
+  if (
+    !canonicalSource.startsWith('/textures/')
+    || canonicalSource.startsWith('/textures/optimized/')
+    || !TEXTURE_SOURCE_PATTERN.test(canonicalSource)
+  ) {
+    return canonicalSource
+  }
+
+  const relativePath = canonicalSource
+    .slice('/textures/'.length)
+    .replace(TEXTURE_SOURCE_PATTERN, '')
+
+  return `/textures/optimized/${relativePath}-${getTextureTierWidth(quality)}.webp`
 }

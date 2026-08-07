@@ -31,6 +31,12 @@ import {
 } from './simulation-clock'
 import { useSolarSystemStore } from './store'
 
+interface ExperienceDockProps {
+  mobileActive: boolean
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
 interface TourStep {
   body: string
   title: string
@@ -152,8 +158,11 @@ function toDateTimeLocal(dateMs: number) {
   return local.toISOString().slice(0, 16)
 }
 
-export default function ExperienceDock() {
-  const [open, setOpen] = useState(false)
+export default function ExperienceDock({
+  mobileActive,
+  open,
+  onOpenChange,
+}: ExperienceDockProps) {
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null)
   const [tourStep, setTourStep] = useState(0)
   const mode = useExperienceStore((state) => state.mode)
@@ -195,6 +204,17 @@ export default function ExperienceDock() {
     if (!isPaused && timeSpeed !== 0) lastSpeedRef.current = timeSpeed
   }, [isPaused, timeSpeed])
 
+  useEffect(() => {
+    if (!open) return
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onOpenChange(false)
+    }
+
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onOpenChange, open])
+
   const setDate = (dateMs: number) => {
     setClockDateMs(dateMs)
     publishDate(dateMs)
@@ -227,12 +247,19 @@ export default function ExperienceDock() {
   if (screenshotMode) return null
 
   return (
-    <div className="pointer-events-auto absolute bottom-3 left-3 z-40 sm:bottom-5 sm:left-5">
+    <div
+      className={`pointer-events-auto z-[55] ${
+        mobileActive
+          ? 'solar-mobile-safe-bottom fixed inset-x-2'
+          : 'max-sm:hidden'
+      } sm:absolute sm:inset-x-auto sm:bottom-5 sm:left-5`}
+    >
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="flex items-center gap-2 rounded-full border border-white/10 bg-black/75 px-3 py-2 text-white shadow-2xl backdrop-blur-xl transition hover:border-amber-300/30 hover:bg-black/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
+        onClick={() => onOpenChange(!open)}
+        className="hidden items-center gap-2 rounded-full border border-white/10 bg-black/75 px-3 py-2 text-white shadow-2xl backdrop-blur-xl transition hover:border-amber-300/30 hover:bg-black/85 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70 sm:flex"
         aria-expanded={open}
+        aria-label="Open mission control"
       >
         <Orbit className="h-3.5 w-3.5 text-amber-300" />
         <span className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/75">
@@ -243,33 +270,43 @@ export default function ExperienceDock() {
         </span>
       </button>
 
-      {open && (
-        <div className="mt-2 flex max-h-[min(76vh,44rem)] w-[min(24rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#07090f]/96 text-white shadow-2xl backdrop-blur-2xl">
-          <div className="flex items-start justify-between gap-4 border-b border-white/10 px-4 py-3.5">
+      {open ? (
+        <section
+          className="solar-mobile-sheet flex max-h-[min(82dvh,44rem)] w-full flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#07090f]/97 text-white shadow-2xl backdrop-blur-2xl sm:mt-2 sm:w-[min(24rem,calc(100vw-1.5rem))]"
+          role="dialog"
+          aria-label="Mission control"
+          data-mobile-bottom-surface="mission-control"
+          data-mobile-surface-active={mobileActive ? 'true' : 'false'}
+        >
+          <div className="flex flex-none justify-center py-2 sm:hidden" aria-hidden="true">
+            <span className="h-1 w-10 rounded-full bg-white/18" />
+          </div>
+
+          <header className="flex flex-none items-start justify-between gap-4 border-b border-white/10 px-4 pb-3.5 pt-1 sm:py-3.5">
             <div>
               <p className="text-[9px] font-semibold uppercase tracking-[0.24em] text-amber-300/80">
                 Mission control
               </p>
-              <h2 className="mt-1 text-sm font-semibold">Explore with purpose</h2>
-              <p className="mt-1 text-[10px] leading-relaxed text-white/40">
-                One ephemeris clock now drives the scene, camera, orbit paths, telemetry, and sandbox.
+              <h2 className="mt-1 text-base font-semibold sm:text-sm">Explore with purpose</h2>
+              <p className="mt-1 text-[10px] leading-relaxed text-white/45">
+                One ephemeris clock drives the scene, camera, orbit paths, telemetry, and sandbox.
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-xl p-1.5 text-white/35 transition hover:bg-white/10 hover:text-white"
+              onClick={() => onOpenChange(false)}
+              className="solar-mobile-icon-button grid h-11 w-11 flex-none place-items-center rounded-xl text-white/40 transition hover:bg-white/10 hover:text-white sm:h-8 sm:w-8"
               aria-label="Close mission control"
             >
               <X className="h-4 w-4" />
             </button>
-          </div>
+          </header>
 
-          <div className="overflow-y-auto overscroll-contain p-3">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
             <section>
               <div className="mb-2 flex items-center gap-2">
-                <Compass className="h-3.5 w-3.5 text-amber-300" />
-                <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                <Compass className="h-4 w-4 text-amber-300 sm:h-3.5 sm:w-3.5" />
+                <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65">
                   Experience
                 </h3>
               </div>
@@ -289,31 +326,31 @@ export default function ExperienceDock() {
                           : 'border-white/5 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.05]'
                       }`}
                     >
-                      <Icon className={`h-3.5 w-3.5 ${selected ? 'text-amber-300' : 'text-white/35'}`} />
+                      <Icon className={`h-4 w-4 sm:h-3.5 sm:w-3.5 ${selected ? 'text-amber-300' : 'text-white/35'}`} />
                       <span className="mt-2 block text-[10px] font-medium text-white/85">
                         {definition.label}
                       </span>
-                      <span className="mt-0.5 block text-[8px] leading-snug text-white/30">
+                      <span className="mt-0.5 block text-[8px] leading-snug text-white/35">
                         {definition.eyebrow}
                       </span>
                     </button>
                   )
                 })}
               </div>
-              <p className="mt-2 rounded-xl bg-white/[0.025] px-3 py-2 text-[9px] leading-relaxed text-white/38">
+              <p className="mt-2 rounded-xl bg-white/[0.025] px-3 py-2 text-[9px] leading-relaxed text-white/45">
                 {EXPERIENCE_MODES[mode].description}
               </p>
             </section>
 
             <section className="mt-4 border-t border-white/8 pt-4">
-              <div className="mb-2 flex items-center justify-between">
+              <div className="mb-2 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <CalendarClock className="h-3.5 w-3.5 text-sky-300" />
-                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                  <CalendarClock className="h-4 w-4 text-sky-300 sm:h-3.5 sm:w-3.5" />
+                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65">
                     Ephemeris time
                   </h3>
                 </div>
-                <span className="font-mono text-[8px] text-white/30">
+                <span className="font-mono text-[8px] text-white/35">
                   JD {getJulianDate(simulationDateMs).toFixed(2)}
                 </span>
               </div>
@@ -328,14 +365,14 @@ export default function ExperienceDock() {
                 className="w-full rounded-xl border border-white/10 bg-black/35 px-3 py-2 text-[10px] text-white/80 outline-none transition focus:border-sky-300/40"
               />
 
-              <div className="mt-2 grid grid-cols-[auto_1fr_auto_auto] gap-1.5">
+              <div className="mt-2 grid grid-cols-[auto_1fr] gap-1.5 sm:grid-cols-[auto_1fr_auto_auto]">
                 <button
                   type="button"
                   onClick={togglePlayback}
                   className="rounded-xl border border-white/10 bg-white/[0.04] p-2 text-white/70 transition hover:bg-white/10 hover:text-white"
                   aria-label={isPaused ? 'Resume simulation' : 'Pause simulation'}
                 >
-                  {isPaused ? <Play className="h-3.5 w-3.5" /> : <Pause className="h-3.5 w-3.5" />}
+                  {isPaused ? <Play className="h-4 w-4 sm:h-3.5 sm:w-3.5" /> : <Pause className="h-4 w-4 sm:h-3.5 sm:w-3.5" />}
                 </button>
                 <div className="grid grid-cols-5 gap-1">
                   {WARP_OPTIONS.map((option) => (
@@ -346,7 +383,7 @@ export default function ExperienceDock() {
                       className={`rounded-lg px-1 py-1.5 text-center transition ${
                         !isPaused && timeSpeed === option.speed
                           ? 'bg-sky-300/15 text-sky-200'
-                          : 'bg-white/[0.035] text-white/38 hover:bg-white/10 hover:text-white/75'
+                          : 'bg-white/[0.035] text-white/42 hover:bg-white/10 hover:text-white/75'
                       }`}
                       title={option.note}
                     >
@@ -357,7 +394,7 @@ export default function ExperienceDock() {
                 <button
                   type="button"
                   onClick={() => setDate(simulationDateMs - DAY_MS)}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[9px] text-white/55 transition hover:bg-white/10 hover:text-white"
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[9px] text-white/60 transition hover:bg-white/10 hover:text-white"
                   title="Step back one day"
                 >
                   −1d
@@ -365,7 +402,7 @@ export default function ExperienceDock() {
                 <button
                   type="button"
                   onClick={() => setDate(simulationDateMs + DAY_MS)}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[9px] text-white/55 transition hover:bg-white/10 hover:text-white"
+                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[9px] text-white/60 transition hover:bg-white/10 hover:text-white"
                   title="Step forward one day"
                 >
                   +1d
@@ -375,18 +412,18 @@ export default function ExperienceDock() {
               <button
                 type="button"
                 onClick={() => setDate(Date.now())}
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/[0.025] py-1.5 text-[9px] text-white/38 transition hover:bg-white/[0.07] hover:text-white/70"
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/[0.025] py-1.5 text-[9px] text-white/45 transition hover:bg-white/[0.07] hover:text-white/70"
               >
-                <RotateCcw className="h-3 w-3" />
+                <RotateCcw className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                 Return to now
               </button>
             </section>
 
-            {mode === 'scientific' && (
+            {mode === 'scientific' ? (
               <section className="mt-4 border-t border-white/8 pt-4">
                 <div className="mb-2 flex items-center gap-2">
-                  <Gauge className="h-3.5 w-3.5 text-emerald-300" />
-                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                  <Gauge className="h-4 w-4 text-emerald-300 sm:h-3.5 sm:w-3.5" />
+                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65">
                     Scientific layers
                   </h3>
                 </div>
@@ -399,25 +436,25 @@ export default function ExperienceDock() {
                   ].map(([label, checked, setter]) => (
                     <label
                       key={label as string}
-                      className="flex cursor-pointer items-center justify-between rounded-xl border border-white/5 bg-white/[0.025] px-2.5 py-2 text-[9px] text-white/55"
+                      className="flex cursor-pointer items-center justify-between rounded-xl border border-white/5 bg-white/[0.025] px-2.5 py-2 text-[9px] text-white/60"
                     >
                       {label as string}
                       <input
                         type="checkbox"
                         checked={checked as boolean}
                         onChange={(event) => (setter as (value: boolean) => void)(event.target.checked)}
-                        className="h-3.5 w-3.5 accent-emerald-300"
+                        className="h-4 w-4 accent-emerald-300"
                       />
                     </label>
                   ))}
                 </div>
               </section>
-            )}
+            ) : null}
 
             <section className="mt-4 border-t border-white/8 pt-4">
               <div className="mb-2 flex items-center gap-2">
-                <BookOpen className="h-3.5 w-3.5 text-violet-300" />
-                <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                <BookOpen className="h-4 w-4 text-violet-300 sm:h-3.5 sm:w-3.5" />
+                <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65">
                   Guided learning
                 </h3>
               </div>
@@ -433,9 +470,9 @@ export default function ExperienceDock() {
                     >
                       <span>
                         <span className="block text-[10px] font-medium text-white/80">{track.title}</span>
-                        <span className="mt-0.5 block text-[8px] text-white/32">{track.subtitle}</span>
+                        <span className="mt-0.5 block text-[8px] text-white/38">{track.subtitle}</span>
                       </span>
-                      <ChevronRight className="h-3.5 w-3.5 text-white/25" />
+                      <ChevronRight className="h-4 w-4 text-white/30 sm:h-3.5 sm:w-3.5" />
                     </button>
                   ))}
                 </div>
@@ -451,21 +488,21 @@ export default function ExperienceDock() {
                     <button
                       type="button"
                       onClick={() => setActiveTrackId(null)}
-                      className="rounded-lg p-1 text-white/30 hover:bg-white/10 hover:text-white"
+                      className="solar-mobile-icon-button grid h-11 w-11 flex-none place-items-center rounded-lg text-white/35 hover:bg-white/10 hover:text-white sm:h-8 sm:w-8"
                       aria-label="End guided track"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <p className="mt-2 text-[9px] leading-relaxed text-white/45">{activeTourStep?.lesson}</p>
+                  <p className="mt-2 text-[9px] leading-relaxed text-white/50">{activeTourStep?.lesson}</p>
                   <div className="mt-3 grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
                       disabled={tourStep === 0}
                       onClick={() => focusTourStep(activeTrack, tourStep - 1)}
-                      className="flex items-center justify-center gap-1 rounded-xl bg-white/[0.05] py-2 text-[9px] text-white/55 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-25"
+                      className="flex items-center justify-center gap-1 rounded-xl bg-white/[0.05] py-2 text-[9px] text-white/60 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-25"
                     >
-                      <ChevronLeft className="h-3 w-3" /> Previous
+                      <ChevronLeft className="h-3.5 w-3.5" /> Previous
                     </button>
                     <button
                       type="button"
@@ -473,23 +510,23 @@ export default function ExperienceDock() {
                       onClick={() => focusTourStep(activeTrack, tourStep + 1)}
                       className="flex items-center justify-center gap-1 rounded-xl bg-violet-300/15 py-2 text-[9px] text-violet-100 transition hover:bg-violet-300/25 disabled:cursor-not-allowed disabled:opacity-25"
                     >
-                      Next <ChevronRight className="h-3 w-3" />
+                      Next <ChevronRight className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
               )}
             </section>
 
-            {mode === 'sandbox' && (
+            {mode === 'sandbox' ? (
               <section className="mt-4 border-t border-white/8 pt-4">
                 <div className="mb-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Zap className="h-3.5 w-3.5 text-rose-300" />
-                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                    <Zap className="h-4 w-4 text-rose-300 sm:h-3.5 sm:w-3.5" />
+                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/65">
                       Sandbox lab
                     </h3>
                   </div>
-                  <span className="font-mono text-[8px] text-white/30">{spawnedObjects.length}/10</span>
+                  <span className="font-mono text-[8px] text-white/35">{spawnedObjects.length}/10</span>
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
                   {(['asteroid', 'comet', 'interstellar'] as const).map((type) => (
@@ -497,26 +534,26 @@ export default function ExperienceDock() {
                       key={type}
                       type="button"
                       onClick={() => spawnObject(type)}
-                      className="rounded-xl border border-white/5 bg-white/[0.035] px-2 py-2 text-[8px] font-medium capitalize text-white/55 transition hover:border-rose-300/20 hover:bg-rose-300/[0.07] hover:text-white"
+                      className="rounded-xl border border-white/5 bg-white/[0.035] px-2 py-2 text-[8px] font-medium capitalize text-white/60 transition hover:border-rose-300/20 hover:bg-rose-300/[0.07] hover:text-white"
                     >
                       {type}
                     </button>
                   ))}
                 </div>
-                {spawnedObjects.length > 0 && (
+                {spawnedObjects.length > 0 ? (
                   <button
                     type="button"
                     onClick={() => spawnedObjects.forEach((object) => removeSpawnedObject(object.id))}
-                    className="mt-2 w-full rounded-xl bg-rose-400/[0.08] py-1.5 text-[8px] text-rose-200/65 transition hover:bg-rose-400/[0.14]"
+                    className="mt-2 w-full rounded-xl bg-rose-400/[0.08] py-1.5 text-[8px] text-rose-200/70 transition hover:bg-rose-400/[0.14]"
                   >
                     Clear spawned objects
                   </button>
-                )}
+                ) : null}
               </section>
-            )}
+            ) : null}
           </div>
-        </div>
-      )}
+        </section>
+      ) : null}
     </div>
   )
 }

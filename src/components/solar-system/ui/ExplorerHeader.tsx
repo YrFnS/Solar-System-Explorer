@@ -40,11 +40,11 @@ function HeaderAction({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="relative grid h-9 w-9 place-items-center rounded-xl border border-white/10 bg-black/65 text-white/45 shadow-xl backdrop-blur-xl transition hover:border-white/20 hover:bg-black/80 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60"
+      className="relative grid h-11 w-11 place-items-center rounded-xl border border-white/10 bg-black/65 text-white/50 shadow-xl backdrop-blur-xl transition hover:border-white/20 hover:bg-black/80 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/60 sm:h-9 sm:w-9"
     >
       {children}
       {badge && badge > 0 ? (
-        <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-amber-300 px-1 text-[7px] font-bold text-black">
+        <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-amber-300 px-1 text-[8px] font-bold text-black">
           {badge > 99 ? '99+' : badge}
         </span>
       ) : null}
@@ -85,18 +85,21 @@ export default function ExplorerHeader({
   }
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-[50] px-3 pt-3 sm:px-5 sm:pt-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="pointer-events-auto flex min-w-0 items-center gap-2.5 rounded-2xl border border-white/10 bg-black/60 px-3 py-2 shadow-2xl backdrop-blur-xl sm:px-3.5">
-          <div className="relative grid h-8 w-8 flex-none place-items-center overflow-hidden rounded-full bg-gradient-to-br from-amber-200 via-orange-400 to-rose-600 shadow-lg shadow-orange-500/20">
+    <div
+      className="solar-mobile-safe-top pointer-events-none absolute inset-x-0 top-0 z-[50] px-3 sm:px-5 sm:pt-4"
+      data-mobile-header="explorer"
+    >
+      <div className="flex items-start justify-between gap-2 sm:gap-3">
+        <div className="pointer-events-auto flex min-w-0 max-w-[calc(100vw-10.25rem)] items-center gap-2.5 rounded-2xl border border-white/10 bg-black/60 px-3 py-2 shadow-2xl backdrop-blur-xl sm:max-w-none sm:px-3.5">
+          <div className="relative grid h-9 w-9 flex-none place-items-center overflow-hidden rounded-full bg-gradient-to-br from-amber-200 via-orange-400 to-rose-600 shadow-lg shadow-orange-500/20 sm:h-8 sm:w-8">
             <span className="absolute inset-1 rounded-full border border-white/25" />
-            <Sparkles className="relative h-3.5 w-3.5 text-white" />
+            <Sparkles className="relative h-4 w-4 text-white sm:h-3.5 sm:w-3.5" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-white/85 sm:text-[11px]">
+            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.14em] text-white/88 sm:text-[11px] sm:tracking-[0.18em]">
               Solar System Explorer
             </p>
-            <div className="mt-0.5 flex items-center gap-1.5 text-[8px] text-white/35">
+            <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-white/42 sm:text-[8px]">
               <span>{EXPERIENCE_MODES[mode].label}</span>
               <span className="text-white/15">•</span>
               <span className="truncate">{body?.name ?? 'System overview'}</span>
@@ -115,7 +118,7 @@ export default function ExplorerHeader({
 
         <div className="pointer-events-auto flex flex-none items-center gap-1.5">
           <HeaderAction label="Search celestial bodies" onClick={onOpenSearch}>
-            <Search className="h-3.5 w-3.5" />
+            <Search className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
           </HeaderAction>
           <div className="hidden items-center gap-1.5 sm:flex">
             <HeaderAction label="Bookmarks" onClick={onOpenBookmarks}>
@@ -130,7 +133,7 @@ export default function ExplorerHeader({
           </div>
           <div className="sm:hidden">
             <HeaderAction label="More explorer tools" onClick={() => setMobileToolsOpen((value) => !value)}>
-              {mobileToolsOpen ? <X className="h-3.5 w-3.5" /> : <Menu className="h-3.5 w-3.5" />}
+              {mobileToolsOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </HeaderAction>
           </div>
           <HeaderAction
@@ -138,21 +141,21 @@ export default function ExplorerHeader({
             onClick={() => setScreenshotMode(true)}
             badge={screenshots}
           >
-            <Camera className="h-3.5 w-3.5" />
+            <Camera className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
           </HeaderAction>
         </div>
       </div>
 
       {mobileToolsOpen ? (
-        <div className="pointer-events-auto absolute right-12 top-14 w-44 overflow-hidden rounded-2xl border border-white/10 bg-[#080a10]/96 p-1.5 text-white shadow-2xl backdrop-blur-2xl sm:hidden">
-          <button type="button" onClick={() => openMobileTool(onOpenBookmarks)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-[9px] text-white/55 hover:bg-white/[0.07] hover:text-white">
-            <Bookmark className="h-3.5 w-3.5 text-violet-300/60" /> Bookmarks
+        <div className="pointer-events-auto absolute right-14 top-[calc(env(safe-area-inset-top,0px)+3.75rem)] w-48 overflow-hidden rounded-2xl border border-white/10 bg-[#080a10]/96 p-1.5 text-white shadow-2xl backdrop-blur-2xl sm:hidden">
+          <button type="button" onClick={() => openMobileTool(onOpenBookmarks)} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white">
+            <Bookmark className="h-4 w-4 text-violet-300/60" /> Bookmarks
           </button>
-          <button type="button" onClick={() => openMobileTool(() => setShowTimeline(true))} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-[9px] text-white/55 hover:bg-white/[0.07] hover:text-white">
-            <History className="h-3.5 w-3.5 text-amber-300/60" /> Space history
+          <button type="button" onClick={() => openMobileTool(() => setShowTimeline(true))} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white">
+            <History className="h-4 w-4 text-amber-300/60" /> Space history
           </button>
-          <button type="button" onClick={() => openMobileTool(onOpenSettings)} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-[9px] text-white/55 hover:bg-white/[0.07] hover:text-white">
-            <SlidersHorizontal className="h-3.5 w-3.5 text-sky-300/60" /> Display settings
+          <button type="button" onClick={() => openMobileTool(onOpenSettings)} className="flex min-h-11 w-full items-center gap-2 rounded-xl px-3 py-2.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white">
+            <SlidersHorizontal className="h-4 w-4 text-sky-300/60" /> Display settings
           </button>
         </div>
       ) : null}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef } from 'react'
-import { useFrame, type ThreeEvent } from '@react-three/fiber'
+import { type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import type { MoonData } from './data'
 import {
@@ -9,8 +9,8 @@ import {
   getMoonRotationAngle,
 } from './ephemeris'
 import { useExperienceStore } from './experience-store'
+import { useFrameLane } from './FrameUpdateLanes'
 import PlanetLabel from './PlanetLabel'
-import { getSimulationDateMs } from './simulation-clock'
 import { useSolarSystemStore } from './store'
 import { useAdaptiveTexture } from './textures/useAdaptiveTexture'
 
@@ -67,21 +67,24 @@ export default function EphemerisMoon({ moon, parentId }: EphemerisMoonProps) {
   const moonId = `${parentId}-${moon.name.toLowerCase().replace(/\s+/g, '-')}`
   const selected = selectedBody === moonId
 
-  useFrame(() => {
-    const dateMs = getSimulationDateMs()
+  useFrameLane({
+    id: `moon:${moonId}`,
+    lane: selected ? 'critical' : 'ephemeris',
+    priority: selected ? -30 : 10,
+  }, ({ simulationDateMs }) => {
     if (groupRef.current) {
       groupRef.current.position.copy(
         getMoonLocalPosition(
           moon,
           parentId,
-          dateMs,
+          simulationDateMs,
           mode,
           positionRef.current
         )
       )
     }
     if (meshRef.current) {
-      meshRef.current.rotation.y = getMoonRotationAngle(moon, dateMs)
+      meshRef.current.rotation.y = getMoonRotationAngle(moon, simulationDateMs)
     }
   })
 
@@ -92,7 +95,7 @@ export default function EphemerisMoon({ moon, parentId }: EphemerisMoonProps) {
   }
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} name={`moon:${moonId}`}>
       {moon.textureUrl ? (
         <TexturedMoonSurface moon={moon} meshRef={meshRef} onClick={handleClick} />
       ) : (

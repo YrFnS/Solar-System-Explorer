@@ -6,11 +6,11 @@ import EphemerisSpawnedObjects from '../EphemerisSpawnedObjects'
 import ExplosionsRenderer from '../ExplosionsRenderer'
 import Wormhole from '../Wormhole'
 import { blackHoles, wormholes } from '../data'
-import { useSolarSystemStore } from '../store'
+import { useSceneSystemActive } from '../scene-workload-policy'
 
 export default function SandboxScene() {
-  const showBlackHole = useSolarSystemStore((state) => state.showBlackHole)
-  const showWormhole = useSolarSystemStore((state) => state.showWormhole)
+  const showBlackHole = useSceneSystemActive('black-hole')
+  const showWormhole = useSceneSystemActive('wormhole')
 
   return (
     <>

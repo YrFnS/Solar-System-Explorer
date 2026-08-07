@@ -1,9 +1,9 @@
 'use client'
 
 import { useRef, useMemo } from 'react'
-import { useFrame } from '@react-three/fiber'
 import { Sparkles } from '@react-three/drei'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 
 interface ExplosionProps {
   position: [number, number, number]
@@ -14,10 +14,10 @@ interface ExplosionProps {
 export default function Explosion({ position, color, onComplete }: ExplosionProps) {
   const meshRef = useRef<THREE.Mesh>(null)
   const materialRef = useRef<THREE.MeshBasicMaterial>(null)
-  const startTime = useRef(Date.now())
+  const startedAtRef = useRef<number | null>(null)
+  const completedRef = useRef(false)
 
   const texture = useMemo(() => {
-    // Create a simple glow texture
     const canvas = document.createElement('canvas')
     canvas.width = 64
     canvas.height = 64
@@ -29,24 +29,30 @@ export default function Explosion({ position, color, onComplete }: ExplosionProp
     gradient.addColorStop(1, 'rgba(0,0,0,0)')
     ctx.fillStyle = gradient
     ctx.fillRect(0, 0, 64, 64)
-    const tex = new THREE.CanvasTexture(canvas)
-    return tex
+    return new THREE.CanvasTexture(canvas)
   }, [])
 
-  useFrame(() => {
-    const elapsed = (Date.now() - startTime.current) / 1000
+  useFrameLane({
+    id: `explosion:${position.join(':')}`,
+    lane: 'critical',
+    priority: -15,
+  }, ({ nowMs }) => {
+    if (completedRef.current) return
+    if (startedAtRef.current === null) startedAtRef.current = nowMs
+    const elapsed = (nowMs - startedAtRef.current) / 1_000
 
     if (meshRef.current) {
       const scale = 1 + elapsed * 15
-      meshRef.current.scale.set(scale, scale, scale)
+      meshRef.current.scale.setScalar(scale)
     }
 
     if (materialRef.current) {
       materialRef.current.opacity = Math.max(0, 1 - elapsed * 0.5)
     }
 
-    if (elapsed > 2 && onComplete) {
-      onComplete()
+    if (elapsed > 2) {
+      completedRef.current = true
+      onComplete?.()
     }
   })
 

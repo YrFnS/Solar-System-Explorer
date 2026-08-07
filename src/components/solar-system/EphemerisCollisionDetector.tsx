@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { planets, sunData } from './data'
 import {
@@ -9,7 +8,7 @@ import {
   getSpawnedObjectVisualPosition,
 } from './ephemeris'
 import { useExperienceStore } from './experience-store'
-import { getSimulationDateMs } from './simulation-clock'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 
 export default function EphemerisCollisionDetector() {
@@ -23,6 +22,7 @@ export default function EphemerisCollisionDetector() {
   const collidedIdsRef = useRef(new Set<string>())
   const objectPosition = useMemo(() => new THREE.Vector3(), [])
   const bodyPosition = useMemo(() => new THREE.Vector3(), [])
+  const enabled = !isPaused && spawnedObjects.length > 0 && mode === 'sandbox'
 
   useEffect(() => {
     const activeIds = new Set(spawnedObjects.map((object) => object.id))
@@ -31,17 +31,18 @@ export default function EphemerisCollisionDetector() {
     })
   }, [spawnedObjects])
 
-  useFrame(() => {
-    if (isPaused || spawnedObjects.length === 0 || mode !== 'sandbox') return
-
-    const dateMs = getSimulationDateMs()
-
+  useFrameLane({
+    id: 'sandbox-collision-detector',
+    lane: 'ephemeris',
+    priority: 80,
+    enabled,
+  }, ({ simulationDateMs }) => {
     for (const object of spawnedObjects) {
       if (collidedIdsRef.current.has(object.id)) continue
 
       getSpawnedObjectVisualPosition(
         object,
-        dateMs,
+        simulationDateMs,
         mode,
         objectPosition
       )
@@ -57,7 +58,7 @@ export default function EphemerisCollisionDetector() {
       }
 
       for (const planet of planets) {
-        getBodyVisualPosition(planet.id, dateMs, mode, bodyPosition)
+        getBodyVisualPosition(planet.id, simulationDateMs, mode, bodyPosition)
         const collisionDistance = (object.radius + planet.radius) * 1.35
 
         if (objectPosition.distanceToSquared(bodyPosition) > collisionDistance * collisionDistance) {

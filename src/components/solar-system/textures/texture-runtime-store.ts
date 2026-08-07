@@ -1,12 +1,15 @@
 'use client'
 
 import { create } from 'zustand'
+import type { EffectiveQuality } from '../performance-store'
 
 export type TextureBackend = 'webp' | 'ktx2' | 'mixed'
 
 export interface TextureRuntimeDiagnostics {
   enabled: boolean
   backend: TextureBackend
+  quality: EffectiveQuality
+  tierWidth: number
   requestedIds: string[]
   loadedIds: string[]
   failedIds: string[]
@@ -16,9 +19,24 @@ export interface TextureRuntimeDiagnostics {
 
 interface TextureRuntimeState extends TextureRuntimeDiagnostics {
   setEnabled: (enabled: boolean) => void
-  recordRequested: (id: string) => void
-  recordSuccess: (id: string, format: string) => void
-  recordFailure: (id: string, message: string) => void
+  beginTier: (quality: EffectiveQuality, tierWidth: number) => void
+  recordRequested: (
+    id: string,
+    quality: EffectiveQuality,
+    tierWidth: number
+  ) => void
+  recordSuccess: (
+    id: string,
+    format: string,
+    quality: EffectiveQuality,
+    tierWidth: number
+  ) => void
+  recordFailure: (
+    id: string,
+    message: string,
+    quality: EffectiveQuality,
+    tierWidth: number
+  ) => void
 }
 
 declare global {
@@ -52,9 +70,31 @@ function deriveBackend(
   return 'ktx2'
 }
 
+function resetTier(
+  state: TextureRuntimeState,
+  quality: EffectiveQuality,
+  tierWidth: number
+) {
+  if (state.quality === quality && state.tierWidth === tierWidth) return state
+
+  return {
+    ...state,
+    quality,
+    tierWidth,
+    backend: 'webp' as const,
+    requestedIds: [],
+    loadedIds: [],
+    failedIds: [],
+    formats: [],
+    lastError: null,
+  }
+}
+
 export const useTextureRuntimeStore = create<TextureRuntimeState>((set) => ({
   enabled: readEnabled(),
   backend: 'webp',
+  quality: 'eco',
+  tierWidth: 512,
   requestedIds: [],
   loadedIds: [],
   failedIds: [],
@@ -76,11 +116,17 @@ export const useTextureRuntimeStore = create<TextureRuntimeState>((set) => ({
     }))
   },
 
-  recordRequested: (id) => set((state) => {
+  beginTier: (quality, tierWidth) => set((state) => (
+    resetTier(state, quality, tierWidth)
+  )),
+
+  recordRequested: (id, quality, tierWidth) => set((currentState) => {
+    const state = resetTier(currentState, quality, tierWidth)
     const requestedIds = includeId(state.requestedIds, id)
     if (requestedIds === state.requestedIds) return state
 
     return {
+      ...state,
       requestedIds,
       backend: deriveBackend(
         state.enabled,
@@ -91,7 +137,9 @@ export const useTextureRuntimeStore = create<TextureRuntimeState>((set) => ({
     }
   }),
 
-  recordSuccess: (id, format) => set((state) => {
+  recordSuccess: (id, format, quality, tierWidth) => set((state) => {
+    if (state.quality !== quality || state.tierWidth !== tierWidth) return state
+
     const requestedIds = includeId(state.requestedIds, id)
     const loadedIds = includeId(state.loadedIds, id)
     const failedIds = state.failedIds.filter((failedId) => failedId !== id)
@@ -114,7 +162,9 @@ export const useTextureRuntimeStore = create<TextureRuntimeState>((set) => ({
     }
   }),
 
-  recordFailure: (id, message) => set((state) => {
+  recordFailure: (id, message, quality, tierWidth) => set((state) => {
+    if (state.quality !== quality || state.tierWidth !== tierWidth) return state
+
     const requestedIds = includeId(state.requestedIds, id)
     const failedIds = includeId(state.failedIds, id)
     return {
@@ -136,6 +186,8 @@ if (typeof window !== 'undefined') {
     window.__SOLAR_TEXTURE_DIAGNOSTICS__ = {
       enabled: state.enabled,
       backend: state.backend,
+      quality: state.quality,
+      tierWidth: state.tierWidth,
       requestedIds: state.requestedIds,
       loadedIds: state.loadedIds,
       failedIds: state.failedIds,

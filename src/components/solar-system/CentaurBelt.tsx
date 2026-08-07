@@ -1,8 +1,8 @@
 'use client'
 
 import { useLayoutEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
+import { useFrameLane } from './FrameUpdateLanes'
 import { useSolarSystemStore } from './store'
 import {
   getEffectiveQuality,
@@ -63,12 +63,18 @@ function CentaurBeltInner() {
     mesh.computeBoundingSphere()
   }, [dummy, effectiveCount])
 
-  useFrame((_, delta) => {
+  useFrameLane({
+    id: 'centaur-field',
+    lane: 'decorative',
+    priority: 81,
+  }, ({ laneDelta }) => {
     if (!meshRef.current) return
 
     const timeSpeed = useSolarSystemStore.getState().timeSpeed
     const motionFactor = reducedMotion ? 0.18 : 1
-    meshRef.current.rotation.y += delta * 0.0055 * timeSpeed * motionFactor
+    meshRef.current.rotation.y += (
+      laneDelta * 0.0055 * timeSpeed * motionFactor
+    )
   })
 
   return (
