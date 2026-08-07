@@ -105,6 +105,11 @@ function readPostProcessingEnabled() {
   return new URLSearchParams(window.location.search).get('post') !== 'off'
 }
 
+function canCreateWebGL2() {
+  if (typeof document === 'undefined') return false
+  return Boolean(document.createElement('canvas').getContext('webgl2'))
+}
+
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
@@ -383,6 +388,15 @@ export default function WebGPULab() {
 
   const switchBackend = useCallback((next: RequestedBackend) => {
     if (next === requestedBackend) return
+    if (next === 'webgl' && !canCreateWebGL2()) {
+      setRendererInfo({
+        ...EMPTY_RENDERER_INFO,
+        status: 'error',
+        adapterStatus: 'not-requested',
+        error: 'WebGL 2 is unavailable in this browser.',
+      })
+      return
+    }
     generationRef.current += 1
     resetTextures()
     setMetrics(null)
