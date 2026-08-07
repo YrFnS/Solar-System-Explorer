@@ -2,7 +2,6 @@
 
 import { Suspense, useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
-import { useSolarSystemStore } from '@/components/solar-system/store'
 
 // Dynamically import the entire 3D container to ensure NO Three.js code runs on server
 const SceneContainer = dynamic(() => import('../components/solar-system/SceneContainer'), { 

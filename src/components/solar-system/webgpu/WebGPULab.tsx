@@ -300,6 +300,13 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 export default function WebGPULab() {
   const [requestedBackend, setRequestedBackend] = useState<RequestedBackend>(readRequestedBackend)
+  const [rendererPreflight, setRendererPreflight] = useState<
+    'pending' | 'ready' | 'unavailable'
+  >(() => (
+    requestedBackend === 'webgl'
+      ? canCreateWebGL2() ? 'ready' : 'unavailable'
+      : 'pending'
+  ))
   const [rendererInfo, setRendererInfo] = useState<RendererInfo>(EMPTY_RENDERER_INFO)
   const [metrics, setMetrics] = useState<LabFrameMetrics | null>(null)
   const [postProcessingEnabled, setPostProcessingEnabled] = useState(
@@ -389,6 +396,7 @@ export default function WebGPULab() {
   const switchBackend = useCallback((next: RequestedBackend) => {
     if (next === requestedBackend) return
     if (next === 'webgl' && !canCreateWebGL2()) {
+      setRendererPreflight('unavailable')
       setRendererInfo({
         ...EMPTY_RENDERER_INFO,
         status: 'error',
@@ -401,6 +409,7 @@ export default function WebGPULab() {
     resetTextures()
     setMetrics(null)
     setBenchmarkBaselinePrepared(false)
+    setRendererPreflight('pending')
     setRendererInfo({
       ...EMPTY_RENDERER_INFO,
       status: 'initializing',
@@ -441,6 +450,60 @@ export default function WebGPULab() {
   }, [])
 
   useEffect(() => () => resetTextures(), [resetTextures])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (requestedBackend === 'webgl') {
+      const available = canCreateWebGL2()
+      setRendererPreflight(available ? 'ready' : 'unavailable')
+      if (!available) {
+        setRendererInfo({
+          ...EMPTY_RENDERER_INFO,
+          status: 'error',
+          adapterStatus: 'not-requested',
+          error: 'WebGL 2 is unavailable in this browser.',
+        })
+      }
+      return () => {
+        cancelled = true
+      }
+    }
+
+    const probe = async () => {
+      const gpu = typeof navigator === 'undefined' ? undefined : getWebGpuApi()
+      if (gpu) {
+        try {
+          const adapter = await gpu.requestAdapter({
+            powerPreference: 'high-performance',
+          }) ?? await gpu.requestAdapter()
+          if (adapter) {
+            if (!cancelled) setRendererPreflight('ready')
+            return
+          }
+        } catch {
+          // The renderer factory publishes the detailed adapter error.
+        }
+      }
+
+      const available = canCreateWebGL2()
+      if (cancelled) return
+      setRendererPreflight(available ? 'ready' : 'unavailable')
+      if (!available) {
+        setRendererInfo({
+          ...EMPTY_RENDERER_INFO,
+          status: 'error',
+          adapterStatus: 'unavailable',
+          error: 'WebGL 2 is unavailable in this browser.',
+        })
+      }
+    }
+
+    void probe()
+    return () => {
+      cancelled = true
+    }
+  }, [requestedBackend])
 
   useEffect(() => {
     window.__SOLAR_WEBGPU_LAB__ = {
@@ -507,7 +570,7 @@ export default function WebGPULab() {
     : textureBackend === 'mixed'
       ? 'Loading / mixed'
       : 'Procedural fallback'
-  const rendererUnavailable = rendererInfo.status === 'error' && !canCreateWebGL2()
+  const rendererUnavailable = rendererPreflight !== 'ready'
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#02030a] text-white">
