@@ -18,7 +18,7 @@ jobs:
   build:
     name: Build application
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Check out repository
@@ -44,6 +44,9 @@ jobs:
       - name: Validate orbital engine
         run: bun run ephemeris:validate
 
+      - name: Validate benchmark decision engine
+        run: bun run webgpu:analysis:validate
+
       - name: Generate optimized WebP fallbacks
         run: bun run textures:optimize
 
@@ -61,3 +64,12 @@ jobs:
 
       - name: Smoke test desktop, mobile, accessibility, WebGL, and KTX2
         run: bun run ui:smoke
+
+      - name: Smoke test WebGPU laboratory backend selection
+        run: bun run webgpu:smoke
+
+      - name: Smoke test real-device benchmark protocol
+        run: bun run webgpu:benchmark:smoke
+
+      - name: Smoke test benchmark evidence workspace
+        run: bun run webgpu:results:smoke
