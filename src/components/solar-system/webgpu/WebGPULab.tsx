@@ -186,6 +186,13 @@ async function createRenderer(
   canvasProps: unknown,
   selection: BackendSelection
 ) {
+  if (selection.forceWebGL) {
+    const canvas = (canvasProps as { canvas?: HTMLCanvasElement }).canvas
+    if (!canvas?.getContext('webgl2')) {
+      throw new Error('WebGL 2 is unavailable in this browser.')
+    }
+  }
+
   const renderer = new THREE.WebGPURenderer({
     ...(canvasProps as Record<string, unknown>),
     antialias: false,
