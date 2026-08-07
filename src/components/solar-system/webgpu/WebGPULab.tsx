@@ -507,10 +507,16 @@ export default function WebGPULab() {
     : textureBackend === 'mixed'
       ? 'Loading / mixed'
       : 'Procedural fallback'
+  const rendererUnavailable = rendererInfo.status === 'error' && !canCreateWebGL2()
 
   return (
     <main className="relative h-screen w-screen overflow-hidden bg-[#02030a] text-white">
       <LabRendererBoundary key={requestedBackend}>
+        {rendererUnavailable ? (
+          <div className="grid h-full w-full place-items-center bg-[#02030a] text-white/60">
+            This browser cannot initialize the laboratory canvas.
+          </div>
+        ) : (
         <Canvas
           key={requestedBackend}
           camera={{
@@ -535,6 +541,7 @@ export default function WebGPULab() {
             postProcessingEnabled={postProcessingEnabled}
           />
         </Canvas>
+        )}
       </LabRendererBoundary>
 
       <div className="pointer-events-none absolute inset-0 z-20 flex items-start justify-between gap-3 p-3 sm:p-5">
