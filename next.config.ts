@@ -23,6 +23,9 @@ function resolveBuildCommitSha() {
 const nextConfig: NextConfig = {
   output: 'standalone',
   reactStrictMode: true,
+  turbopack: {
+    root: process.cwd(),
+  },
   env: {
     // The acceptance lab already reads this public key. Supplying it from the
     // checked-out Git repository also gives local and VPS builds the same

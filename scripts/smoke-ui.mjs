@@ -8,12 +8,16 @@ const host = '127.0.0.1'
 const baseUrl = `http://${host}:${port}`
 const standaloneRoot = path.resolve('.next', 'standalone')
 const standaloneNextRoot = path.join(standaloneRoot, '.next')
-const ktx2Manifest = JSON.parse(
-  await readFile(
-    path.resolve('src/components/solar-system/textures/ktx2-manifest.json'),
-    'utf8'
-  )
+const ktx2ManifestPath = path.resolve(
+  'src/components/solar-system/textures/ktx2-manifest.json'
 )
+const ktx2ManifestSource = await readFile(ktx2ManifestPath, 'utf8')
+let ktx2Manifest
+try {
+  ktx2Manifest = JSON.parse(ktx2ManifestSource)
+} catch (error) {
+  throw new Error(`Invalid KTX2 manifest at ${ktx2ManifestPath}`, { cause: error })
+}
 const KTX2_CATALOGUE_IDS = ktx2Manifest.textures.map((entry) => entry.id)
 
 const RENDER_BUDGETS = {
@@ -69,7 +73,7 @@ async function configurePage(page, viewport) {
     window.localStorage.setItem('solar-explorer-experience-mode-v1', 'explore')
     window.localStorage.setItem('solar-explorer-quality-preset-v1', 'eco')
     window.localStorage.setItem('solar-explorer-ktx2-enabled-v1', 'true')
-    window.sessionStorage.setItem('solar-explorer-scene-warmup-v1', 'complete')
+    window.sessionStorage.setItem('solar-explorer-scene-settled-v1', 'complete')
   })
 }
 

@@ -394,7 +394,7 @@ export default function ExperienceDock({
                 <button
                   type="button"
                   onClick={() => setDate(simulationDateMs - DAY_MS)}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[9px] text-white/60 transition hover:bg-white/10 hover:text-white"
+                  className="min-w-11 rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[9px] text-white/60 transition hover:bg-white/10 hover:text-white"
                   title="Step back one day"
                 >
                   −1d
@@ -402,7 +402,7 @@ export default function ExperienceDock({
                 <button
                   type="button"
                   onClick={() => setDate(simulationDateMs + DAY_MS)}
-                  className="rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[9px] text-white/60 transition hover:bg-white/10 hover:text-white"
+                  className="min-w-11 rounded-xl border border-white/10 bg-white/[0.04] px-2 text-[9px] text-white/60 transition hover:bg-white/10 hover:text-white"
                   title="Step forward one day"
                 >
                   +1d

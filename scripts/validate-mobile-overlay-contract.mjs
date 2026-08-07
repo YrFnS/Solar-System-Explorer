@@ -21,8 +21,15 @@ const paths = {
 const entries = await Promise.all(
   Object.entries(paths).map(async ([key, filePath]) => [key, await readFile(filePath, 'utf8')])
 )
-const source = Object.fromEntries(entries)
-const packageJson = JSON.parse(source.packageJson)
+const source = Object.fromEntries(
+  entries.map(([key, value]) => [key, value.replace(/\r\n/g, '\n')])
+)
+let packageJson
+try {
+  packageJson = JSON.parse(source.packageJson)
+} catch (error) {
+  throw new Error(`Invalid package.json at ${paths.packageJson}`, { cause: error })
+}
 const failures = []
 
 function requireContract(condition, message) {
