@@ -185,8 +185,8 @@ export const planets: PlanetData[] = [
       'Earth has a powerful magnetic field that protects us from solar radiation',
     ],
     textureUrl: '/textures/earth.jpg',
-    cloudMapUrl: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png',
-    specularMapUrl: 'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_specular_2048.jpg',
+    cloudMapUrl: '/textures/earth-clouds.svg',
+    specularMapUrl: '/textures/earth.jpg',
     moons: [
       {
         name: 'Moon',

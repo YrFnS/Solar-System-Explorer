@@ -38,10 +38,7 @@
     {
       "id": "earth",
       "input": "/textures/earth.jpg",
-      "sources": [
-        "/textures/earth.jpg",
-        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_specular_2048.jpg"
-      ],
+      "sources": ["/textures/earth.jpg"],
       "role": "albedo",
       "colorSpace": "srgb",
       "alpha": false,
@@ -52,12 +49,7 @@
     {
       "id": "moon",
       "input": "/textures/moon.jpg",
-      "sources": [
-        "/textures/moon.jpg",
-        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moon_1024.jpg",
-        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moonmap1k.jpg",
-        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/moonbump1k.jpg"
-      ],
+      "sources": ["/textures/moon.jpg"],
       "role": "albedo",
       "colorSpace": "srgb",
       "alpha": false,
@@ -134,10 +126,7 @@
     {
       "id": "earth-clouds",
       "input": "/textures/earth-clouds.svg",
-      "sources": [
-        "/textures/earth-clouds.svg",
-        "https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_clouds_1024.png"
-      ],
+      "sources": ["/textures/earth-clouds.svg"],
       "role": "alpha",
       "colorSpace": "srgb",
       "alpha": true,

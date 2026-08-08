@@ -100,6 +100,8 @@ export default function ScreenshotGallery() {
                       <img
                         src={imageUrl}
                         alt={`Solar System capture ${index + 1}`}
+                        width={16}
+                        height={9}
                         loading="lazy"
                         decoding="async"
                         className="aspect-video w-full object-cover"

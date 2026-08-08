@@ -89,6 +89,27 @@ Those invalid pointer files were removed. The application uses lightweight proce
 
 Screenshots are created locally from the WebGL canvas. They are stored as temporary WebP object URLs for the current session only, capped at 12 images, and are not uploaded by the application.
 
+## Runtime image and icon audit
+
+The runtime was audited for user-visible images, image-based icons, logos, avatars, hero/catalogue media, fixture screenshots, and model URLs. No stable third-party image URL is selected for runtime substitution: every candidate is either a renderer-owned texture, an app icon, an object URL created from the current WebGL canvas, or code-drawn geometry. Keeping those assets local avoids cross-origin canvas/WebGL failures, preserves the adaptive WebP/KTX2 cache and GPU residency guarantees, and keeps the app shell installable offline.
+
+| Runtime reference | Decision | Reason / accessibility contract |
+| --- | --- | --- |
+| `public/textures/*` source maps, `optimized/*.webp`, and `ktx2/<tier>/*.ktx2` | Keep local | Renderer-owned planet, cloud, and ring maps are sampled by WebGL/WebGPU. They use explicit quality tiers, KTX2 transcoding, and local WebP fallback; a remote URL would add CORS and residency risk. Scene labels remain semantic HTML with accessible body names. |
+| `src/app/icon.svg` | Keep local | Next's app icon is a browser/PWA asset, not page content. A same-origin SVG preserves installability and avoids a third-party favicon dependency. |
+| `ScreenshotGallery.tsx` `<img src={imageUrl}>` | Keep local session URL | `imageUrl` is a `blob:` URL created from the current canvas capture, never a static/demo image or remote resource. It retains meaningful `alt`, lazy loading, decoding, and a fixed `aspect-video` layout. |
+| `HumanArtifacts.tsx` model paths (`/models/*.glb`) | Keep code-drawn fallback | Historical paths were invalid Git LFS pointers. `model-policy.ts` clears them before loading and procedural Three.js geometry remains the reliable, selectable visual. |
+| `lucide-react` controls and timeline/device icons | Keep semantic icon library | These are inline accessible SVG components, not image-based icons. Every interactive icon control has a text label/`aria-label`; replacing them with network images would reduce resilience and accessibility. |
+| `components/ui/avatar.tsx`, body catalogue, hero surfaces, and acceptance fixtures | No runtime media found | The avatar wrapper is unused and catalogue/fixture records contain text, color, or generated screenshots only; no placeholder image URL exists to replace. |
+
+Legacy Three.js example-image aliases were removed from authoritative runtime data and the KTX2 manifest. The compatibility normalizer in `asset-policy.ts` and `texture-manifest.ts` still maps old strings to canonical local files without issuing a network request.
+
+### URL/source ledger
+
+No runtime replacement URL was selected, so HTTP 200/content-type/HTTPS/CORS validation for replacement hosts is **N/A**. Build-time source URLs remain documented in `scripts/download-textures.mjs`; they are not emitted to the browser and are subject to the provenance/license verification requirements above before redistribution. NASA/JPL links in this document and `ephemeris.ts` are scientific-data citations, not image sources.
+
+No `next/image` remote patterns, image-host allowlist, or image CSP source was added because the app has zero remote runtime images. The production browser check should therefore expect no third-party image requests and no image CORS failures.
+
 ## Adding a new asset
 
 For every new texture, model, sound, or data file, record:
