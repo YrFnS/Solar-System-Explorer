@@ -10,6 +10,12 @@ node_modules
 !.yarn/releases
 !.yarn/versions
 
+# Bun is the only dependency authority for this repository
+/package-lock.json
+/npm-shrinkwrap.json
+/pnpm-lock.yaml
+/yarn.lock
+
 # testing
 /coverage
 
